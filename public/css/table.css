@@ -1,0 +1,133 @@
+.table-responsive .table-borderless {
+    border: 1.5px solid var(--iq-light-border);
+    border-radius: 8px;
+    width: 100%;
+    margin: 0 auto;
+    clear: both;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.table thead tr {
+    background: #fff;
+}
+.table th{
+    font-weight: 400;
+    letter-spacing: .2px;
+    color:#212529;
+    white-space: nowrap;
+}
+.table-borderless td{
+    padding: 10px 15px;
+}
+.table-borderless tbody tr td {
+    border-bottom: 1px solid var(--iq-light-border);
+     vertical-align: middle; 
+}
+.table-borderless tbody tr:last-child td {
+    border-bottom: 0;
+}
+.table-responsive .table-borderless .ri-ball-pen-fill,.ri-delete-bin-5-line{cursor: pointer;}
+.datatable-container {
+    width: 100%;
+}
+
+.datatable-controls {
+    width: 100%;
+}
+
+.table-container {
+    max-height: 400px;
+    /* overflow-y: auto; */
+    margin-bottom: 20px;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.pagination {
+    margin: 0;
+}
+
+.page-item .page-link {
+    cursor: pointer;
+}
+
+.sticky-header th {
+    position: sticky;
+    color: #fff;
+    font-weight: 500;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.ah-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 29px;
+}
+
+.ah-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.ah-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #e5e7eb;
+    border-radius: 9999px;
+    transition: .2s;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px;
+}
+
+.ah-slider i {
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    color: #fff;
+    background: #9ca3af;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ah-switch input:checked+.ah-slider {
+    background-color: #10b981;
+}
+
+.ah-switch input:checked+.ah-slider i {
+    background: #10b981;
+    box-shadow: 0 0 0 16px #10b981 inset;
+}
+
+.ah-switch input:checked+.ah-slider {
+    justify-content: flex-end;
+}
+
+.page-info {
+    font-size: 14px;
+    padding-left: 10px;
+}
+
+@media (max-width: 768px) {
+    .datatable-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .table-container {
+        max-height: 300px;
+    }
+}

@@ -1,0 +1,110 @@
+<script setup>
+import { ref } from "vue";
+import BaseInput from "@/Components/Common/Input/BaseInput.vue";
+import { useForm } from "@inertiajs/vue3";
+
+const props = defineProps({
+     socialHistory: Object,
+});
+
+const isValidated = ref(false);
+
+const parseMentalHealthNotes = (notes) => {
+    if (!notes) {
+        return {
+            psychological_history: "",
+            devolepmental_history: "",
+            past_medication_trials: "",
+        };
+    }
+
+    const parts = notes.split(" | ");
+    return {
+        psychological_history: parts[0] || "",
+        devolepmental_history: parts[1] || "",
+        past_medication_trials: parts[2] || "",
+    };
+};
+
+const existingData = parseMentalHealthNotes(
+    props.socialHistory?.mental_health_notes
+);
+
+const fields = [
+    {
+        key: "psychological_history",
+        type: "text",
+        placeholder: "Psychosocial History",
+    },
+    {
+        key: "devolepmental_history",
+        type: "text",
+        placeholder: "Developmental History",
+    },
+    {
+        key: "past_medication_trials",
+        type: "text",
+        placeholder: "Past Medication Trials",
+    },
+];
+
+const form = useForm({
+    id: props.socialHistory?.id || '',
+    psychological_history: existingData.psychological_history,
+    devolepmental_history: existingData.devolepmental_history,
+    past_medication_trials: existingData.past_medication_trials,
+});
+
+const emit = defineEmits(["close", "submit"]);
+
+const closeModal = () => {
+    emit("close");
+};
+
+const submitForm = () => {
+      isValidated.value = true;
+        form.post(route("doctor.socialHistory.store"), {
+            onSuccess: () => {
+                isValidated.value = false;
+                form.reset();
+                emit("submit");
+                closeModal();
+                window.location.reload();
+            },
+            onError: () => {
+                isValidated.value = false;
+            },
+        });
+     
+};
+
+</script>
+
+<template>
+        <form
+            @submit.prevent="submitForm"
+             class="needs-validation"
+            :class="{ 'was-validated': isValidated }"
+        >
+              <div v-for="field in fields" :key="field.key">
+                <BaseInput
+                    v-model="form[field.key]"
+                    :name="field.key"
+                    :placeholder="field.placeholder"
+                    :label="field.placeholder"
+                    :type="field.type"
+                    required
+                />
+            </div>
+
+            <div class="form-button mt-4 px-3 d-flex justify-content-end gap-3">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button
+                    type="button"
+                    class="btn btn-danger"
+                    @click="closeModal">
+                    Cancel
+                </button>
+            </div>
+        </form>
+ </template>

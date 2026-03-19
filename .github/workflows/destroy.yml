@@ -1,0 +1,96 @@
+name: Destroy Free-Tier Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      region:
+        description: 'AWS Region'
+        required: true
+        default: 'us-east-1'
+        type: string
+
+jobs:
+  terraform-destroy:
+    name: 'Terraform Destroy'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./free-tier
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.region }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=afra-terraform-state-backups" \
+            -backend-config="key=${{ inputs.environment }}/${{ inputs.environment }}.tfstate" \
+            -backend-config="region=${{ inputs.region }}"
+
+      - name: Terraform Plan Destroy
+        run: terraform plan -destroy -out=destroy-plan -var-file="destroy-dummy.tfvars"
+        continue-on-error: false
+
+      - name: Show Resources to be Destroyed
+        run: |
+          echo "## ⚠️ Resources to be Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following resources will be **permanently deleted**:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          terraform show -no-color destroy-plan | grep -E "# (module\.|aws_)" | head -50 >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve -var-file="destroy-dummy.tfvars"
+        env:
+          TF_LOG: INFO
+
+      - name: Verify Destruction
+        run: |
+          echo "## Destruction Complete! 🗑️" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All infrastructure resources have been destroyed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Destroyed Resources:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ VPC and subnets" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ EC2 instance" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ RDS database" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ S3 bucket (if empty)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security groups" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ CloudWatch alarms and SNS topics" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ SSM patch configurations" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Manual Cleanup Required:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🗂️ S3 state bucket: \`afra-terraform-state-backups\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🗂️ State file: \`${{ inputs.environment }}/${{ inputs.environment }}.tfstate\`" >> $GITHUB_STEP_SUMMARY
+          echo "- 🗂️ Application S3 bucket: \`hipaa-${{ inputs.environment }}-ft-bucket\` (if not empty)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** The Terraform state file and S3 buckets must be manually deleted if no longer needed." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Destroy Plan (on failure)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: terraform-destroy-plan
+          path: free-tier/destroy-plan
+          retention-days: 7

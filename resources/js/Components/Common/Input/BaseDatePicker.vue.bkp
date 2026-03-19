@@ -1,0 +1,736 @@
+<script setup>
+import { defineProps, defineEmits, ref, watch, computed, onMounted, onBeforeUnmount } from "vue";
+
+const props = defineProps({
+  modelValue: [String, Date],
+  type: String, // "time" | "date"
+  showTime: Boolean,
+  label: String,
+  error: String,
+  placeholder: String,
+  required: { type: Boolean, default: false },
+});
+
+const emit = defineEmits(["update:modelValue"]);
+
+const internalValue = ref("");
+const isCalendarOpen = ref(false);
+const isTimeOpen = ref(false);
+const wrapperRef = ref(null);
+
+const inputType = computed(() => {
+  if (props.type === "time") return "time";
+  return props.showTime ? "datetime-local" : "date";
+});
+
+const isDateMode = computed(() => inputType.value === "date");
+const isTimeMode = computed(() => inputType.value === "time");
+
+const pad = (n) => String(n).padStart(2, "0");
+
+/* ── Value conversion helpers ─────────────────────────── */
+const toInputValue = (val) => {
+  if (!val) return "";
+
+  if (val instanceof Date && !Number.isNaN(val.getTime())) {
+    const y = val.getFullYear();
+    const m = pad(val.getMonth() + 1);
+    const d = pad(val.getDate());
+    const hh = pad(val.getHours());
+    const mm = pad(val.getMinutes());
+    if (inputType.value === "date") return `${y}-${m}-${d}`;
+    if (inputType.value === "time") return `${hh}:${mm}`;
+    return `${y}-${m}-${d}T${hh}:${mm}`;
+  }
+
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+
+    if (inputType.value === "date") {
+      if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) {
+        const [mm, dd, yyyy] = trimmed.split("-");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      return trimmed;
+    }
+
+    if (inputType.value === "time") {
+      const match = trimmed.match(/^(\d{2}):(\d{2})/);
+      return match ? `${match[1]}:${match[2]}` : trimmed;
+    }
+
+    if (inputType.value === "datetime-local") {
+      let datePart = "", timePart = "";
+      if (trimmed.includes("T")) [datePart, timePart] = trimmed.split("T");
+      else if (trimmed.includes(" ")) [datePart, timePart] = trimmed.split(" ");
+      else return trimmed;
+
+      if (/^\d{2}-\d{2}-\d{4}$/.test(datePart)) {
+        const [mm, dd, yyyy] = datePart.split("-");
+        datePart = `${yyyy}-${mm}-${dd}`;
+      }
+      const m = timePart?.match(/^(\d{2}):(\d{2})/);
+      if (m) timePart = `${m[1]}:${m[2]}`;
+      return `${datePart}T${timePart}`;
+    }
+
+    return trimmed;
+  }
+
+  return "";
+};
+
+/* ── Calendar state ───────────────────────────────────── */
+const today = new Date();
+const calendarMonth = ref(today.getMonth());
+const calendarYear = ref(today.getFullYear());
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const calendarTitle = computed(() =>
+  `${MONTH_NAMES[calendarMonth.value]} ${calendarYear.value}`
+);
+
+const parsedInternalDate = computed(() => {
+  if (!internalValue.value || !/^\d{4}-\d{2}-\d{2}$/.test(internalValue.value)) return null;
+  const [y, m, d] = internalValue.value.split("-");
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return Number.isNaN(date.getTime()) ? null : date;
+});
+
+const isSameDate = (a, b) =>
+  !!a && !!b &&
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const calendarWeeks = computed(() => {
+  const month = calendarMonth.value;
+  const year = calendarYear.value;
+  const startDay = new Date(year, month, 1).getDay();
+  const startDate = new Date(year, month, 1 - startDay);
+  const weeks = [];
+  const cursor = new Date(startDate);
+
+  for (let w = 0; w < 6; w++) {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(cursor);
+      days.push({
+        date,
+        label: date.getDate(),
+        inCurrentMonth: date.getMonth() === month,
+        isToday: isSameDate(date, today),
+        isSelected: isSameDate(date, parsedInternalDate.value),
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(days);
+  }
+  return weeks;
+});
+
+const goToPreviousMonth = () => {
+  if (calendarMonth.value === 0) { calendarMonth.value = 11; calendarYear.value--; }
+  else calendarMonth.value--;
+};
+const goToNextMonth = () => {
+  if (calendarMonth.value === 11) { calendarMonth.value = 0; calendarYear.value++; }
+  else calendarMonth.value++;
+};
+const goToPreviousYear = () => { calendarYear.value--; };
+const goToNextYear = () => { calendarYear.value++; };
+
+const selectDate = (day) => {
+  if (!day.inCurrentMonth) {
+    calendarMonth.value = day.date.getMonth();
+    calendarYear.value = day.date.getFullYear();
+  }
+  internalValue.value = toInputValue(day.date);
+  isCalendarOpen.value = false;
+};
+
+const displayDateValue = computed(() => {
+  const d = parsedInternalDate.value;
+  if (!d) return "";
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${d.getFullYear()}`;
+});
+
+/* ── Time picker helpers ──────────────────────────────── */
+const hours12 = Array.from({ length: 12 }, (_, i) => pad(i + 1));
+const minutesList = Array.from({ length: 60 }, (_, i) => pad(i));
+const periods = ["AM", "PM"];
+
+const parsedTime = computed(() => {
+  if (!internalValue.value || !/^\d{2}:\d{2}$/.test(internalValue.value)) return null;
+  const [hh, mm] = internalValue.value.split(":").map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+  const period = hh >= 12 ? "PM" : "AM";
+  const hour12 = hh % 12 === 0 ? 12 : hh % 12;
+  return { hour12: pad(hour12), minute: pad(mm), period };
+});
+
+const displayTimeValue = computed(() => {
+  const t = parsedTime.value;
+  return t ? `${t.hour12}:${t.minute} ${t.period}` : "";
+});
+
+const setTimeFromParts = (hour12Str, minuteStr, periodStr) => {
+  const h12 = Number(hour12Str);
+  const min = Number(minuteStr);
+  if (Number.isNaN(h12) || Number.isNaN(min)) return;
+  let hh = h12 % 12;
+  if (periodStr === "PM") hh = (h12 % 12) + 12;
+  internalValue.value = `${pad(hh)}:${pad(min)}`;
+};
+
+const selectHour = (h) => { const c = parsedTime.value || { hour12: "12", minute: "00", period: "AM" }; setTimeFromParts(h, c.minute, c.period); };
+const selectMinute = (m) => { const c = parsedTime.value || { hour12: "12", minute: m, period: "AM" }; setTimeFromParts(c.hour12, m, c.period); };
+const selectPeriod = (p) => { const c = parsedTime.value || { hour12: "12", minute: "00", period: p }; setTimeFromParts(c.hour12, c.minute, p); };
+
+/* ── Watchers ─────────────────────────────────────────── */
+
+watch(() => props.modelValue, (val) => {
+  internalValue.value = toInputValue(val);
+}, { immediate: true });
+
+watch(internalValue, (val) => {
+  if (!val) {
+    emit('update:modelValue', null);
+    return;
+  }
+ 
+
+  if (inputType.value === 'date') {
+    // already in YYYY‑MM‑DD format
+    emit('update:modelValue', val);
+    return;
+  }
+
+  if (inputType.value === 'datetime-local' &&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val)) {
+    emit('update:modelValue', val.replace('T', ' ')); // yyyy-mm-dd hh:mm
+    return;
+  }
+
+  // time-only, or fallback – emit as‑is
+  emit('update:modelValue', val);
+});
+
+watch(parsedInternalDate, (date) => {
+  if (date) { calendarMonth.value = date.getMonth(); calendarYear.value = date.getFullYear(); }
+}, { immediate: true });
+
+/* ── Click outside to close ───────────────────────────── */
+const handleClickOutside = (e) => {
+  if (wrapperRef.value && !wrapperRef.value.contains(e.target)) {
+    isCalendarOpen.value = false;
+    isTimeOpen.value = false;
+  }
+};
+onMounted(() => document.addEventListener("mousedown", handleClickOutside));
+onBeforeUnmount(() => document.removeEventListener("mousedown", handleClickOutside));
+</script>
+
+<template>
+  <div class="dtp-root mb-2" ref="wrapperRef">
+
+    <!-- Label -->
+    <label v-if="label" class="form-label">
+      {{ label }}
+      <span v-if="required" class="dtp-required">*</span>
+    </label>
+
+    <!-- ── DATE MODE ─────────────────────────────────────── -->
+    <div v-if="isDateMode" class="dtp-field-wrap">
+      <div class="dtp-input-group" @click="isCalendarOpen = !isCalendarOpen">
+        <span class="dtp-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        </span>
+        <input type="text" class="dtp-input" :class="{ 'dtp-input--error': error, 'dtp-input--active': isCalendarOpen }"
+          :value="displayDateValue" :placeholder="placeholder || 'MM-DD-YYYY'" :required="required" readonly />
+      </div>
+
+      <!-- Calendar popup -->
+      <transition name="dtp-pop">
+        <div v-if="isCalendarOpen" class="dtp-popup dtp-calendar">
+
+          <!-- Header -->
+          <div class="cal-header">
+            <button type="button" class="cal-nav" @click.stop="goToPreviousYear" title="Previous year">«</button>
+            <button type="button" class="cal-nav" @click.stop="goToPreviousMonth" title="Previous month">‹</button>
+            <span class="cal-title">{{ calendarTitle }}</span>
+            <button type="button" class="cal-nav" @click.stop="goToNextMonth" title="Next month">›</button>
+            <button type="button" class="cal-nav" @click.stop="goToNextYear" title="Next year">»</button>
+          </div>
+
+          <!-- Weekday headers -->
+          <div class="cal-weekdays">
+            <span v-for="d in ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']" :key="d">{{ d }}</span>
+          </div>
+
+          <!-- Days grid -->
+          <div class="cal-grid">
+            <div v-for="(week, wi) in calendarWeeks" :key="wi" class="cal-row">
+              <button v-for="day in week" :key="day.date.toISOString()" type="button" class="cal-cell" :class="{
+                'cal-cell--other': !day.inCurrentMonth,
+                'cal-cell--today': day.isToday,
+                'cal-cell--selected': day.isSelected,
+              }" @click.stop="selectDate(day)">
+                {{ day.label }}
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </transition>
+    </div>
+
+    <!-- ── TIME MODE ─────────────────────────────────────── -->
+    <div v-else-if="isTimeMode" class="dtp-field-wrap">
+      <div class="dtp-input-group" @click="isTimeOpen = !isTimeOpen">
+        <span class="dtp-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </span>
+        <input type="text" class="dtp-input" :class="{ 'dtp-input--error': error, 'dtp-input--active': isTimeOpen }"
+          :value="displayTimeValue" :placeholder="placeholder || 'hh:mm AM/PM'" :required="required" readonly />
+      </div>
+
+      <!-- Time popup -->
+      <transition name="dtp-pop">
+        <div v-if="isTimeOpen" class="dtp-popup dtp-time">
+          <div class="time-cols">
+
+            <!-- Hours -->
+            <div class="time-col">
+              <div class="time-col-label">Hour</div>
+              <div class="time-scroll">
+                <button v-for="h in hours12" :key="h" type="button" class="time-cell"
+                  :class="{ 'time-cell--sel': parsedTime && parsedTime.hour12 === h }" @click.stop="selectHour(h)">{{ h
+                  }}</button>
+              </div>
+            </div>
+
+            <div class="time-divider">:</div>
+
+            <!-- Minutes -->
+            <div class="time-col">
+              <div class="time-col-label">Min</div>
+              <div class="time-scroll">
+                <button v-for="m in minutesList" :key="m" type="button" class="time-cell"
+                  :class="{ 'time-cell--sel': parsedTime && parsedTime.minute === m }" @click.stop="selectMinute(m)">{{
+                  m }}</button>
+              </div>
+            </div>
+
+            <!-- AM / PM -->
+            <div class="time-col time-col--period">
+              <div class="time-col-label">Period</div>
+              <div class="time-scroll">
+                <button v-for="p in periods" :key="p" type="button" class="time-cell time-cell--period"
+                  :class="{ 'time-cell--sel': parsedTime && parsedTime.period === p }" @click.stop="selectPeriod(p)">{{
+                  p }}</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </transition>
+    </div>
+
+    <!-- ── DATETIME-LOCAL (native fallback) ──────────────── -->
+    <template v-else>
+      <div class="dtp-input-group">
+        <span class="dtp-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        </span>
+        <input v-model="internalValue" :type="inputType" class="dtp-input" :class="{ 'dtp-input--error': error }"
+          :required="required" :placeholder="placeholder" />
+      </div>
+    </template>
+
+    <!-- Error message -->
+    <transition name="dtp-err">
+      <p v-if="error" class="dtp-error-msg">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        {{ error }}
+      </p>
+    </transition>
+
+  </div>
+</template>
+
+<style scoped>
+/* ── Root ───────────────────────────────────────────────── */
+.dtp-root {
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── Label ───────────────────────────────────────────────── */
+.dtp-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.dtp-required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+/* ── Input wrapper ───────────────────────────────────────── */
+.dtp-field-wrap {
+  position: relative;
+}
+
+.dtp-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.dtp-icon {
+  position: absolute;
+  right: 11px;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  transition: color 0.15s;
+}
+
+.dtp-chevron {
+  display: none;
+}
+
+.dtp-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 38px 0 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #111827;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  caret-color: transparent;
+}
+
+.dtp-input::placeholder {
+  color: #9ca3af;
+}
+
+.dtp-input:hover {
+  border-color: #93c5fd;
+}
+
+.dtp-input--active {
+  border-color: #09ACFF;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .12);
+}
+
+.dtp-input--active+.dtp-icon {
+  color: #09ACFF;
+}
+
+.dtp-input--error {
+  border-color: #ef4444;
+}
+
+.dtp-input--error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, .12);
+}
+
+/* Hover icon tint when group is hovered */
+.dtp-input-group:hover .dtp-icon {
+  color: #6b7280;
+}
+
+/* ── Popup base ──────────────────────────────────────────── */
+.dtp-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .10), 0 2px 6px rgba(0, 0, 0, .06);
+  overflow: hidden;
+}
+
+/* ── Popup transition ────────────────────────────────────── */
+.dtp-pop-enter-active,
+.dtp-pop-leave-active {
+  transition: opacity .15s, transform .15s;
+}
+
+.dtp-pop-enter-from,
+.dtp-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ── Calendar ────────────────────────────────────────────── */
+.dtp-calendar {
+  width: 270px;
+  padding: 0 0 10px;
+}
+
+.cal-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 10px 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.cal-title {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.cal-nav {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: #6b7280;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.cal-nav:hover {
+  background: #eff6ff;
+  color: #09ACFF;
+}
+
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 8px 10px 4px;
+  gap: 2px;
+}
+
+.cal-weekdays span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.cal-grid {
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cal-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.cal-cell:hover:not(.cal-cell--selected):not(.cal-cell--other) {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.cal-cell--other {
+  color: #d1d5db;
+}
+
+.cal-cell--other:hover {
+  background: #f9fafb;
+  color: #9ca3af;
+}
+
+.cal-cell--today {
+  font-weight: 700;
+  color: #09ACFF;
+}
+
+.cal-cell--today:not(.cal-cell--selected) {
+  box-shadow: inset 0 0 0 1.5px #09ACFF;
+}
+
+.cal-cell--selected {
+  background: #09ACFF;
+  color: #fff;
+  font-weight: 600;
+}
+
+.cal-cell--selected:hover {
+  background: #2563eb;
+}
+
+/* ── Time picker ─────────────────────────────────────────── */
+.dtp-time {
+  width: 230px;
+  padding: 12px;
+}
+
+.time-cols {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.time-divider {
+  padding-top: 28px;
+  font-size: 18px;
+  color: #9ca3af;
+  font-weight: 300;
+  flex-shrink: 0;
+}
+
+.time-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.time-col--period {
+  flex: 0 0 54px;
+}
+
+.time-col-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 6px;
+}
+
+.time-scroll {
+  max-height: 168px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+.time-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.time-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.time-scroll::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+
+.time-cell {
+  width: 100%;
+  padding: 5px 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s, color 0.1s;
+}
+
+.time-cell:hover:not(.time-cell--sel) {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.time-cell--sel {
+  background: #09ACFF;
+  color: #fff;
+  font-weight: 600;
+}
+
+.time-cell--period {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .03em;
+}
+
+/* ── Error message ───────────────────────────────────────── */
+.dtp-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.dtp-err-enter-active,
+.dtp-err-leave-active {
+  transition: opacity .15s, transform .12s;
+}
+
+.dtp-err-enter-from,
+.dtp-err-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>

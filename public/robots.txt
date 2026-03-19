@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:/public/index.php
+Disallow: /public
+Disallow: /index.php

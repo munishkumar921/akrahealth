@@ -1,0 +1,29 @@
+{
+    "version": "0.2",
+    "ignorePaths": [],
+    "dictionaryDefinitions": [],
+    "dictionaries": [],
+    "words": [
+        "clinicalsupport",
+        "Htmldom",
+        "Livekit",
+        "Maatwebsite",
+        "neuro",
+        "openepic",
+        "openidconnect",
+        "opennotes",
+        "peacehealth",
+        "phaxio",
+        "practicehandle",
+        "rcopia",
+        "snomed",
+        "specialities",
+        "Speciality",
+        "standardmtm",
+        "standardpsych",
+        "updox",
+        "vivacare"
+    ],
+    "ignoreWords": [],
+    "import": []
+}

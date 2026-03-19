@@ -1,0 +1,46 @@
+name: PHP Guard
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - dev
+
+jobs:
+  php-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch base branch
+        run: |
+          git fetch origin ${{ github.base_ref }}
+
+      - name: Check changed PHP files
+        run: |
+          files=$(git diff --name-only origin/${{ github.base_ref }} -- '*.php')
+
+          if [ -z "$files" ]; then
+            echo "No PHP files changed."
+            exit 0
+          fi
+
+          echo "Changed PHP files:"
+          echo "$files"
+
+          for file in $files; do
+
+            # Check conflict markers
+            if grep -E '<<<<<<<|=======|>>>>>>>' "$file"; then
+              echo "❌ Conflict markers found in $file"
+              exit 1
+            fi
+
+            # Check PHP syntax
+            php -l "$file" || exit 1
+
+          done
+
+          echo "✅ All checks passed."

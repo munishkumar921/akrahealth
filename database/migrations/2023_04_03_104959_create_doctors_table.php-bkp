@@ -1,0 +1,42 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('doctors', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('user_id')->constrained()->onDelete('cascade');
+            $table->foreignUuid('national_provider_identifier_id')->nullable()->constrained()->onDelete('cascade');
+            $table->foreignUuid('hospital_id')->nullable()->constrained();
+            $table->foreignUuid('selected_patient_id')->nullable()->constrained('users');
+            $table->string('upin')->nullable()->comment('unique physician identification number');
+            $table->string('dea')->nullable()->comment('Drug Enforcement Administration of the US');
+            $table->string('medicare')->nullable();
+            $table->string('tax_id')->nullable();
+            $table->string('signature')->nullable();
+            $table->bigInteger('time_slots_per_hour')->nullable();
+            $table->json('timings')->nullable();
+            $table->string('rcopia_username')->nullable();
+            $table->string('schedule_increment')->nullable();
+            $table->string('peace_health_id')->nullable();
+            $table->longText('description')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('doctors');
+    }
+};

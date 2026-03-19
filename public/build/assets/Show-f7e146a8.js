@@ -1,0 +1,2 @@
+import{e as t,a as o,t as r,o as a}from"./app-04a3dc98.js";const d={class:"p-6"},l={key:0},c={class:"bg-gray-100 p-4 rounded"},i={key:1,class:"text-gray-500"},u={__name:"Show",props:{data:{type:Object,default:()=>null}},setup(n){const e=n;return(p,s)=>(a(),t("div",d,[s[0]||(s[0]=o("h1",{class:"text-2xl font-bold mb-4"},"Prescription Details",-1)),e.data?(a(),t("div",l,[o("pre",c,""+r(e.data)+`
+            `,1)])):(a(),t("div",i," No data available. "))]))}};export{u as default};

@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Override SweetAlert2 warning icon border-color */
+.swal2-warning {
+    border-color: #f39c12 !important; /* or any color you prefer */
+}
