@@ -18,9 +18,10 @@ class FormsController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         $patientId = auth()->user()->patient->id ?? null;
+        $keyword = trim((string) $request->input('keyword', ''));
 
         if (! $patientId) {
             abort(404, 'Patient not found');
@@ -69,18 +70,30 @@ class FormsController extends Controller
             ->where('patient_id', $patientId)
             ->get();
 
-        return Inertia::render('Patients/Forms/Index', [
-            'completdForms' => $completedForms,
-            'forms' => $list_array,
-        ]);
-    }
+        if ($keyword !== '') {
+            $list_array = collect($list_array)
+                ->filter(function ($form) use ($keyword) {
+                    return str_contains(strtolower((string) ($form['label'] ?? '')), strtolower($keyword));
+                })
+                ->values()
+                ->all();
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
+            $completedForms = $completedForms->filter(function ($form) use ($keyword) {
+                $doctorName = $form->doctor?->user?->name ?? '';
+
+                return str_contains(strtolower((string) ($form->title ?? '')), strtolower($keyword))
+                    || str_contains(strtolower((string) ($form->date ?? '')), strtolower($keyword))
+                    || str_contains(strtolower((string) $doctorName), strtolower($keyword));
+            })->values();
+        }
+
+        return Inertia::render('Patients/Forms/Index', [
+            'completedForms' => $completedForms,
+            'forms' => $list_array,
+            'filters' => [
+                'keyword' => $keyword,
+            ],
+        ]);
     }
 
     /**
@@ -108,12 +121,11 @@ class FormsController extends Controller
             throw new \Exception("Invalid form type: {$type}");
         }
 
-        // ✅ Capture form metadata once
         $formMeta = [
             'form_title' => $array[$type]['forms_title'] ?? null,
             'form_destination' => $array[$type]['forms_destination'] ?? null,
         ];
-        // ✅ Loop through all fields
+
         foreach ($array[$type] as $row_k => $row_v) {
             // Skip metadata and control keys
             if (in_array($row_k, ['forms_title', 'forms_destination', 'scoring', 'gender', 'age'])) {
@@ -152,7 +164,6 @@ class FormsController extends Controller
             $items[$row_k] = $form_item;
         }
 
-        // ✅ Combine metadata + questions
         $result = [
             'form_title' => $formMeta['form_title'],
             'form_destination' => $formMeta['form_destination'],

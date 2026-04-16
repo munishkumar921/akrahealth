@@ -4,7 +4,6 @@ import AuthLayout from "@/Layouts/AuthLayout2.vue";
 import {router } from '@inertiajs/vue3';
 import Modal from '@/Components/Common/Modal.vue';
 import AddResult from '@/Pages/Modals/AddResult.vue';
-import { defineProps } from "vue";
 
 const props = defineProps({
     result: Object,

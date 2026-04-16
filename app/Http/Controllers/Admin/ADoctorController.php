@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminDoctorRequest;
 use App\Models\Doctor;
 use App\Models\Speciality;
 use App\Services\DoctorService;
 use App\Services\UserService;
-use Illuminate\Http\Request;
 use Throwable;
 
 class ADoctorController extends Controller
@@ -62,7 +62,7 @@ class ADoctorController extends Controller
      * @param  mixed  $request
      * @return void
      */
-    public function store(Request $request)
+    public function store(AdminDoctorRequest $request)
     {
         $doctor = $this->userService->upsert($request->all());
 
@@ -95,7 +95,7 @@ class ADoctorController extends Controller
      * @param  mixed  $id
      * @return void
      */
-    public function update(Request $request, string $id)
+    public function update(AdminDoctorRequest $request, string $id)
     {
         $doctor = $this->userService->upsert($request->all(), $id);
 

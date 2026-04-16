@@ -4,7 +4,6 @@ import AuthLayout from "@/Layouts/AuthLayout2.vue";
 import {router } from '@inertiajs/vue3';
  
 
-import { defineProps } from "vue";
 
 const props = defineProps({
     result: Object,

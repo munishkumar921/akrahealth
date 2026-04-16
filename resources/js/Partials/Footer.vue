@@ -1,7 +1,7 @@
 <script setup>
 import { Link } from "@inertiajs/vue3";
 import MvpModal from '@/Pages/Modals/GetMvp.vue';
- 
+
 </script>
 <template>
   <div class="footer pt-5">
@@ -60,13 +60,13 @@ import MvpModal from '@/Pages/Modals/GetMvp.vue';
                   </li>
                   <li>
                     <Link :class="`${route().current('patient-portal')?'text-cobalt-blue':''}`"  :href="route('patient-portal')">Patient Portal</Link>
-                  </li>              
+                  </li>
                   <li>
                     <Link :class="`${route().current('erx')?'text-cobalt-blue':''}`"  :href="route('erx')">Prescription (eRx)</Link>
                   </li>
                   <li>
                     <a  href="https://practice.akrahealth.com/" rel="noopener noreferrer">Lightweight EMR</a>
-                  
+
                   </li>
                 </ul>
               </div>
@@ -93,32 +93,44 @@ import MvpModal from '@/Pages/Modals/GetMvp.vue';
               <div class="col-md-3 col-xl-2 w3agile_footer_grid w3agile_footer_grid1" id="Registration">
                 <h3>Get your Apps</h3>
                 <ul>
+                <li>
+                <a  :class="route().current('akrahealth-intake') ? 'text-cobalt-blue' : ''"href="https://intake.akrahealth.com/"  rel="noopener noreferrer"> Akrahealth Intake</a>
+
+                </li>
+                <li>
+                <a  :class="route().current('akrahealth-emr') ? 'text-cobalt-blue' : ''"href="https://emr.akrahealth.com/"  rel="noopener noreferrer"> Akrahealth EMR</a>
+
+                </li>
+                <li>
+                <a  :class="route().current('scribe-akrahealth') ? 'text-cobalt-blue' : ''"href="https://scribe.akrahealth.com/"  rel="noopener noreferrer"> Scribe Akrahealth</a>
+
+                </li>
                   <li>
                     <a  :class="route().current('clinic-management') ? 'text-cobalt-blue' : ''"href="https://practice.akrahealth.com/"  rel="noopener noreferrer"> Practice Management</a>
-                 
+
                   </li>
                   <li>
-                    <a  :class="route().current('patient-management') ? 'text-cobalt-blue' : ''"href="https://appointment.akrahealth.com/"  rel="noopener noreferrer">Automated Appointments</a>
-                  
+                    <a  :class="route().current('patient-management') ? 'text-cobalt-blue' : ''"href="https://practice.akrahealth.com/"  rel="noopener noreferrer">Automated Appointments</a>
+
                   </li>
-                  <li>
-                    <a  :class="route().current('doctor-on-call') ? 'text-cobalt-blue' : ''"href="https://telehealth.akrahealth.com/" rel="noopener noreferrer">Telehealth Services</a>
-                  
-                  </li>
+                  <!-- <li>
+                    <a  :class="route().current('doctor-on-call') ? 'text-cobalt-blue' : ''"href="https://practice.akrahealth.com/" rel="noopener noreferrer">Telehealth Services</a>
+
+                  </li> -->
                   <li>
                     <a  :class="route().current('mobile-iv') ? 'text-cobalt-blue' : ''"href="https://mobileiv.akrahealth.com/"  rel="noopener noreferrer"> Mobile IV</a>
-                 
+
                   </li>
                   <li>
                     <a  :class="route().current('prescription') ? 'text-cobalt-blue' : ''"href="https://prescription.akrahealth.com"  rel="noopener noreferrer"> Prescription Management</a>
-                  
-                  </li> 
-                  <li>
-                    <a  :class="route().current('mar') ? 'text-cobalt-blue' : ''"href="https://mar.akrahealth.com"  rel="noopener noreferrer">  Medication Administration Records</a>                
-                  </li> 
-                  <li>
-                    <a  :class="route().current('wellness') ? 'text-cobalt-blue' : ''"href="https://wellness.akrahealth.com"  rel="noopener noreferrer">Wellness Service</a>                
-                  </li>          
+
+                  </li>
+                  <!-- <li>
+                    <a  :class="route().current('mar') ? 'text-cobalt-blue' : ''"href="https://mar.akrahealth.com"  rel="noopener noreferrer">  Medication Administration Records</a>
+                  </li> -->
+                  <!-- <li>
+                    <a  :class="route().current('wellness') ? 'text-cobalt-blue' : ''"href="https://wellness.akrahealth.com"  rel="noopener noreferrer">Wellness Service</a>
+                  </li> -->
                 </ul>
               </div>
 
@@ -133,8 +145,8 @@ import MvpModal from '@/Pages/Modals/GetMvp.vue';
                   </li>
 
                   <li>
-                    <Link :class="`${route().current('training')?'text-cobalt-blue':''}`" :href="route('training')">Training</Link>
-                    
+                    <a  :class="route().current('training') ? 'text-cobalt-blue' : ''"href="https://www.atlearn.in/"  rel="noopener noreferrer">Training</a>
+
                   </li>
                   <li>
                      <Link :href="route('hire-us')">Hire EMR Integrators</Link>
@@ -145,9 +157,9 @@ import MvpModal from '@/Pages/Modals/GetMvp.vue';
                   <li>
                     <Link :class="`${route().current('outreach-program')?'text-cobalt-blue':''}`" :href="route('outreach-program')">Outreach Program</Link>
                   </li>
-                 
+
                 </ul>
-              </div>     
+              </div>
           <div class="clearfix"></div>
       </div>
       <div class="row">

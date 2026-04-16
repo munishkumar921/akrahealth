@@ -1,465 +1,786 @@
 <script setup>
-import { reactive,onMounted, nextTick } from 'vue'
+import { nextTick, onMounted } from 'vue'
 import AuthLayout from '@/Layouts/AuthLayout.vue'
-import Chart from 'chart.js/auto';
+import Chart from 'chart.js/auto'
 
-// Sample data (mirrors variables used in Blade)
-const total_data_monthly = reactive({
-  new_users_current_month: 124,
-  new_users_past_month: 100,
-  new_subscribers_current_month: 18,
-  new_subscribers_past_month: 14,
-  income_current_month: [{ currency: 'USD', data: 12500 }],
-  income_past_month: [{ currency: 'USD', data: 10100 }],
-  spending_current_month: 3500.12,
-  spending_past_month: 3000.00,
-  words_current_month: 450000,
-  words_past_month: 420000,
-  images_current_month: 1200,
-  images_past_month: 1100,
-  contents_current_month: 320,
-  contents_past_month: 280,
-  transactions_current_month: [{ data: 230 }],
-  transactions_past_month: [{ data: 190 }]
+const props = defineProps({
+  metrics: Object,
+  charts: Object,
+  latestRegistrations: Array,
+  latestTransactions: Array,
+  topPlans: Array,
 })
 
-const total_data_yearly = reactive({
-  total_new_users: 1240,
-  total_new_subscribers: 240,
-  total_income: [{ currency: 'USD', data: 145000 }],
-  total_spending: 42000,
-  words_generated: 5000000,
-  images_generated: 24000,
-  contents_generated: 3200,
-  transactions_generated: [{ data: 2800 }]
-})
-
-const chart_data = reactive({
-  monthly_new_users: JSON.stringify([4,5,12,7,10,8,6,9,12,11,13,14,5,6,7,8,9,3,4,5,6,7,8,9,2,1,0,0,0,0,2]),
-  total_new_users: JSON.stringify([10,20,30,25,40,60,55,45,70,85,95,100]),
-  total_income: JSON.stringify([2000,3000,4000,5000,6000,7000,8000,9000,7500,8500,9500,10000])
-})
-
-const percentage = reactive({
-  users_current: JSON.stringify(124),
-  users_past: JSON.stringify(100),
-  subscribers_current: JSON.stringify(18),
-  subscribers_past: JSON.stringify(14),
-  income_current: JSON.stringify([{ data: 12500 }]),
-  income_past: JSON.stringify([{ data: 10100 }]),
-  spending_current: JSON.stringify(3500),
-  spending_past: JSON.stringify(3000),
-  words_current: JSON.stringify(450000),
-  words_past: JSON.stringify(420000),
-  images_current: JSON.stringify(1200),
-  images_past: JSON.stringify(1100),
-  contents_current: JSON.stringify(320),
-  contents_past: JSON.stringify(280),
-  transactions_current: JSON.stringify([{ data: 230 }]),
-  transactions_past: JSON.stringify([{ data: 190 }])
-})
-
-const result = reactive([
-  { id: 1, profile_photo_path: '/images/user/02.jpg', name: 'Alice', email: 'alice@example.com', group: 'admin', status: 'active', created_at: '2025-12-01 09:00:00' },
-  { id: 2, profile_photo_path: '/images/user/03.jpg', name: 'Bob', email: 'bob@example.com', group: 'user', status: 'inactive', created_at: '2025-12-05 14:00:00' }
-])
-
-const transaction = reactive([
-  { id: 1, profile_photo_path: '/images/user/05.jpg', name: 'Charlie', email: 'charlie@example.com', status: 'Paid', price: '49.99', gateway: 'Stripe', created_at: '2025-12-07 11:00:00' }
-])
-
-const notifications = reactive([
-  { id: 1, data: { type: 'new-user', subject: 'New user registered', name: 'Eve', email: 'eve@example.com' }, created_at: '2025-12-08 12:00:00' }
-])
-
-function formatNumber(n) {
-  if (n === null || n === undefined) return '-' 
-  if (typeof n === 'number') return n.toLocaleString()
-  return n
+const formatNumber = (value) => {
+  const amount = Number(value || 0)
+  return amount.toLocaleString('en-IN')
 }
 
-function mainPercentageDifference(past, current) {
-  past = Number(past) || 0
-  current = Number(current) || 0
-  if (past === 0) return current === 0 ? '<span class="text-muted"> 0%</span>' : '<span class="text-success fs-14">+100%</span>'
-  const diff = current - past
-  const change = (Math.abs(diff) / past) * 100
-  return diff > 0 ? `<span class="text-success fs-14">+${change.toFixed(1)}%</span>` : `<span class="text-danger">-${change.toFixed(1)}%</span>`
+const formatCurrency = (value, currency = 'USD') => {
+  const amount = Number(value || 0)
+
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  } catch (error) {
+    return `${currency} ${amount.toFixed(2)}`
+  }
+}
+
+const getChange = (past, current) => {
+  const previous = Number(past || 0)
+  const now = Number(current || 0)
+
+  if (previous === 0) {
+    return {
+      label: now === 0 ? '0%' : '+100%',
+      tone: now === 0 ? 'neutral' : 'up',
+    }
+  }
+
+  const diff = ((now - previous) / previous) * 100
+
+  if (diff === 0) {
+    return { label: '0%', tone: 'neutral' }
+  }
+
+  return {
+    label: `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%`,
+    tone: diff > 0 ? 'up' : 'down',
+  }
+}
+
+const statCards = [
+  {
+    key: 'users',
+    label: 'New Users',
+    value: props.metrics?.new_users_current_month ?? 0,
+    helper: 'Compared to last month',
+    icon: 'fa-solid fa-user-plus',
+    change: getChange(props.metrics?.new_users_past_month, props.metrics?.new_users_current_month),
+  },
+  {
+    key: 'subscribers',
+    label: 'New Subscribers',
+    value: props.metrics?.new_subscribers_current_month ?? 0,
+    helper: 'Compared to last month',
+    icon: 'fa-solid fa-id-card',
+    change: getChange(props.metrics?.new_subscribers_past_month, props.metrics?.new_subscribers_current_month),
+  },
+  {
+    key: 'income',
+    label: 'Revenue This Month',
+    value: formatCurrency(props.metrics?.income_current_month ?? 0),
+    helper: 'Compared to last month',
+    icon: 'fa-solid fa-wallet',
+    change: getChange(props.metrics?.income_past_month, props.metrics?.income_current_month),
+  },
+  {
+    key: 'transactions',
+    label: 'Transactions',
+    value: props.metrics?.transactions_current_month ?? 0,
+    helper: 'Compared to last month',
+    icon: 'fa-solid fa-receipt',
+    change: getChange(props.metrics?.transactions_past_month, props.metrics?.transactions_current_month),
+  },
+]
+
+const renderChangeClass = (tone) => {
+  if (tone === 'up') return 'metric-change metric-change--up'
+  if (tone === 'down') return 'metric-change metric-change--down'
+  return 'metric-change metric-change--neutral'
 }
 
 onMounted(async () => {
-  // Wait for DOM to be ready
   await nextTick()
-  
-  // Helper function to init charts with retry
-  const initChart = (elementId, chartConfig, retries = 5) => {
-    return new Promise((resolve) => {
-      const tryFind = () => {
-        const ctx = document.getElementById(elementId)
-        if (ctx) {
-          try {
-            new Chart(ctx, chartConfig)
-            resolve(true)
-          } catch (e) {
-            console.error(`Chart ${elementId} error:`, e)
-            resolve(false)
-          }
-        } else if (retries > 0) {
-          setTimeout(() => tryFind(), 100)
-        } else {
-          console.warn(`Element ${elementId} not found after retries`)
-          resolve(false)
-        }
-      }
-      tryFind()
-    })
+
+  const initChart = (selector, config) => {
+    const target = document.getElementById(selector)
+    if (!target) return
+    new Chart(target, config)
   }
 
-  // monthly users chart
-  try {
-    const userMonthly = JSON.parse(chart_data.monthly_new_users)
-    await initChart('chart-total-users-month', {
-      type: 'bar',
-      data: { labels: Array.from({ length: userMonthly.length }, (_, i) => (i+1).toString()), datasets: [{ label: 'New Registered Users', data: userMonthly, backgroundColor: '#007bff' }] },
-      options: { responsive: true, maintainAspectRatio: false }
-    })
-  } catch (e) {
-    console.warn('Monthly users chart error:', e)
-  }
+  initChart('sadmin-users-chart', {
+    type: 'line',
+    data: {
+      labels: props.charts?.daily_labels || [],
+      datasets: [
+        {
+          label: 'Daily registrations',
+          data: props.charts?.monthly_new_users || [],
+          borderColor: '#1294ea',
+          backgroundColor: 'rgba(18, 148, 234, 0.14)',
+          fill: true,
+          tension: 0.35,
+          borderWidth: 3,
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(148, 163, 184, 0.16)' },
+        },
+        x: {
+          grid: { display: false },
+        },
+      },
+    },
+  })
 
-  try {
-    const userYearly = JSON.parse(chart_data.total_new_users)
-    await initChart('chart-total-users-year', {
-      type: 'bar',
-      data: { labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], datasets: [{ label: 'Total New Registered Users', data: userYearly, backgroundColor: '#1e1e2d' }] },
-      options: { responsive: true, maintainAspectRatio: false }
-    })
-  } catch (e) {
-    console.warn('Yearly users chart error:', e)
-  }
+  initChart('sadmin-yearly-users-chart', {
+    type: 'bar',
+    data: {
+      labels: props.charts?.month_labels || [],
+      datasets: [
+        {
+          label: 'Users',
+          data: props.charts?.yearly_users || [],
+          backgroundColor: '#0f172a',
+          borderRadius: 16,
+          barThickness: 18,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(148, 163, 184, 0.16)' },
+        },
+        x: {
+          grid: { display: false },
+        },
+      },
+    },
+  })
 
-  try {
-    const income = JSON.parse(chart_data.total_income)
-    await initChart('chart-total-income', {
-      type: 'bar',
-      data: { labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], datasets: [{ label: 'Total Income', data: income, backgroundColor: '#FF9D00' }] },
-      options: { responsive: true, maintainAspectRatio: false }
-    })
-  } catch (e) {
-    console.warn('Income chart error:', e)
-  }
-
-  // compute and inject differences into elements (mirroring Blade JS behavior)
-  try {
-    const users_change = mainPercentageDifference(JSON.parse(percentage.users_past), JSON.parse(percentage.users_current))
-    const subscribers_change = mainPercentageDifference(JSON.parse(percentage.subscribers_past), JSON.parse(percentage.subscribers_current))
-    const income_change = mainPercentageDifference( (percentage.income_past && JSON.parse(percentage.income_past)[0]?.data) || 0, (percentage.income_current && JSON.parse(percentage.income_current)[0]?.data) || 0)
-    const spending_change = mainPercentageDifference(JSON.parse(percentage.spending_past), JSON.parse(percentage.spending_current))
-    const words_change = mainPercentageDifference(JSON.parse(percentage.words_past), JSON.parse(percentage.words_current))
-    const images_change = mainPercentageDifference(JSON.parse(percentage.images_past), JSON.parse(percentage.images_current))
-    const contents_change = mainPercentageDifference(JSON.parse(percentage.contents_past), JSON.parse(percentage.contents_current))
-    const transactions_change = mainPercentageDifference( (percentage.transactions_past && JSON.parse(percentage.transactions_past)[0]?.data) || 0, (percentage.transactions_current && JSON.parse(percentage.transactions_current)[0]?.data) || 0)
-
-    const setHtml = (id, html) => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = html
-    }
-
-    setHtml('users_change', users_change)
-    setHtml('subscribers_change', subscribers_change)
-    setHtml('income_change', income_change)
-    setHtml('spending_change', spending_change)
-    setHtml('words_change', words_change)
-    setHtml('images_change', images_change)
-    setHtml('contents_change', contents_change)
-    setHtml('transactions_change', transactions_change)
-  } catch (e) {}
+  initChart('sadmin-income-chart', {
+    type: 'bar',
+    data: {
+      labels: props.charts?.month_labels || [],
+      datasets: [
+        {
+          label: 'Revenue',
+          data: props.charts?.yearly_income || [],
+          backgroundColor: '#0ea5e9',
+          borderRadius: 16,
+          barThickness: 18,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(148, 163, 184, 0.16)' },
+        },
+        x: {
+          grid: { display: false },
+        },
+      },
+    },
+  })
 })
 </script>
 
 <template>
-  <AuthLayout title="Admin Dashboard" description="Converted admin dashboard sample">
-    <div class="page-header mt-5-7">
-      <div class="page-leftheader">
-        <h4 class="page-title mb-0">Admin Dashboard</h4>
-      </div>
-    </div>
+  <AuthLayout title="Super Admin Dashboard" description="Platform analytics and business overview">
+    <section class="sadmin-dashboard">
+      <div class="dashboard-hero">
+        <div>
+          <p class="dashboard-kicker">Platform Overview</p>
+          <h1 class="dashboard-title">Super Admin control center</h1>
+          <p class="dashboard-copy">
+            Review platform growth, subscription health, transaction activity, and the latest user movement from one
+            place.
+          </p>
+        </div>
 
-    <!-- Metrics row: Users, Subscribers, Income, Transactions (icons instead of images) -->
-    <div class="row">
-      <div class="col-xl-3 col-lg-3 col-md-6 col-sm-12 d-flex" v-for="(i, idx) in [0,1,2,3]" :key="idx">
-        <div class="card overflow-hidden border-0 mb-3 metric-card w-100">
-          <div class="card-body d-flex align-items-center">
-            <div class="d-flex align-items-end justify-content-between">
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="hero-stat__label">Annual Revenue</span>
+            <strong>{{ formatCurrency(metrics?.total_income_current_year ?? 0) }}</strong>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat__label">Yearly Users</span>
+            <strong>{{ formatNumber(metrics?.total_new_users_current_year ?? 0) }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <article v-for="card in statCards" :key="card.key" class="metric-card">
+          <div class="metric-card__top">
+            <div>
+              <p class="metric-label">{{ card.label }}</p>
+              <h3 class="metric-value">{{ card.value }}</h3>
+            </div>
+            <div class="metric-icon">
+              <i :class="card.icon"></i>
+            </div>
+          </div>
+          <div class="metric-card__bottom">
+            <span :class="renderChangeClass(card.change.tone)">{{ card.change.label }}</span>
+            <span class="metric-helper">{{ card.helper }}</span>
+          </div>
+        </article>
+      </div>
+
+      <div class="signal-grid">
+        <article class="signal-card signal-card--warning">
+          <p class="signal-card__label">Active Subscribers</p>
+          <h3>{{ formatNumber(metrics?.active_subscribers ?? 0) }}</h3>
+          <p>Currently active recurring subscriptions across the platform.</p>
+        </article>
+
+        <article class="signal-card signal-card--warning">
+          <p class="signal-card__label">Plans Live</p>
+          <h3>{{ formatNumber(metrics?.plans_live ?? 0) }}</h3>
+          <p>Subscription plans currently available for signup and upgrades.</p>
+        </article>
+
+        <article class="signal-card signal-card--warning">
+          <p class="signal-card__label">Trial Ending Soon</p>
+          <h3>{{ formatNumber(metrics?.trial_ending_soon ?? 0) }}</h3>
+          <p>Subscriptions reaching their end date within the next 14 days.</p>
+        </article>
+      </div>
+
+      <div class="analytics-grid">
+        <article class="panel-card panel-card--wide">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Growth</p>
+              <h3>Daily registrations this month</h3>
+            </div>
+            <span class="panel-chip">{{ formatNumber(metrics?.new_users_current_month ?? 0) }} new users</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="sadmin-users-chart"></canvas>
+          </div>
+        </article>
+
+        <article class="panel-card">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Subscriptions</p>
+              <h3>Top plans</h3>
+            </div>
+          </div>
+          <div class="plan-list">
+            <div v-for="plan in topPlans" :key="plan.plan_name" class="plan-item">
               <div>
-                <p class="mb-3 fs-14 font-weight-bold">{{ i===0 ? 'Total New Users' : i===1 ? 'Total New Subscribers' : i===2 ? 'Total Income' : 'Total Transactions' }} <span class="text-muted">(Current Month)</span></p>
-                <h2 class="mb-0"><span class="number-font fs-14">
-                  {{ i===0 ? formatNumber(total_data_monthly.new_users_current_month) : i===1 ? formatNumber(total_data_monthly.new_subscribers_current_month) : i===2 ? '$' + formatNumber(total_data_monthly.income_current_month[0].data) : formatNumber(total_data_monthly.transactions_current_month[0].data) }}</span>
-                  <span class="ml-2 text-muted fs-11 data-percentage-change"><span :id="i===0 ? 'users_change' : i===1 ? 'subscribers_change' : i===2 ? 'income_change' : 'transactions_change'"></span></span>
-                </h2>
+                <strong>{{ plan.plan_name }}</strong>
+                <p>{{ formatNumber(plan.subscriptions_count) }} subscriptions</p>
               </div>
-              <div>
-                <div style="width:70px;height:70px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f3f4f6;">
-                  <i :class="i===0 ? 'fa-solid fa-users text-info' : i===1 ? 'fa-solid fa-user-plus text-info' : i===2 ? 'fa-solid fa-dollar-sign text-success' : 'fa-solid fa-receipt text-primary'" style="font-size:28px"></i>
+              <span>{{ formatCurrency(plan.revenue, plan.currency) }}</span>
+            </div>
+            <div v-if="!topPlans?.length" class="empty-state">No subscription data available yet.</div>
+          </div>
+        </article>
+
+        <article class="panel-card">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Users</p>
+              <h3>Yearly new users</h3>
+            </div>
+          </div>
+          <div class="chart-wrap chart-wrap--small">
+            <canvas id="sadmin-yearly-users-chart"></canvas>
+          </div>
+        </article>
+
+        <article class="panel-card">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Revenue</p>
+              <h3>Yearly income</h3>
+            </div>
+          </div>
+          <div class="chart-wrap chart-wrap--small">
+            <canvas id="sadmin-income-chart"></canvas>
+          </div>
+        </article>
+      </div>
+
+      <div class="table-grid">
+        <article class="panel-card">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Latest Users</p>
+              <h3>Recent registrations</h3>
+            </div>
+          </div>
+          <div class="table-list">
+            <div v-for="user in latestRegistrations" :key="user.id" class="table-row">
+              <div class="table-user">
+                <img :src="user.profile_photo_url" alt="user" class="table-avatar" />
+                <div>
+                  <strong>{{ user.name || 'Unknown user' }}</strong>
+                  <p>{{ user.email || 'No email' }}</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Charts -->
-    <div class="row">
-      <div class="col-lg-6 col-md-12 mt-3">
-        <div class="card overflow-hidden border-0 mb-3">
-          <div class="card-header d-inline border-0">
-            <h3 class="card-title fs-16 mt-2 mb-2 text-white">Finance Overview</h3>
-            <div>
-              <h3 class="card-title fs-24 font-weight-800 text-white">${{ formatNumber(total_data_yearly.total_income[0].data) }}</h3>
-              <div class="text-white">Total Earnings Current Year</div>
-            </div>
-          </div>
-          <div class="card-body">
-            <canvas id="chart-total-income" class="h-330"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-lg-6 col-md-12 mt-3">
-        <div class="card overflow-hidden border-0 mb-3">
-          <div class="card-header d-inline border-0">
-            <h3 class="card-title fs-16 mt-2 mb-2 text-white">Total New Users</h3>
-            <div>
-              <h3 class="card-title fs-24 font-weight-800 text-white">{{ formatNumber(total_data_yearly.total_new_users) }}</h3>
-              <div class="text-white">Total New Registered Users Current Year</div>
-            </div>
-          </div>
-          <div class="card-body">
-            <canvas id="chart-total-users-year" class="h-330"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Latest registrations and transactions -->
-    <div class="row">
-      <div class="col-lg-12 col-md-12 mt-3">
-        <div class="card border-0 mb-3">
-          <div class="card-header d-inline border-0">
-            <h3 class="card-title fs-16 mt-2 text-white">Latest Registrations</h3>
-          </div>
-          <div class="card-body">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Group</th>
-                  <th>Status</th>
-                  <th>Registered On</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="u in result" :key="u.id">
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="widget-user-image-sm overflow-hidden mr-4"><img :src="u.profile_photo_path || '/img/users/avatar.png'" style="width:48px;height:48px;"/></div>
-                      <div class="widget-user-name"><span class="font-weight-bold">{{ u.name }}</span><br/><span class="text-muted">{{ u.email }}</span></div>
-                    </div>
-                  </td>
-                  <td><span class="cell-box user-group-{{ u.group }}">{{ u.group }}</span></td>
-                  <td><span class="cell-box user-{{ u.status }}">{{ u.status }}</span></td>
-                  <td><span class="font-weight-bold">{{ u.created_at }}</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="card border-0 mb-3">
-          <div class="card-header d-inline border-0"><h3 class="card-title fs-16 mt-2 text-white">Latest Transactions</h3></div>
-          <div class="card-body">
-            <table class="table">
-              <thead>
-                <tr><th>Paid By</th><th>Status</th><th>Total</th><th>Gateway</th><th>Paid On</th></tr>
-              </thead>
-              <tbody>
-                <tr v-for="t in transaction" :key="t.id">
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="widget-user-image-sm overflow-hidden mr-4"><img :src="t.profile_photo_path || '/img/users/avatar.png'" style="width:48px;height:48px;"/></div>
-                      <div><span class="font-weight-bold">{{ t.name }}</span><br/><span class="text-muted">{{ t.email }}</span></div>
-                    </div>
-                  </td>
-                  <td><span class="cell-box payment-{{ t.status.toLowerCase() }}">{{ t.status }}</span></td>
-                  <td><span class="font-weight-bold">${{ t.price }}</span></td>
-                  <td>{{ t.gateway }}</td>
-                  <td>{{ t.created_at }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!--Notifications -->
-    <div class="row mt-3">
-
-      <div class="col-lg-12 col-md-12 col-sm-12">
-        <div class="card border-0 mb-3 notification-card">
-          <div class="card-header notification-header">
-            <h3 class="card-title mb-0 fs-16 fw-bold">
-              <i class="fa-solid fa-bell me-2"></i>Notifications
-            </h3>
-          </div>
-          <div class="card-body pt-0 dashboard-timeline height-400">
-            <div class="vertical-timeline">
-              <div v-for="n in notifications" :key="n.id" class="vertical-timeline-item notification-item">
-                <div class="d-flex align-items-start">
-                  <div class="notification-badge">
-                    <i class="fa-solid fa-check-circle text-success"></i>
-                  </div>
-                  <div class="notification-content">
-                    <h6 class="notification-title mb-2">
-                      <span class="badge bg-info me-2">{{ n.data.type === 'new-user' ? 'NEW USER' : 'EVENT' }}</span>
-                      {{ n.data.subject }}
-                    </h6>
-                    <p class="notification-user mb-2">
-                      <i class="fa-solid fa-user me-1 text-muted"></i>
-                      <span class="fw-500">{{ n.data.name }}</span> 
-                      <span class="text-muted">{{ n.data.email }}</span>
-                    </p>
-                    <small class="notification-time text-muted">
-                      <i class="fa-solid fa-clock me-1"></i>{{ n.created_at }}
-                    </small>
-                  </div>
-                </div>
+              <div class="table-meta">
+                <span class="role-pill">{{ user.group }}</span>
+                <span class="status-pill" :class="user.status === 'active' ? 'status-pill--active' : 'status-pill--inactive'">
+                  {{ user.status }}
+                </span>
+                <small>{{ user.created_at }}</small>
               </div>
             </div>
+            <div v-if="!latestRegistrations?.length" class="empty-state">No recent registrations found.</div>
           </div>
-        </div>
-      </div>
+        </article>
 
-    </div>
+        <article class="panel-card">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Revenue Feed</p>
+              <h3>Latest transactions</h3>
+            </div>
+          </div>
+          <div class="table-list">
+            <div v-for="transaction in latestTransactions" :key="transaction.id" class="table-row">
+              <div class="table-user">
+                <img :src="transaction.profile_photo_url" alt="customer" class="table-avatar" />
+                <div>
+                  <strong>{{ transaction.name || 'Unknown customer' }}</strong>
+                  <p>{{ transaction.email || 'No email' }}</p>
+                </div>
+              </div>
+              <div class="table-meta table-meta--transaction">
+                <span class="gateway-pill">{{ transaction.gateway }}</span>
+                <strong>{{ formatCurrency(transaction.price, transaction.currency) }}</strong>
+                <small>{{ transaction.created_at }}</small>
+              </div>
+            </div>
+            <div v-if="!latestTransactions?.length" class="empty-state">No recent transactions found.</div>
+          </div>
+        </article>
+      </div>
+    </section>
   </AuthLayout>
 </template>
 
 <style scoped>
-.h-330 { height: 330px; }
-.card { background: #fff; }
+.sadmin-dashboard {
+  display: grid;
+  gap: 24px;
+}
+
+.dashboard-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 32px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.20), transparent 28%),
+    linear-gradient(135deg, #f8fcff 0%, #eef7ff 48%, #ffffff 100%);
+  border: 1px solid rgba(18, 148, 234, 0.10);
+}
+
+.dashboard-kicker,
+.panel-kicker,
+.signal-card__label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #1294ea;
+}
+
+.dashboard-title {
+  margin: 0 0 12px;
+  font-size: 42px;
+  line-height: 1.05;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.dashboard-copy {
+  margin: 0;
+  max-width: 760px;
+  color: #475569;
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 16px;
+  min-width: 340px;
+}
+
+.hero-stat {
+  padding: 20px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
+}
+
+.hero-stat__label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.hero-stat strong {
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.metric-grid,
+.signal-grid,
+.table-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.signal-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.table-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metric-card,
+.signal-card,
+.panel-card {
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 24px;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
+}
 
 .metric-card {
-  min-height: 160px;
+  padding: 22px;
 }
 
-/* Notifications styling */
-.notification-card {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border-radius: 6px !important;
-  overflow: hidden;
-}
-
-.notification-header {
-  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
-  color: #fff;
-  padding: 1.5rem;
-  border: none;
+.metric-card__top {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
 
-.notification-header .card-title {
-  color: #fff;
+.metric-label {
+  margin: 0 0 10px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.metric-value {
   margin: 0;
-  font-weight: 600;
-  font-size: 1.1rem;
+  color: #0f172a;
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 700;
 }
 
-.vertical-timeline {
-  position: relative;
-  padding: 1rem 0;
-}
-
-.vertical-timeline::before {
-  content: '';
-  position: absolute;
-  left: 25px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(to bottom, #0ea5e9, transparent);
-}
-
-.vertical-timeline-item {
-  position: relative;
-  padding-left: 70px;
-  padding-bottom: 1.5rem;
-}
-
-.vertical-timeline-item:last-child {
-  padding-bottom: 0;
-}
-
-.notification-badge {
-  position: absolute;
-  left: 10px;
-  top: 5px;
-  width: 36px;
-  height: 36px;
-  background: #f0f9ff;
-  border-radius: 50%;
-  display: flex;
+.metric-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid #0ea5e9;
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  color: #0ea5e9;
+  font-size: 24px;
+}
+
+.metric-card__bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.metric-change {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metric-change--up {
+  color: #059669;
+}
+
+.metric-change--down {
+  color: #dc2626;
+}
+
+.metric-change--neutral {
+  color: #64748b;
+}
+
+.metric-helper {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.signal-card {
+  padding: 24px;
+}
+
+.signal-card h3 {
+  margin: 0 0 8px;
+  font-size: 34px;
+  line-height: 1;
+  color: #0f172a;
+}
+
+.signal-card p:last-child {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.signal-card--dark {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-color: rgba(15, 23, 42, 0.7);
+}
+
+.signal-card--dark .signal-card__label,
+.signal-card--dark h3,
+.signal-card--dark p:last-child {
+  color: #fff;
+}
+
+.signal-card--warning {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.panel-card {
+  padding: 24px;
+}
+
+.panel-card--wide {
+  grid-column: span 1;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.panel-head h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.panel-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chart-wrap {
+  height: 320px;
+}
+
+.chart-wrap--small {
+  height: 280px;
+}
+
+.plan-list,
+.table-list {
+  display: grid;
+  gap: 14px;
+}
+
+.plan-item,
+.table-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: #f8fbff;
+  border: 1px solid #e2e8f0;
+}
+
+.plan-item strong,
+.table-user strong {
+  color: #0f172a;
+}
+
+.plan-item p,
+.table-user p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.table-user {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.table-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.10);
+}
+
+.table-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
+
+.table-meta small {
+  color: #94a3b8;
+}
+
+.table-meta--transaction strong {
   font-size: 16px;
 }
 
-.notification-content {
-  background: #f8fafc;
-  padding: 1rem;
-  border-radius: 8px;
-  border-left: 4px solid #0ea5e9;
-  transition: all 0.3s ease;
-}
-
-.notification-content:hover {
-  background: #f1f5f9;
-  border-left-color: #06b6d4;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
-}
-
-.notification-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
-}
-
-.notification-title .badge {
-  font-size: 0.7rem;
-  padding: 0.35rem 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.notification-user {
-  font-size: 0.9rem;
-  color: #64748b;
-  margin: 0.5rem 0;
-}
-
-.notification-user span.fw-500 {
-  color: #1e293b;
-  font-weight: 500;
-}
-
-.notification-time {
-  font-size: 0.85rem;
+.role-pill,
+.status-pill,
+.gateway-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.role-pill {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.status-pill--active {
+  background: #ecfdf3;
+  color: #059669;
+}
+
+.status-pill--inactive {
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.gateway-pill {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.empty-state {
+  padding: 24px;
+  border-radius: 18px;
+  background: #f8fafc;
+  color: #64748b;
+  text-align: center;
+}
+
+@media (max-width: 1400px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .signal-grid,
+  .analytics-grid,
+  .table-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 991px) {
+  .dashboard-hero {
+    flex-direction: column;
+  }
+
+  .hero-stats {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .metric-grid,
+  .signal-grid,
+  .table-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-title {
+    font-size: 32px;
+  }
+
+  .hero-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-head,
+  .plan-item,
+  .table-row,
+  .metric-card__bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .table-meta {
+    align-items: flex-start;
+    text-align: left;
+  }
 }
 </style>

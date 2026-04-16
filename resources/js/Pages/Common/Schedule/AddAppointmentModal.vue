@@ -28,7 +28,20 @@ const fieldsTwo = [
     { key: "notes", type: "textarea", placeholder: "Notes / Tasks" },
 ];
 
-// 🔹 Inertia form
+const getFormattedDateTime = () => {
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 const form = useForm({
     patient_id: "",
     doctor_id: props.doctor?.id ?? "",
@@ -42,12 +55,10 @@ const form = useForm({
     duration_minutes: 0,
     fee_amount: 0,
     currancy: "USD",
+    createdAt: getFormattedDateTime(),
 });
 
-// 🔹 Visit types
 const visitTypes = ref([]);
-
-// 🔹 Fetch visit types
 const getVisitTypes = async () => {
     if (!form.doctor_id) {
         visitTypes.value = [];
@@ -65,12 +76,10 @@ const getVisitTypes = async () => {
     }
 };
 
-// 🔹 Sync props → form
 watch(() => props.selectedDate, v => v && (form.start_date = v), { immediate: true });
 watch(() => props.selectedStartTime, v => v && (form.start_time = v), { immediate: true });
 watch(() => props.selectedEndTime, v => v && (form.end_time = v), { immediate: true });
 
-// 🔹 Doctor change → reload visit types
 watch(() => form.doctor_id, () => {
     form.visit_type_id = "";
     form.duration_minutes = 0;
@@ -79,7 +88,6 @@ watch(() => form.doctor_id, () => {
     getVisitTypes();
 });
 
-// 🔹 Visit type change → auto-fill duration, amount, and currency
 watch(() => form.visit_type_id, (visitTypeId) => {
     if (!visitTypeId) {
         form.duration_minutes = 0;
@@ -96,14 +104,12 @@ watch(() => form.visit_type_id, (visitTypeId) => {
     }
 });
 
-// 🔹 Initial fetch
 onMounted(() => {
     if (form.doctor_id) {
         getVisitTypes();
     }
 });
 
-// 🔹 Close modal
 const closeModal = () => {
     form.reset();
     form.clearErrors();
@@ -111,7 +117,6 @@ const closeModal = () => {
     emit("close");
 };
 
-// 🔹 Submit
 const submitForm = () => {
     if (!form.patient_id) {
         form.setError("patient_id", "Please select a patient.");
@@ -136,6 +141,7 @@ const submitForm = () => {
 
 <template>
     <form @submit.prevent="submitForm" novalidate>
+
         <!-- Patient -->
         <div class="form-group">
             <BaseSelect v-model="form.patient_id" placeholder="Select Patient" label="Patient">

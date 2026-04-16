@@ -1,62 +1,82 @@
 <script setup>
 import AuthLayout from "@/Layouts/AuthLayout.vue";
-import { useForm, Link } from "@inertiajs/vue3";
-import { route } from "ziggy-js";
-import Swal from "sweetalert2";
+import timezones from "@/Components/Common/timezone.js";
+import { useForm } from "@inertiajs/vue3";
+import Swal from "sweetalert2/dist/sweetalert2.js";
 
-// ---------------- PROPS ----------------
 const props = defineProps({
-    settings: Object,
-    app: Object,
+    settings: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
-// ---------------- FORM ----------------
 const form = useForm({
-    site_name: props.app?.name ?? "",
-    site_website: props.app?.url ?? "",
-    site_email: props.app?.email ?? "",
-    time_zone: props.app?.timezone ?? "UTC",
-
-    default_user_group: props.settings?.default_user ?? "marketing",
-    support_email: props.settings?.support_email ?? "enabled",
-    user_notification: props.settings?.user_notification ?? "enabled",
-    user_support: props.settings?.user_support ?? "enabled",
-    theme: props.settings?.default_theme ?? "light",
-
-    // Live Chat
-    enable_live_chat: props.settings?.live_chat === "on",
-    live_chat_link: props.settings?.live_chat_link ?? "",
-
-    // Google reCaptcha
-    enable_recaptcha: props.settings?.recaptcha_enable === "on",
-    recaptcha_site_key: props.settings?.recaptcha_site_key ?? "",
-    recaptcha_secret_key: props.settings?.recaptcha_secret_key ?? "",
-
-    // Google Analytics
-    enable_analytics: props.settings?.analytics_enable === "on",
-    google_analytics_id: props.settings?.analytics_id ?? "",
-
-    // Google Maps
-    enable_maps: props.settings?.maps_enable === "on",
-    google_maps_key: props.settings?.maps_key ?? "",
-
-    // GDPR
-    enable_gdpr: props.settings?.gdpr ?? false,
+    site_name: props.settings?.site_name || "",
+    site_website: props.settings?.site_website || "",
+    site_email: props.settings?.site_email || "",
+    time_zone: props.settings?.time_zone || "Asia/Kolkata",
+    default_user_group: props.settings?.default_user_group || "marketing",
+    support_email: Boolean(props.settings?.support_email),
+    user_notification: Boolean(props.settings?.user_notification),
+    user_support: Boolean(props.settings?.user_support),
+    theme: props.settings?.theme || "light",
+    enable_live_chat: Boolean(props.settings?.enable_live_chat),
+    live_chat_link: props.settings?.live_chat_link || "",
+    enable_recaptcha: Boolean(props.settings?.enable_recaptcha),
+    recaptcha_site_key: props.settings?.recaptcha_site_key || "",
+    recaptcha_secret_key: props.settings?.recaptcha_secret_key || "",
+    enable_analytics: Boolean(props.settings?.enable_analytics),
+    google_analytics_id: props.settings?.google_analytics_id || "",
+    enable_maps: Boolean(props.settings?.enable_maps),
+    google_maps_key: props.settings?.google_maps_key || "",
+    enable_gdpr: Boolean(props.settings?.enable_gdpr),
 });
 
-// ---------------- SUBMIT ----------------
+const metricCards = [
+    {
+        label: "Timezone",
+        value: form.time_zone,
+        helper: "Default platform timezone",
+        icon: "fa-solid fa-clock",
+        tone: "tone-blue",
+    },
+    {
+        label: "Theme",
+        value: form.theme.charAt(0).toUpperCase() + form.theme.slice(1),
+        helper: "Default application appearance",
+        icon: "fa-solid fa-palette",
+        tone: "tone-amber",
+    },
+    {
+        label: "Live Chat",
+        value: form.enable_live_chat ? "Enabled" : "Disabled",
+        helper: "Visitor support status",
+        icon: "fa-solid fa-comments",
+        tone: "tone-green",
+    },
+    {
+        label: "Security",
+        value: form.enable_recaptcha ? "Protected" : "Standard",
+        helper: "reCAPTCHA protection status",
+        icon: "fa-solid fa-shield-halved",
+        tone: "tone-slate",
+    },
+];
+
 const submitForm = () => {
     Swal.fire({
-        title: "Save Global Settings?",
+        title: "Save global settings?",
+        text: "These changes will update the platform defaults.",
         icon: "question",
         showCancelButton: true,
-        confirmButtonText: "Yes, Save",
-    }).then((r) => {
-        if (r.isConfirmed) {
-            form.post(route("admin.settings.global.store"), {
-                onSuccess: () => {
-                    Swal.fire("Saved!", "Settings updated successfully.", "success");
-                },
+        confirmButtonText: "Save settings",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#0ea5e9",
+    }).then((result) => {
+        if (result.isConfirmed) {
+            form.post(route("superAdmin.globalsetting.update"), {
+                preserveScroll: true,
             });
         }
     });
@@ -64,221 +84,324 @@ const submitForm = () => {
 </script>
 
 <template>
-<AuthLayout
-    title="Global Settings"
-    description="Admin - Global Settings"
-    heading="Global Settings"
->
-    <!-- PAGE HEADER -->
-    <div class="page-header mt-5-7 justify-content-center mb-4">
-        <div class="page-leftheader text-center">
-            <h4 class="page-title mb-0">Global Settings</h4>
-        </div>
-    </div>
+    <AuthLayout title="Global Settings" description="Configure platform-wide preferences and integrations">
+        <section class="settings-page">
+            <div class="hero-card card border-0 shadow-sm">
+                <div class="card-body">
+                    <p class="hero-kicker">General Settings</p>
+                    <h1 class="hero-title">Global Settings</h1>
+                    <p class="hero-text">
+                        Manage the platform identity, support defaults, visual preferences, and third-party service
+                        switches from one place.
+                    </p>
+                </div>
+            </div>
 
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <form @submit.prevent="submitForm">
-
-                <!-- GENERAL SETTINGS -->
-                <div class="card border-0 special-shadow mb-4">
-
+            <div class="metric-grid">
+                <article v-for="card in metricCards" :key="card.label" class="metric-card card border-0 shadow-sm" :class="card.tone">
                     <div class="card-body">
-                        <h6 class="fs-16 font-weight-bold mb-4">General Settings</h6>
+                        <div class="metric-icon"><i :class="card.icon"></i></div>
+                        <div>
+                            <p class="metric-label">{{ card.label }}</p>
+                            <h3 class="metric-value">{{ card.value }}</h3>
+                            <p class="metric-helper">{{ card.helper }}</p>
+                        </div>
+                    </div>
+                </article>
+            </div>
 
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <h6>Website Name</h6>
-                                <input v-model="form.site_name" class="form-control" />
+            <form @submit.prevent="submitForm" class="settings-stack">
+                <div class="card border-0 shadow-sm settings-card">
+                    <div class="card-body">
+                        <div class="section-head">
+                            <div>
+                                <p class="section-kicker">Platform</p>
+                                <h3 class="section-title">General details</h3>
                             </div>
+                        </div>
 
-                            <div class="col-md-6 mb-3">
-                                <h6>Website URL</h6>
-                                <input v-model="form.site_website" class="form-control" />
+                        <div class="row g-4">
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label">Website Name</label>
+                                <input v-model="form.site_name" type="text" class="form-control" />
+                                <div v-if="form.errors.site_name" class="text-danger small mt-1">{{ form.errors.site_name }}</div>
                             </div>
-
-                            <div class="col-md-6 mb-3">
-                                <h6>Website Email Address</h6>
-                                <input v-model="form.site_email" class="form-control" />
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label">Website URL</label>
+                                <input v-model="form.site_website" type="url" class="form-control" />
+                                <div v-if="form.errors.site_website" class="text-danger small mt-1">{{ form.errors.site_website }}</div>
                             </div>
-
-                            <div class="col-md-6 mb-3">
-                                <h6>Time Zone</h6>
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label">Website Email</label>
+                                <input v-model="form.site_email" type="email" class="form-control" />
+                                <div v-if="form.errors.site_email" class="text-danger small mt-1">{{ form.errors.site_email }}</div>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label">Timezone</label>
                                 <select v-model="form.time_zone" class="form-select">
-                                    <option value="UTC">UTC</option>
-                                    <option value="Asia/Kolkata">Asia/Kolkata</option>
-                                    <option value="America/Los_Angeles">Los Angeles</option>
-                                    <option value="Europe/London">London</option>
+                                    <option v-for="timezone in timezones" :key="timezone.value" :value="timezone.value">
+                                        {{ timezone.label }}
+                                    </option>
+                                </select>
+                                <div v-if="form.errors.time_zone" class="text-danger small mt-1">{{ form.errors.time_zone }}</div>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label">Default User Group</label>
+                                <input v-model="form.default_user_group" type="text" class="form-control" />
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label">Default Theme</label>
+                                <select v-model="form.theme" class="form-select">
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
+                                    <option value="system">System</option>
                                 </select>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- LIVE CHAT -->
-               <div class="card border-0 special-shadow mb-4">
+                <div class="card border-0 shadow-sm settings-card">
                     <div class="card-body">
-                        <h6 class="font-weight-bold mb-4">Live Chat (tawk.to)</h6>
+                        <div class="section-head">
+                            <div>
+                                <p class="section-kicker">Support</p>
+                                <h3 class="section-title">Experience controls</h3>
+                            </div>
+                        </div>
 
-                        <label class="custom-switch mb-3">
-                            <input
-                                type="checkbox"
-                                v-model="form.enable_live_chat"
-                                class="custom-switch-input"
-                            />
-                            <span class="custom-switch-indicator"></span>
-                            <span class="custom-switch-description">
-                                Enable Live Chat
-                            </span>
-                        </label>
+                        <div class="toggle-grid">
+                            <label class="toggle-card">
+                                <div>
+                                    <h4>Support Email</h4>
+                                    <p>Show support email availability across the platform.</p>
+                                </div>
+                                <input v-model="form.support_email" type="checkbox" class="settings-switch" />
+                            </label>
 
-                        <div v-if="form.enable_live_chat" class="mt-3">
-                            <input
-                                v-model="form.live_chat_link"
-                                class="form-control"
-                                placeholder="Direct Chat Link"
-                            />
+                            <label class="toggle-card">
+                                <div>
+                                    <h4>User Notifications</h4>
+                                    <p>Enable platform-level user notification support.</p>
+                                </div>
+                                <input v-model="form.user_notification" type="checkbox" class="settings-switch" />
+                            </label>
+
+                            <label class="toggle-card">
+                                <div>
+                                    <h4>User Support</h4>
+                                    <p>Enable customer support access points for users.</p>
+                                </div>
+                                <input v-model="form.user_support" type="checkbox" class="settings-switch" />
+                            </label>
+
+                            <label class="toggle-card">
+                                <div>
+                                    <h4>Enable GDPR</h4>
+                                    <p>Show GDPR consent and compliance prompts.</p>
+                                </div>
+                                <input v-model="form.enable_gdpr" type="checkbox" class="settings-switch" />
+                            </label>
                         </div>
                     </div>
                 </div>
 
+                <div class="row g-4">
+                    <div class="col-12 col-xl-4">
+                        <div class="card border-0 shadow-sm settings-card h-100">
+                            <div class="card-body">
+                                <div class="integration-head">
+                                    <div>
+                                        <p class="section-kicker">Integration</p>
+                                        <h3 class="section-title">Live Chat</h3>
+                                    </div>
+                                    <input v-model="form.enable_live_chat" type="checkbox" class="settings-switch" />
+                                </div>
+                                <p class="integration-text">Enable and manage the default live support entry point.</p>
+                                <input
+                                    v-model="form.live_chat_link"
+                                    type="url"
+                                    class="form-control"
+                                    placeholder="https://"
+                                    :disabled="!form.enable_live_chat"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
-                <!-- GOOGLE ANALYTICS -->
-                <div class="card border-0 special-shadow mb-4">
-                    <div class="card-body">
-                        <h6 class="font-weight-bold mb-4">Google Analytics</h6>
+                    <div class="col-12 col-xl-4">
+                        <div class="card border-0 shadow-sm settings-card h-100">
+                            <div class="card-body">
+                                <div class="integration-head">
+                                    <div>
+                                        <p class="section-kicker">Security</p>
+                                        <h3 class="section-title">Google reCAPTCHA</h3>
+                                    </div>
+                                    <input v-model="form.enable_recaptcha" type="checkbox" class="settings-switch" />
+                                </div>
+                                <p class="integration-text">Protect signup and public forms from spam and abuse.</p>
+                                <div class="d-grid gap-3">
+                                    <input
+                                        v-model="form.recaptcha_site_key"
+                                        type="text"
+                                        class="form-control"
+                                        placeholder="Site key"
+                                        :disabled="!form.enable_recaptcha"
+                                    />
+                                    <input
+                                        v-model="form.recaptcha_secret_key"
+                                        type="text"
+                                        class="form-control"
+                                        placeholder="Secret key"
+                                        :disabled="!form.enable_recaptcha"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                        <label class="custom-switch mb-3">
-                            <input
-                                type="checkbox"
-                                v-model="form.enable_analytics"
-                                class="custom-switch-input"
-                            />
-                            <span class="custom-switch-indicator"></span>
-                            <span class="custom-switch-description">
-                                Enable Google Analytics
-                            </span>
-                        </label>
-
-                        <div v-if="form.enable_analytics" class="mt-3">
-                            <input
-                                v-model="form.google_analytics_id"
-                                class="form-control"
-                                placeholder="G-XXXXXXXXXX"
-                            />
+                    <div class="col-12 col-xl-4">
+                        <div class="card border-0 shadow-sm settings-card h-100">
+                            <div class="card-body">
+                                <div class="integration-head">
+                                    <div>
+                                        <p class="section-kicker">Tracking & Maps</p>
+                                        <h3 class="section-title">External Services</h3>
+                                    </div>
+                                </div>
+                                <div class="mini-toggle mb-3">
+                                    <label class="d-flex align-items-center justify-content-between gap-3 w-100">
+                                        <span>
+                                            <strong>Analytics</strong>
+                                            <small class="d-block text-muted">Google Analytics measurement ID</small>
+                                        </span>
+                                        <input v-model="form.enable_analytics" type="checkbox" class="settings-switch" />
+                                    </label>
+                                </div>
+                                <input
+                                    v-model="form.google_analytics_id"
+                                    type="text"
+                                    class="form-control mb-3"
+                                    placeholder="G-XXXXXXXXXX"
+                                    :disabled="!form.enable_analytics"
+                                />
+                                <div class="mini-toggle mb-3">
+                                    <label class="d-flex align-items-center justify-content-between gap-3 w-100">
+                                        <span>
+                                            <strong>Google Maps</strong>
+                                            <small class="d-block text-muted">Maps API integration</small>
+                                        </span>
+                                        <input v-model="form.enable_maps" type="checkbox" class="settings-switch" />
+                                    </label>
+                                </div>
+                                <input
+                                    v-model="form.google_maps_key"
+                                    type="text"
+                                    class="form-control"
+                                    placeholder="Maps API key"
+                                    :disabled="!form.enable_maps"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
 
-
-                <!-- GOOGLE MAPS -->
-               <div class="card border-0 special-shadow mb-4">
-                    <div class="card-body">
-                        <h6 class="font-weight-bold mb-4">Google Maps</h6>
-
-                        <label class="custom-switch mb-3">
-                            <input
-                                type="checkbox"
-                                v-model="form.enable_maps"
-                                class="custom-switch-input"
-                            />
-                            <span class="custom-switch-indicator"></span>
-                            <span class="custom-switch-description">
-                                Enable Google Maps
-                            </span>
-                        </label>
-
-                        <div v-if="form.enable_maps" class="mt-3">
-                            <input
-                                v-model="form.google_maps_key"
-                                class="form-control"
-                                placeholder="Google Maps API Key"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-
-                <!-- GDPR -->
-               <div class="card border-0 special-shadow mb-4">
-                    <div class="card-body">
-                        <h6 class="font-weight-bold mb-3">GDPR Policy</h6>
-
-                        <label class="custom-switch">
-                            <input
-                                type="checkbox"
-                                v-model="form.enable_gdpr"
-                                class="custom-switch-input"
-                            />
-                            <span class="custom-switch-indicator"></span>
-                            <span class="custom-switch-description">
-                                Enable GDPR Consent Popup
-                            </span>
-                        </label>
-                    </div>
-                </div>
-
-
-                <!-- ACTIONS -->
-                <div class="text-right">
-                    <Link :href="route('superAdmin.globalsetting')" class="btn btn-danger mr-2">
-                        Cancel
-                    </Link>
-                    <button type="submit" class="btn btn-primary">
-                        Save
+                <div class="action-bar">
+                    <button type="submit" class="btn btn-primary btn-lg" :disabled="form.processing">
+                        <i class="bi bi-save me-2"></i> Save Global Settings
                     </button>
                 </div>
-
             </form>
-        </div>
-    </div>
-</AuthLayout>
+        </section>
+    </AuthLayout>
 </template>
+
 <style scoped>
-    .custom-switch {
+.settings-page { display: grid; gap: 1.5rem; }
+.hero-card {
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 42%),
+        linear-gradient(135deg, #ffffff, #f8fbff 55%, #eef7ff);
+}
+.hero-card .card-body, .settings-card .card-body { padding: 1.5rem; }
+.hero-kicker, .section-kicker {
+    margin: 0 0 .35rem;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-size: .72rem;
+    font-weight: 700;
+    color: #0ea5e9;
+}
+.hero-title, .section-title { margin: 0; color: #0f172a; }
+.hero-title { font-size: clamp(2rem, 3vw, 2.6rem); font-weight: 800; }
+.hero-text { margin: .75rem 0 0; max-width: 760px; color: #64748b; line-height: 1.7; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.metric-card { border-radius: 24px; }
+.metric-card .card-body { display: flex; align-items: center; gap: 1rem; }
+.metric-icon { width: 3.2rem; height: 3.2rem; display: grid; place-items: center; border-radius: 1rem; font-size: 1.1rem; }
+.metric-label { margin: 0 0 .35rem; color: #475569; font-weight: 700; }
+.metric-value { margin: 0; font-size: 1.5rem; font-weight: 800; color: #0f172a; }
+.metric-helper { margin: .35rem 0 0; color: #64748b; font-size: .9rem; }
+.tone-blue .metric-icon { background: rgba(59, 130, 246, .12); color: #2563eb; }
+.tone-amber .metric-icon { background: rgba(245, 158, 11, .14); color: #d97706; }
+.tone-green .metric-icon { background: rgba(34, 197, 94, .12); color: #16a34a; }
+.tone-slate .metric-icon { background: rgba(100, 116, 139, .12); color: #475569; }
+.settings-card { border-radius: 24px; }
+.settings-stack { display: grid; gap: 1.5rem; }
+.section-head, .integration-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.toggle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.toggle-card {
+    padding: 1.1rem 1.15rem;
+    border: 1px solid #dbe4f0;
+    border-radius: 20px;
     display: flex;
-    align-items: center;
-    cursor: pointer;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    background: #f8fbff;
 }
-
-.custom-switch-input {
-    width: 44px;
-    height: 24px;
-    appearance: none;
-    background: #cbd5e0;
-    border-radius: 12px;
+.toggle-card h4 { margin: 0 0 .35rem; color: #0f172a; font-size: 1rem; }
+.toggle-card p, .integration-text { margin: 0; color: #64748b; line-height: 1.6; }
+.mini-toggle { padding: .85rem 1rem; border: 1px solid #dbe4f0; border-radius: 16px; background: #f8fbff; }
+.action-bar { display: flex; justify-content: flex-end; }
+.settings-switch {
     position: relative;
-    outline: none;
-    transition: background 0.3s;
+    flex: 0 0 auto;
+    width: 3.2rem;
+    height: 1.8rem;
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: #cbd5e1;
     cursor: pointer;
+    transition: background-color .2s ease;
+    margin: 0;
 }
-
-.custom-switch-input:checked {
-    background: #3b82f6;
-}
-
-.custom-switch-input::before {
+.settings-switch::before {
     content: "";
     position: absolute;
-    width: 20px;
-    height: 20px;
-    background: #fff;
+    top: .2rem;
+    left: .2rem;
+    width: 1.4rem;
+    height: 1.4rem;
     border-radius: 50%;
-    top: 2px;
-    left: 2px;
-    transition: transform 0.3s;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+    transition: transform .2s ease;
 }
-
-.custom-switch-input:checked::before {
-    transform: translateX(20px);
+.settings-switch:checked {
+    background: #0ea5e9;
 }
-
-.custom-switch-indicator {
-    display: none;
+.settings-switch:checked::before {
+    transform: translateX(1.4rem);
 }
-
-.custom-switch-description {
-    margin-left: 10px;
-    font-size: 0.9rem;
+.settings-switch:focus {
+    outline: 0;
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
+}
+@media (max-width: 767px) {
+    .action-bar { justify-content: stretch; }
+    .action-bar .btn { width: 100%; }
 }
 </style>

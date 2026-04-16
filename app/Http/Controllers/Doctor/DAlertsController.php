@@ -19,11 +19,11 @@ class DAlertsController extends Controller
     {
 
         $patientId = auth()->user()->doctor->selected_patient_id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $type = trim((string) $request->input('type', 'active'));
 
         $alertsQuery = Alert::with('doctor')
             ->where('patient_id', $patientId);
-
-        $keyword = $request->get('keyword', '');
 
         // 🔍 Keyword search
         if (! empty($keyword)) {
@@ -34,8 +34,6 @@ class DAlertsController extends Controller
         }
 
         // 📌 Type filter
-        $type = $request->get('type', 'active');
-
         if ($type === 'active') {
             $alertsQuery->where('date_active', '<=', now()->addWeeks(2))
                 ->whereNull('date_complete')
@@ -78,10 +76,23 @@ class DAlertsController extends Controller
         }
 
         // 📄 Pagination
-        $alerts = $alertsQuery->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $alerts = $alertsQuery
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
 
         // 🔄 Transform data safely
         $alerts->getCollection()->transform(function ($alert) {
+            $status = 'Active';
+
+            if ($alert->date_complete) {
+                $status = 'Completed';
+            } elseif (! empty($alert->why_not_complete)) {
+                $status = 'Inactive';
+            } elseif ($alert->date_active && $alert->date_active > now()->addWeeks(2)) {
+                $status = 'Pending';
+            }
+
             return [
                 'id' => $alert->id,
                 'date' => $alert->date_complete ?? $alert->date_active,
@@ -92,13 +103,16 @@ class DAlertsController extends Controller
                 'message_sent' => $alert->message_sent,
                 'why_not_complete' => $alert->why_not_complete,
                 'doctor' => $alert->doctor,
+                'status_label' => $status,
             ];
         });
 
         return Inertia::render('Doctors/Patient/Alerts/Index', [
             'alerts' => $alerts,
-            'keyword' => $keyword,
-            'currentTab' => $type,
+            'filters' => [
+                'keyword' => $keyword,
+                'type' => $type,
+            ],
         ]);
 
     }

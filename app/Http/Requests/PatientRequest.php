@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Actions\Fortify\PasswordValidationRules;
+use App\Models\Patient;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,10 +18,7 @@ class PatientRequest extends FormRequest
      */
     public function rules(): array
     {
-
         $user_id = $this->request->get('user_id');
-        $question_id = $this->request->get('question_id');
-        $secret_answer = $this->request->get('secret_answer');
         $rules = [
             'profile_photo_path' => ['nullable', 'mimes:png,jpg,jpeg', 'max:1000'],
             'first_name' => ['required', 'string', 'max:255', 'min:2'],
@@ -29,27 +27,41 @@ class PatientRequest extends FormRequest
             'street_address2' => ['nullable', 'string', 'max:500'],
             'city' => ['required', 'string', 'max:100'],
             'state' => ['nullable', 'string', 'max:100'],
-            'zip' => ['required', 'string', 'max:20'],
+            'zip' => ['required', 'regex:/^[0-9][0-9\\-\\s]{2,19}$/'],
             'country' => ['required', 'string', 'max:100'],
-            'mobile' => ['required', 'string', 'min:10', 'max:15'],
+            'mobile' => ['required', 'regex:/^[0-9+\-\s()]{10,20}$/'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user_id)],
             'sex' => ['nullable', 'string', 'max:6', 'in:Male,Female,Other'],
             'is_active' => ['required', 'boolean'],
+            'dob' => ['nullable', 'date'],
+            'question_id' => ['nullable', 'exists:questions,id', 'required_with:secret_answer'],
+            'secret_answer' => ['nullable', 'string', 'max:255', 'min:2', 'required_with:question_id'],
+            'password' => (! $user_id && ! (auth()->check() && auth()->user()->hasRole('Doctor')))
+                ? ['required', 'confirmed', 'min:8']
+                : ['nullable', 'confirmed', 'min:8'],
 
         ];
 
-        // Secret question rules: required for new patients, nullable for updates
-        if (! $question_id == 0 && ! $secret_answer == null) {
-            $rules['question_id'] = ['required', 'string', 'max:255'];
-            $rules['secret_answer'] = ['required', 'string', 'max:255', 'min:2'];
+        return $rules;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $routeId = $this->route('id') ?? $this->route('patient');
+
+        if (! $this->filled('user_id') && $routeId) {
+            $patient = Patient::find($routeId);
+            if ($patient?->user_id) {
+                $this->merge([
+                    'user_id' => $patient->user_id,
+                ]);
+            }
         }
 
-        // Password rules: required for new patients, nullable for updates
-        $rules['password'] = (! $user_id && ! auth()->user()->hasRole('Doctor'))
-            ? ['required']
-            : ['nullable'];
-
-        return $rules;
+        $this->merge([
+            'mobile' => $this->filled('mobile') ? preg_replace('/\s+/', '', (string) $this->input('mobile')) : $this->input('mobile'),
+            'is_active' => $this->boolean('is_active'),
+        ]);
     }
 
     /**

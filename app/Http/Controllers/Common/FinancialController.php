@@ -10,6 +10,7 @@ use App\Models\Hospital;
 use App\Models\Patient;
 use App\Models\Schedule;
 use App\Traits\CommonTrait;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -20,36 +21,48 @@ class FinancialController extends Controller
 
     public function bills_to_submit(Request $request)
     {
-        $keyword = $request->get('keyword');
+        $keyword = trim((string) $request->input('keyword', ''));
+        $encounterSigned = trim((string) $request->input('encounter_signed', ''));
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 10;
 
-        // Build QUERY BUILDER (do NOT call ->get() yet)
         $query = Encounter::with('patient.user')
             ->where('bill_submitted', '!=', 'Done')
             ->where('addendum', 'n')
             ->where('hospital_id', auth()->user()->doctor->hospital_id)
             ->orderBy('encounter_date_of_service', 'desc');
 
-        // SEARCH FILTER
         if ($keyword) {
             $query->where(function ($q) use ($keyword) {
-                $q->where('patient.user.name', 'like', "%$keyword%")
-                    ->orWhere('patient.user.name', 'like', "%$keyword%")
-                    ->orWhere('encounters.encounter_date_of_service', 'like', "%$keyword%");
+                $q->whereHas('patient.user', function ($patientQuery) use ($keyword) {
+                    $patientQuery->where('name', 'like', "%{$keyword}%");
+                })
+                    ->orWhere('chief_complaint', 'like', "%{$keyword}%")
+                    ->orWhere('encounter_date_of_service', 'like', "%{$keyword}%")
+                    ->orWhere('batch_type', 'like', "%{$keyword}%")
+                    ->orWhere('encounter_signed', 'like', "%{$keyword}%");
             });
         }
 
-        // FETCH RESULTS AFTER FILTERING
-        $encounters = $query->paginate();
-        // PROCESS BILLING TOTALS
+        if ($encounterSigned !== '') {
+            $query->where('encounter_signed', $encounterSigned);
+        }
+
+        $encounters = $query->paginate($perPage)->withQueryString();
         $bills = [];
         foreach ($encounters as $row) {
             $bills[] = [
                 'id' => $row->id,
                 'date_of_service' => $row->encounter_date_of_service,
-                'patient_name' => $row->patient->user->name,
-                'chief_complaint' => $row->chief_complaint,
+                'date_of_service_label' => $row->encounter_date_of_service
+                    ? \Carbon\Carbon::parse($row->encounter_date_of_service)->format('M d, Y')
+                    : '-',
+                'patient_name' => $row->patient?->user?->name ?? '-',
+                'chief_complaint' => $row->chief_complaint ?: '-',
                 'encounter_signed' => $row->encounter_signed,
-                'batch_type' => $row->batch_type,
+                'encounter_signed_label' => $row->encounter_signed ?: 'Pending',
+                'batch_type' => $row->batch_type ?: '-',
+                'batch_type_label' => $row->batch_type ?: '-',
                 'encounter_id' => $row->id,
                 'patient_id' => $row->patient_id,
                 'hospital_id' => $row->hospital_id,
@@ -59,33 +72,36 @@ class FinancialController extends Controller
 
         return Inertia::render('Common/Financial/BillsToSubmit', [
             'bills' => $encounters,
-            'keyword' => request()->get('keyword', ''),
+            'filters' => [
+                'keyword' => $keyword,
+                'encounter_signed' => $encounterSigned,
+            ],
         ]);
     }
 
     public function processed_bills(Request $request)
     {
-        $keyword = $request->get('keyword');
+        $keyword = trim((string) $request->get('keyword', ''));
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 10;
 
-        // Build QUERY BUILDER (do NOT call ->get() yet)
         $query = Encounter::with('patient.user')
             ->where('bill_submitted', 'Done')
             ->where('addendum', 'n')
             ->where('hospital_id', auth()->user()->doctor->hospital_id)
             ->orderBy('encounter_date_of_service', 'desc');
 
-        // SEARCH FILTER
         if ($keyword) {
             $query->where(function ($q) use ($keyword) {
-                $q->where('patient.user.name', 'like', "%$keyword%")
-                    ->orWhere('patient.user.name', 'like', "%$keyword%")
-                    ->orWhere('encounters.encounter_date_of_service', 'like', "%$keyword%");
+                $q->whereHas('patient.user', function ($patientQuery) use ($keyword) {
+                    $patientQuery->where('name', 'like', "%{$keyword}%");
+                })
+                    ->orWhere('chief_complaint', 'like', "%{$keyword}%")
+                    ->orWhere('encounter_date_of_service', 'like', "%{$keyword}%");
             });
         }
 
-        // FETCH RESULTS AFTER FILTERING
-        $encounters = $query->paginate();
-        // PROCESS BILLING TOTALS
+        $encounters = $query->paginate($perPage)->withQueryString();
         $bills = [];
         foreach ($encounters as $row) {
 
@@ -101,11 +117,17 @@ class FinancialController extends Controller
             $bills[] = [
                 'id' => $row->id,
                 'date_of_service' => $row->encounter_date_of_service,
-                'patient_name' => $row->patient->user->name,
-                'chief_complaint' => $row->chief_complaint,
+                'date_of_service_label' => $row->encounter_date_of_service
+                    ? \Carbon\Carbon::parse($row->encounter_date_of_service)->format('M d, Y')
+                    : '-',
+                'patient_name' => $row->patient?->user?->name ?? '-',
+                'chief_complaint' => $row->chief_complaint ?: '-',
                 'charges' => number_format($charges, 2),
                 'total_balance' => number_format($balance, 2),
+                'charges_label' => number_format($charges, 2),
+                'total_balance_label' => number_format($balance, 2),
                 'date_processed' => $row->updated_at->format('Y-m-d'),
+                'date_processed_label' => $row->updated_at?->format('M d, Y') ?? '-',
                 'encounter_id' => $row->id,
                 'patient_id' => $row->patient_id,
                 'hospital_id' => $row->hospital_id,
@@ -116,12 +138,18 @@ class FinancialController extends Controller
 
         return Inertia::render('Common/Financial/ProcessedBills', [
             'bills' => $encounters,
-            'keyword' => $keyword,
+            'filters' => [
+                'keyword' => $keyword,
+            ],
         ]);
     }
 
-    public function outstanding_balances()
+    public function outstanding_balances(Request $request)
     {
+        $keyword = trim((string) $request->get('keyword', ''));
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 10;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
         $patients = Patient::with(['user'])->get();
 
         $result = [];
@@ -182,22 +210,54 @@ class FinancialController extends Controller
             // Only include if has balance or billing note
             if ($totalBalance >= 0.01 || $billingNotes !== '') {
                 $result[] = [
+                    'id' => $patient->id,
                     'patient_id' => $patient->id,
-                    'patient_name' => $patient->user->name,
+                    'patient_name' => $patient->user?->name ?? '-',
                     'balance' => $totalBalance,
-                    'billing_notes' => $billingNotes,
+                    'balance_label' => number_format($totalBalance, 2),
+                    'billing_notes' => $billingNotes ?: '-',
                 ];
             }
         }
 
+        $result = collect($result);
+
+        if ($keyword !== '') {
+            $result = $result->filter(function ($row) use ($keyword) {
+                $needle = mb_strtolower($keyword);
+
+                return str_contains(mb_strtolower((string) ($row['patient_name'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['billing_notes'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['balance_label'] ?? '')), $needle);
+            })->values();
+        }
+
+        $paginated = new LengthAwarePaginator(
+            $result->forPage($currentPage, $perPage)->values(),
+            $result->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
         return Inertia::render('Common/Financial/OutstandingBalances', [
-            'bills' => $result,
-            'keyword' => request()->get('keyword', ''),
+            'bills' => $paginated,
+            'filters' => [
+                'keyword' => $keyword,
+            ],
         ]);
     }
 
-    public function monthly_financial_report()
+    public function monthly_financial_report(Request $request)
     {
+        $keyword = trim((string) $request->get('keyword', ''));
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 10;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+
         $query = DB::table('encounters')
             ->select(DB::raw("DATE_FORMAT(encounter_date_of_service, '%Y-%m') as month"), DB::raw('COUNT(*) as patients_seen'))
             ->where('addendum', 'n')
@@ -215,6 +275,7 @@ class FinancialController extends Controller
                 $row = [];
                 $row['patients_seen'] = $row_obj->patients_seen;
                 $row['month'] = $row_obj->month;
+                $row['month_label'] = \Carbon\Carbon::createFromFormat('Y-m', $row_obj->month)->format('M Y');
 
                 // Extract year + month
                 [$year, $month] = explode('-', $row_obj->month);
@@ -264,26 +325,62 @@ class FinancialController extends Controller
                     ->get();
 
                 foreach ($schedule as $sch) {
-                    if ($sch->status === 'DNKA') {
+                    if ($sch->schedule_status === 'DNKA') {
                         $row['dnka'] += 1;
                     }
-                    if ($sch->status === 'LMC') {
+                    if ($sch->schedule_status === 'LMC') {
                         $row['lmc'] += 1;
                     }
                 }
+
+                $row['total_billed_label'] = number_format((float) $row['total_billed'], 2);
+                $row['total_payments_label'] = number_format((float) $row['total_payments'], 2);
                 // Push to result
                 $result[] = $row;
             }
         }
 
+        $result = collect($result);
+
+        if ($keyword !== '') {
+            $result = $result->filter(function ($row) use ($keyword) {
+                $needle = mb_strtolower($keyword);
+
+                return str_contains(mb_strtolower((string) ($row['month_label'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['patients_seen'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['total_billed_label'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['total_payments_label'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['dnka'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['lmc'] ?? '')), $needle);
+            })->values();
+        }
+
+        $paginated = new LengthAwarePaginator(
+            $result->forPage($currentPage, $perPage)->values(),
+            $result->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
         return Inertia::render('Common/Financial/MonthlyFinancialReport', [
-            'bills' => $result,
-            'keyword' => request()->get('search', ''),
+            'bills' => $paginated,
+            'filters' => [
+                'keyword' => $keyword,
+            ],
         ]);
     }
 
     public function yearly_financial_report(Request $request)
     {
+        $keyword = trim((string) $request->get('keyword', ''));
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 10;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+
         $query = DB::table('encounters')
             ->select(DB::raw('YEAR(encounter_date_of_service) as year, COUNT(*) as patients_seen'))
             ->where('addendum', 'n')
@@ -292,12 +389,15 @@ class FinancialController extends Controller
             ->orderBy('year', 'desc')
             ->get();
 
+        $result = [];
+
         if ($query->count()) {
             foreach ($query as $row_obj) {
 
                 $row = [];
                 $row['patients_seen'] = $row_obj->patients_seen;
                 $row['year'] = $row_obj->year;
+                $row['year_label'] = (string) $row_obj->year;
                 $row['total_billed'] = 0;
                 $row['total_payments'] = 0;
                 $row['dnka'] = 0;
@@ -338,21 +438,51 @@ class FinancialController extends Controller
                     ->get();
 
                 foreach ($query1b as $row3) {
-                    if ($row3->status === 'DNKA') {
+                    if ($row3->schedule_status === 'DNKA') {
                         $row['dnka'] += 1;
                     }
-                    if ($row3->status === 'LMC') {
+                    if ($row3->schedule_status === 'LMC') {
                         $row['lmc'] += 1;
                     }
                 }
 
+                $row['total_billed_label'] = number_format((float) $row['total_billed'], 2);
+                $row['total_payments_label'] = number_format((float) $row['total_payments'], 2);
                 $result[] = $row;
             }
         }
 
+        $result = collect($result);
+
+        if ($keyword !== '') {
+            $result = $result->filter(function ($row) use ($keyword) {
+                $needle = mb_strtolower($keyword);
+
+                return str_contains(mb_strtolower((string) ($row['year_label'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['patients_seen'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['total_billed_label'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['total_payments_label'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['dnka'] ?? '')), $needle)
+                    || str_contains(mb_strtolower((string) ($row['lmc'] ?? '')), $needle);
+            })->values();
+        }
+
+        $paginated = new LengthAwarePaginator(
+            $result->forPage($currentPage, $perPage)->values(),
+            $result->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
         return Inertia::render('Common/Financial/YearlyFinancialReport', [
-            'bills' => $result,
-            'keyword' => request()->get('search', ''),
+            'bills' => $paginated,
+            'filters' => [
+                'keyword' => $keyword,
+            ],
         ]);
     }
 

@@ -78,7 +78,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
                     <Link :href="route('emr-integration')" class="btn btn-primary btn-rounded mt-3 px-4">Learn More</Link>
                 </div>
                 <div class="col-lg-6 mt-4 mt-lg-0">
-                  <img src="images/webpages/appss_1.webp" class="img-fluid shadow" alt="emr-online-chart" style="border-radius: 15px;" />
+                  <img src="images/healthcare_integrations.png" class="img-fluid shadow" alt="emr-online-chart" style="border-radius: 15px;" />
                 </div>
             </div>
         </div>

@@ -3,19 +3,20 @@ import AuthLayout2 from '@/Layouts/AuthLayout2.vue';
 import { router } from '@inertiajs/vue3';
 
 defineProps({
-  counts: Object,
+    counts: Object,
 });
 
 const handleCardClick = (routeName) => {
-  router.visit(route(routeName));
+    router.visit(route(routeName));
 };
 </script>
 <template>
-<AuthLayout2 title="Dashboard" description="View your patient dashboard and key metrics" heading="">
+    <AuthLayout2 title="Dashboard" description="View your patient dashboard and key metrics" heading="">
         <div class="row">
 
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.messages')" style="cursor: pointer;">
+            <div class="col-md-6 col-lg-4">
+                <div class="iq-card iq-card-block iq-card-stretch iq-card-height"
+                    @click="handleCardClick('patient.messages')" style="cursor: pointer;">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Messages</span></div>
                         <div class="d-flex justify-content-between align-items-center">
@@ -33,13 +34,15 @@ const handleCardClick = (routeName) => {
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.encounters')" style="cursor: pointer;">
+            <div class="col-md-6 col-lg-4">
+                <div class="iq-card iq-card-block iq-card-stretch iq-card-height"
+                    @click="handleCardClick('patient.encounters')" style="cursor: pointer;">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Encounters to Complete</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ counts.encounters_to_complete }}</span></h2>
+                                <h2 class="mb-0"><span class="counter fs-34">{{ counts.encounters_to_complete }}</span>
+                                </h2>
                             </div>
                             <div class="iq-iconbox iq-bg-info">
                                 <i class="fa fa-stethoscope"></i>
@@ -52,47 +55,9 @@ const handleCardClick = (routeName) => {
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.messages')" style="cursor: pointer;">
-                    <div class="iq-card-body">
-                        <div class="text-center"><span>Telephone Messages</span></div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ counts.telephone_messages }}</span></h2>
-                            </div>
-                            <div class="iq-iconbox iq-bg-success">
-                                <i class="fa fa-phone"></i>
-                            </div>
-                        </div>
-                        <div class="iq-progress-bar mt-5">
-                            <span class="bg-success" data-percent="56"
-                                style="transition: width 2s ease 0s; width: 66%;"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.booking.list')" style="cursor: pointer;">
-                    <div class="iq-card-body">
-                        <div class="text-center"><span>Calendar</span></div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ counts.calendar.total }}</span></h2>
-                                <div class="small text-muted">Pending: {{ counts.calendar.pending }} | Completed: {{ counts.calendar.completed }}</div>
-                            </div>
-                            <div class="iq-iconbox iq-spring-green ">
-                                <i class="fa fa-calendar"></i>
-                            </div>
-                        </div>
-                        <div class="iq-progress-bar mt-5">
-                            <span class="iq-spring-green" data-percent="60"
-                                style="transition: width 2s ease 0s; width: 70%;"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.booking.list')" style="cursor: pointer;">
+            <div class="col-md-6 col-lg-4">
+                <div class="iq-card iq-card-block iq-card-stretch iq-card-height"
+                    @click="handleCardClick('patient.booking.list')" style="cursor: pointer;">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Reminders</span></div>
                         <div class="d-flex justify-content-between align-items-center">
@@ -110,8 +75,9 @@ const handleCardClick = (routeName) => {
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.documents')" style="cursor: pointer;">
+            <div class="col-md-6 col-lg-4">
+                <div class="iq-card iq-card-block iq-card-stretch iq-card-height"
+                    @click="handleCardClick('patient.documents')" style="cursor: pointer;">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Scanned Documents</span></div>
                         <div class="d-flex justify-content-between align-items-center">
@@ -129,8 +95,9 @@ const handleCardClick = (routeName) => {
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.billing')" style="cursor: pointer;">
+            <div class="col-md-6 col-lg-4">
+                <div class="iq-card iq-card-block iq-card-stretch iq-card-height"
+                    @click="handleCardClick('patient.billing')" style="cursor: pointer;">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Bills to Process</span></div>
                         <div class="d-flex justify-content-between align-items-center">
@@ -148,8 +115,9 @@ const handleCardClick = (routeName) => {
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height" @click="handleCardClick('patient.results')" style="cursor: pointer;">
+            <div class="col-md-6 col-lg-4">
+                <div class="iq-card iq-card-block iq-card-stretch iq-card-height"
+                    @click="handleCardClick('patient.results')" style="cursor: pointer;">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Test Results to Review</span></div>
                         <div class="d-flex justify-content-between align-items-center">

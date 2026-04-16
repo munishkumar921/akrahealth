@@ -27,7 +27,7 @@ const initGoogleTranslate = () => {
   window.googleTranslateElementInit = () => {
     new window.google.translate.TranslateElement(
       {
-         includedLanguages: availableLanguages.map(l => l.code).join(','),
+        includedLanguages: availableLanguages.map(l => l.code).join(','),
         autoDisplay: false,
       },
       'google_translate_element'
@@ -83,11 +83,11 @@ const getCurrentFlag = () =>
 
 const getCurrentLanguageName = () =>
   availableLanguages.find(l => l.code === selectedLanguage.value)?.name || 'English'
- 
+
 /* ---------------- LIFECYCLE ---------------- */
 onMounted(() => {
   initGoogleTranslate()
-   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
@@ -97,10 +97,10 @@ onUnmounted(() => {
 /* ---------------- OTHER ---------------- */
 const logout = () => form.post(route('logout'))
 
- 
 
 
-const announcementText='A Lightweight EMR Built for Modern Clinics — Designed for solo providers and clinics';
+
+const announcementText = 'A Lightweight EMR Built for Modern Clinics — Designed for solo providers and clinics';
 </script>
 
 
@@ -119,79 +119,57 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
                 <img class="w-30px mr-1" src="/images/techStack/WhatsApp.svg" alt="WhatsApp" /><span class="mt-1">+91
                   6381250184</span>
               </a>
-              
+
             </div>
           </div>
         </div>
         <!-- Desktop: marquee -->
         <div class="col-lg-8">
           <div class="announcement-wrap">
-              <!-- Google Translate Widget -->
-           
+            <!-- Google Translate Widget -->
+
             <div class="marquee-container" title="Click to pause/resume" @click="toggleMarquee">
-              <span
-                class="marquee-text pointer"
-                :style="{ animationPlayState: isPaused ? 'paused' : 'running' }"
-              >
-                <img
-                  src="/images/speaker_13668445.webp"
-                  alt="announcement"
-                  class="me-2 announcement-icon"
-                />
+              <span class="marquee-text pointer" :style="{ animationPlayState: isPaused ? 'paused' : 'running' }">
+                <img src="/images/speaker_13668445.webp" alt="announcement" class="me-2 announcement-icon" />
                 <span class="announcement-text">{{ announcementText }}</span>
-                <img
-                  src="/images/speaker_13668445.webp"
-                  alt="announcement"
-                  class="me-2 announcement-icon"
-                />
+                <img src="/images/speaker_13668445.webp" alt="announcement" class="me-2 announcement-icon" />
               </span>
             </div>
-             <li class="nav-item ms-2 d-flex align-items-center" ref="languageDropdownRef">
+            <li class="nav-item ms-2 d-flex align-items-center" ref="languageDropdownRef">
               <div class="language-selector" @click.stop>
-                <button 
-                  class="language-dropdown d-flex align-items-center gap-2"
-                  @click="toggleLanguageDropdown($event)"
-                >
+                <button class="language-dropdown d-flex align-items-center gap-2"
+                  @click="toggleLanguageDropdown($event)">
                   <span class="current-flag">{{ getCurrentFlag() }}</span>
                   <span class="current-lang">{{ getCurrentLanguageName() }}</span>
                   <i class="ri-arrow-down-s-line" :class="{ 'rotate-180': isLanguageDropdownOpen }"></i>
                 </button>
-                
-                <div 
-                  v-show="isLanguageDropdownOpen"
-                  class="language-options"
-                >
-                  <div 
-                    v-for="lang in availableLanguages" 
-                    :key="lang.code"
+
+                <div v-show="isLanguageDropdownOpen" class="language-options">
+                  <div v-for="lang in availableLanguages" :key="lang.code"
                     class="language-option d-flex align-items-center gap-2"
-                    :class="{ 'active': selectedLanguage === lang.code }"
-                    @click="selectLanguage(lang.code)"
-                  >
+                    :class="{ 'active': selectedLanguage === lang.code }" @click="selectLanguage(lang.code)">
                     <span class="option-flag">{{ lang.flag }}</span>
                     <span class="option-name">{{ lang.name }}</span>
                   </div>
                 </div>
               </div>
-              
+
               <!-- Hidden Google Translate element container -->
-              <div 
-                id="google_translate_element" 
-                style="position: absolute; left: -9999px; top: -9999px; visibility: hidden;"
-              ></div>
+              <div id="google_translate_element"
+                style="position: absolute; left: -9999px; top: -9999px; visibility: hidden;"></div>
             </li>
 
           </div>
         </div>
       </div>
-    </div> 
-  </div> 
+    </div>
+  </div>
 
   <header id="header" class="fixed-top">
     <div class="container ">
       <nav class="navbar navbar-expand-lg" id="navbar">
         <Link :href="route('home')" class="logo mr-auto">
-        <img src="/images/akrahealth.webp" alt="" />
+          <img src="/images/akrahealth.webp" alt="" />
         </Link>
         <a class="navbar-toggler" data-toggle="collapse" data-target="#navbarSupportedContent"
           aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -202,7 +180,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
             <li>
               <Link class="nav-link me-2" :class="`${route().current('home') ? 'active' : ''}`" :href="route('home')"
                 :active="route().current('home')">
-                {{  'Home'}}</Link>
+                {{ 'Home' }}</Link>
             </li>
             <li>
               <Link class="nav-link me-2" :class="`${route().current('emr') ? 'active' : ''}`" :href="route('emr')"
@@ -214,29 +192,32 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
                 :active="route().current('ai-receptionist')">{{ 'AI Receptionist' }}
               </Link>
             </li> -->
-                        <li class="nav-item dropdown">
-               <a href="#" class="nav-link me-2 dropdown-toggle mt-1" role="button" data-toggle="dropdown"
+            <li class="nav-item dropdown">
+              <a href="#" class="nav-link me-2 dropdown-toggle mt-1" role="button" data-toggle="dropdown"
                 aria-expanded="false"
                 :class="`${route().current('ai-receptionist') ? 'active' : ''}` || `${route().current('ai-receptionist') ? 'active' : ''}`
                   || `${route().current('ai-receptionist') ? 'active' : ''}` || `${route().current('ai-receptionist') ? 'active' : ''}`">
                 <span>{{ 'AI Solutions' }}</span> <i class="ri-arrow-drop-down-line ri-xl "></i>
               </a>
-           
+
               <div class="dropdown-menu">
-                  <Link class="nav-link me-2 dropdown-item" :class="`${route().current('ai-receptionist') ? 'active' : ''}`" :href="route('ai-receptionist')"
-                    :active="route().current('ai-receptionist')">{{ 'AI Receptionist' }}
-                  </Link>
+                <Link class="nav-link me-2 dropdown-item"
+                  :class="`${route().current('ai-receptionist') ? 'active' : ''}`" :href="route('ai-receptionist')"
+                  :active="route().current('ai-receptionist')">{{ 'AI Receptionist' }}
+                </Link>
                 <div class="dropdown-divider"></div>
-                  <Link class="nav-link me-2 dropdown-item" :class="`${route().current('ai-patient-intake') ? 'active' : ''}`" :href="route('ai-patient-intake')"
-                    :active="route().current('ai-patient-intake')">{{ 'AI Patient Intake' }}
-                  </Link>
+                <Link class="nav-link me-2 dropdown-item"
+                  :class="`${route().current('ai-patient-intake') ? 'active' : ''}`" :href="route('ai-patient-intake')"
+                  :active="route().current('ai-patient-intake')">{{ 'AI Patient Intake' }}
+                </Link>
                 <div class="dropdown-divider"></div>
-                  <Link class="nav-link me-2 dropdown-item" :class="`${route().current('ai-medical-scribe') ? 'active' : ''}`" :href="route('ai-medical-scribe')"
-                    :active="route().current('ai-medical-scribe')">{{ 'AI Medical Scribe' }}
-                  </Link>
-               
+                <Link class="nav-link me-2 dropdown-item"
+                  :class="`${route().current('ai-medical-scribe') ? 'active' : ''}`" :href="route('ai-medical-scribe')"
+                  :active="route().current('ai-medical-scribe')">{{ 'AI Medical Scribe' }}
+                </Link>
+
               </div>
-              </li> 
+            </li>
             <!---- <li>
               <Link class="nav-link me-2" :class="`${route().current('dental') ? 'active' : ''}`"
                 :href="route('dental')" :active="route().current('dental')">Dental
@@ -254,12 +235,12 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
               <div class="dropdown-menu">
                 <Link class="nav-link me-2 dropdown-item"
                   :class="`${route().current('emr-integration') ? 'active' : ''}`" :href="route('emr-integration')">EMR
-                Integration
+                  Integration
                 </Link>
                 <div class="dropdown-divider"></div>
                 <Link class="nav-link me-2 dropdown-item"
                   :class="`${route().current('api-integration') ? 'active' : ''}`" :href="route('api-integration')">API
-                Integration
+                  Integration
                 </Link>
                 <div class="dropdown-divider"></div>
                 <Link class="nav-link me-2 dropdown-item"
@@ -276,93 +257,107 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
               <a href="#" class="nav-link me-2 dropdown-toggle mt-1" role="button" data-toggle="dropdown"
                 aria-expanded="false"
                 :class="`${route().current('clinic-integration') ? 'active' : ''}` || `${route().current('doctor-on-call') ? 'active' : ''}`
-                  || `${route().current('patient-integrations') ? 'active' : ''}` || `${route().current('mobile-iv') ? 'active' : ''}`|| `${route().current('prescription') ? 'active' : ''}`|| `${route().current('mar') ? 'active' : ''}`|| `${route().current('wellness') ? 'active' : ''}`"
-                >
+                  || `${route().current('patient-integrations') ? 'active' : ''}` || `${route().current('mobile-iv') ? 'active' : ''}` || `${route().current('prescription') ? 'active' : ''}` || `${route().current('mar') ? 'active' : ''}` || `${route().current('wellness') ? 'active' : ''}`">
                 <span>{{ 'Products' }}</span> <i class="ri-arrow-drop-down-line ri-xl "></i>
               </a>
 
               <div class="dropdown-menu">
                 <!-- External links use <a> -->
-                  <a 
+                <a class="nav-link me-2 dropdown-item" :class="route().current('clinic-management') ? 'active' : ''"
+                  href="https://intake.akrahealth.com/" rel="noopener noreferrer">
+                  Akrahealth Intake
+                </a>
+                <div class="dropdown-divider"></div>
+
+                <a class="nav-link me-2 dropdown-item" :class="route().current('clinic-management') ? 'active' : ''"
+                  href="https://emr.akrahealth.com/" rel="noopener noreferrer">
+                  Akrahealth EMR
+                </a>
+                <div class="dropdown-divider"></div>
+
+                <a class="nav-link me-2 dropdown-item" :class="route().current('clinic-management') ? 'active' : ''"
+                  href="https://scribe.akrahealth.com/" rel="noopener noreferrer">
+                  Akrahealth Scribe
+                </a>
+                <div class="dropdown-divider"></div>
+
+                <a class="nav-link me-2 dropdown-item" :class="route().current('clinic-management') ? 'active' : ''"
+                  href="https://practice.akrahealth.com/" rel="noopener noreferrer">
+                  Practice Management
+                </a>
+                <div class="dropdown-divider"></div>
+
+                <a class="nav-link me-2 dropdown-item" :class="route().current('patient-management') ? 'active' : ''"
+                  href="https://appointment.akrahealth.com/" rel="noopener noreferrer">
+                  AI Appointment
+                </a>
+
+                <!-- <div class="dropdown-divider"></div> -->
+
+                <!-- Internal Inertia route -->
+                <!-- <a
                   class="nav-link me-2 dropdown-item"
-                  :class="route().current('clinic-management') ? 'active' : ''"
+                  :class="route().current('doctor-on-call') ? 'active' : ''"
                   href="https://practice.akrahealth.com/"
                   rel="noopener noreferrer"
                 >
-                  Practice Management
-                </a>            
-                <div class="dropdown-divider"></div>
-                <a 
-                  class="nav-link me-2 dropdown-item"
-                  :class="route().current('patient-management') ? 'active' : ''"
-                  href="https://appointment.akrahealth.com/"
-                  rel="noopener noreferrer"
-                >
-                Automated Appointments
-              </a>
-
-                <div class="dropdown-divider"></div>
-
-                <!-- Internal Inertia route -->
-                <a 
-                  class="nav-link me-2 dropdown-item"
-                  :class="route().current('doctor-on-call') ? 'active' : ''"
-                  href="https://telehealth.akrahealth.com/"
-                  rel="noopener noreferrer"
-                >
                   Telehealth Services
-                </a>               
+                </a> -->
                 <div class="dropdown-divider"></div>
-                <a
+                <a class="nav-link me-2 dropdown-item" :class="route().current('mobile-iv') ? 'active' : ''"
+                  href="https://mobile-iv.akrahealth.com" rel="noopener noreferrer">
+                  Mobile IV
+                </a>
+
+
+                <div class="dropdown-divider"></div>
+                <!--
+                                <a
                   class="nav-link me-2 dropdown-item"
                   :class="route().current('mobile-iv') ? 'active' : ''"
-                  href="https://mobileiv.akrahealth.com/"
+                  href="https://outreach.akrahealth.com/"
                   rel="noopener noreferrer"
        >
-                  Mobile IV
+                  Akrahealth Outreach
               </a>
-               
 
-                <div class="dropdown-divider"></div>
+
+                <div class="dropdown-divider"></div> -->
 
                 <!-- Internal route -->
-                <a 
-                  class="nav-link me-2 dropdown-item"
-                  :class="route().current('prescription') ? 'active' : ''"
-                  href="https://prescription.akrahealth.com"
-                  rel="noopener noreferrer"
-                >
+                <a class="nav-link me-2 dropdown-item" :class="route().current('prescription') ? 'active' : ''"
+                  href="https://prescription.akrahealth.com" rel="noopener noreferrer">
                   Prescription Management
                 </a>
-                
+
                 <div class="dropdown-divider"></div>
 
-                <a 
+                <!-- <a
                   class="nav-link me-2 dropdown-item"
                   :class="route().current('mar') ? 'active' : ''"
-                  href="https://mar.akrahealth.com"
+                  href="https://mar.akrahealth.com/"
                   rel="noopener noreferrer"
                 >
                   Medication Administration Records
                 </a>
 
-                <div class="dropdown-divider"></div>
+                <div class="dropdown-divider"></div> -->
 
-                <a 
+                <!-- <a
                   class="nav-link me-2 dropdown-item"
                   :class="route().current('wellness') ? 'active' : ''"
                   href="https://wellness.akrahealth.com"
                   rel="noopener noreferrer"
                 >
                   Wellness Service
-                </a>
-                </div>
-          </li>
+                </a> -->
+              </div>
+            </li>
 
             <li>
               <Link class="nav-link me-2" :class="`${route().current('security') ? 'active' : ''}`"
                 :href="route('security')">
-              {{ 'Security'}}</Link>
+                {{ 'Security' }}</Link>
             </li>
 
             <li class="nav-item dropdown">
@@ -372,8 +367,9 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
                 <span>{{ 'Apps' }}</span> <i class="ri-arrow-drop-down-line ri-xl "></i>
               </a>
               <div class="dropdown-menu">
-                <Link class="nav-link me-2 dropdown-item" :class="`${route().current('emr-app') ? 'active' : ''}`"
-                  :href="route('emr-app')">EMR App</Link>
+                <a class="nav-link me-2 dropdown-item" :class="route().current('emr-app') ? 'active' : ''"
+                  href="https://akrahealth.com/emr" rel="noopener noreferrer"> EMR App</a>
+
                 <div class="dropdown-divider"></div>
                 <Link class="nav-link me-2 dropdown-item" :class="`${route().current('pharmacy-app') ? 'active' : ''}`"
                   :href="route('pharmacy-app')">Pharmacy App</Link>
@@ -394,15 +390,17 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
               <div class="dropdown-menu">
 
                 <Link class="nav-link me-2 dropdown-item" :href="route('dashboard')">
-                  <i class="fa fa-btn fa-dashboard mr-3"></i>Dashboard</Link>
+                  <i class="fa fa-btn fa-dashboard mr-3"></i>Dashboard
+                </Link>
                 <div class="dropdown-divider"></div>
                 <Link class="nav-link me-2 dropdown-item my-2" :href="route('user.profile')"><i
-                  class="ri-account-circle-fill mr-3"></i>
+                    class="ri-account-circle-fill mr-3"></i>
                   My Information
                 </Link>
 
                 <Link class="nav-link me-2 dropdown-item my-2" :href="route('change.password')">
-                <i class="ri-lock-password-fill mr-3"></i>Password Change</Link>
+                  <i class="ri-lock-password-fill mr-3"></i>Password Change
+                </Link>
 
                 <a class="nav-link me-2 dropdown-item my-2" @click="logout()"><i
                     class="fa fa-btn fa-sign-out mr-3"></i>Logout</a>
@@ -413,10 +411,11 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
               <a class="btn btn-primary me-2 my-2 my-sm-0" href="https://app.akrahealth.com/login">Login</a>
           </li> -->
               <li>
-                 <a :href="route('login')" class="btn btn-success me-2 my-2 my-sm-0">Login</a>
+                <a :href="route('login')" class="btn btn-success me-2 my-2 my-sm-0">Login</a>
               </li>
-              <button class="btn btn-primary me-2 my-2 my-sm-0" data-toggle="modal" data-target="#demo-request-modal">Get Demo</button>
-               <!-- <li>
+              <button class="btn btn-primary me-2 my-2 my-sm-0" data-toggle="modal"
+                data-target="#demo-request-modal">Get Demo</button>
+              <!-- <li>
                  <a :href="route('signup')" class="btn btn-primary me-2 my-2 my-sm-0">  Sign Up</a>
               </li> -->
             </div>
@@ -425,7 +424,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
       </nav>
     </div>
   </header>
- </template>
+</template>
 
 <style scoped>
 .announcement-wrap {
@@ -483,8 +482,13 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
 }
 
 @keyframes marquee {
-  0% { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 /* Dropdown Styling */
@@ -494,6 +498,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   display: flex;
   align-items: center;
 }
+
 .language-dropdown:disabled {
   opacity: 0.7;
   cursor: not-allowed;
@@ -504,7 +509,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   background: #fff;
   padding: 8px;
 }
- 
+
 
 .language-dropdown:focus:not(:disabled) {
   outline: none;
@@ -524,8 +529,8 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   background: #fff;
   color: #000;
   border: 2px solid rgba(255, 255, 255, 0.3);
-   border-radius: 8px;
-   cursor: pointer;
+  border-radius: 8px;
+  cursor: pointer;
   text-align: left;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -559,7 +564,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   overflow: hidden;
-   z-index: 10000;
+  z-index: 10000;
 }
 
 .language-option {
@@ -660,13 +665,13 @@ a.skiptranslate {
   visibility: hidden !important;
   width: 0 !important;
   height: 0 !important;
-    pointer-events: none !important;
+  pointer-events: none !important;
 
 }
 
 /* Hide the translate box Google branding */
-.goog-te-gadget > a > img,
-.goog-te-gadget > a {
+.goog-te-gadget>a>img,
+.goog-te-gadget>a {
   display: none !important;
 }
 
@@ -689,17 +694,18 @@ a.skiptranslate {
   top: -9999px !important;
   visibility: hidden !important;
 }
- .VIpgJd-ZVi9od-ORHb-OEVmcd,
+
+.VIpgJd-ZVi9od-ORHb-OEVmcd,
 .VIpgJd-ZVi9od-ORHb-OEVmcd * {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
 .goog-te-balloon-frame,
 .goog-te-balloon-frame * {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
 }
-
 </style>

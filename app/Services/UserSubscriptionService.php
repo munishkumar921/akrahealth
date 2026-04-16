@@ -55,7 +55,14 @@ class UserSubscriptionService
             'amount' => $plan->price,
         ], $additionalData);
 
-        return UserSubscription::create($subscriptionData);
+        $subscription = UserSubscription::create($subscriptionData);
+        app(AuditService::class)->logCreate(
+            'Subscription',
+            $subscription->fresh(),
+            'Subscription activated for '.$plan->title
+        );
+
+        return $subscription;
     }
 
     /**
@@ -65,10 +72,18 @@ class UserSubscriptionService
      */
     public function cancel(UserSubscription $subscription)
     {
+        $oldSubscription = clone $subscription;
         $subscription->update([
             'status' => 'cancelled',
             'end_date' => Carbon::now()->toDateString(),
         ]);
+
+        app(AuditService::class)->logUpdate(
+            'Subscription',
+            $oldSubscription,
+            $subscription->fresh(),
+            'Subscription cancelled'
+        );
 
         return true;
     }
@@ -80,6 +95,7 @@ class UserSubscriptionService
      */
     public function renew(UserSubscription $subscription)
     {
+        $oldSubscription = clone $subscription;
         $newEndDate = $this->calculateEndDate(
             Carbon::parse($subscription->end_date),
             $subscription->subscriptionPlan->frequency
@@ -89,6 +105,13 @@ class UserSubscriptionService
             'status' => 'active',
             'end_date' => $newEndDate->toDateString(),
         ]);
+
+        app(AuditService::class)->logUpdate(
+            'Subscription',
+            $oldSubscription,
+            $subscription->fresh(),
+            'Subscription renewed'
+        );
 
         return $subscription->fresh();
     }
@@ -175,7 +198,14 @@ class UserSubscriptionService
             'amount' => $plan->price,
         ], $additionalData);
 
-        return UserSubscription::create($subscriptionData);
+        $subscription = UserSubscription::create($subscriptionData);
+        app(AuditService::class)->logCreate(
+            'Subscription',
+            $subscription->fresh(),
+            'Pending subscription created for '.$plan->title
+        );
+
+        return $subscription;
     }
 
     /**
@@ -186,12 +216,34 @@ class UserSubscriptionService
     public function processExpiredSubscriptions()
     {
         $expiredSubscriptions = UserSubscription::where('status', 'active')
-            ->where('end_date', '<=', Carbon::now())
+            ->whereDate('end_date', '<', Carbon::today())
             ->get();
 
         foreach ($expiredSubscriptions as $subscription) {
+            $oldSubscription = clone $subscription;
             $subscription->update(['status' => 'expired']);
+            app(AuditService::class)->logUpdate(
+                'Subscription',
+                $oldSubscription,
+                $subscription->fresh(),
+                'Subscription expired'
+            );
             Log::info('Subscription expired', ['subscription_id' => $subscription->id]);
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'Subscription expired',
+                    ($subscription->user?->name ?? 'A user')."'s subscription has expired.",
+                    'subscription_expired',
+                    [
+                        'related_model_type' => UserSubscription::class,
+                        'related_model_id' => $subscription->id,
+                        'meta' => [
+                            'plan' => $subscription->subscriptionPlan?->title,
+                            'end_date' => $subscription->end_date,
+                        ],
+                    ]
+                )
+            );
         }
     }
 
@@ -221,7 +273,14 @@ class UserSubscriptionService
 
         if ($response['success']) {
             // Store payment_link_id in subscription
+            $oldSubscription = clone $subscription;
             $subscription->update(['payment_link_id' => $response['data']['id']]);
+            app(AuditService::class)->logUpdate(
+                'Subscription',
+                $oldSubscription,
+                $subscription->fresh(),
+                'Subscription payment link generated'
+            );
         }
 
         return $response;
@@ -338,6 +397,11 @@ class UserSubscriptionService
         ], $additionalData);
 
         $newSubscription = UserSubscription::create($subscriptionData);
+        app(AuditService::class)->logCreate(
+            'Subscription',
+            $newSubscription->fresh(),
+            'Subscription upgraded from expired plan'
+        );
 
         Log::info('New subscription created', [
             'new_subscription_id' => $newSubscription->id,
@@ -359,6 +423,25 @@ class UserSubscriptionService
             'old_status_was' => 'expired',
             'new_status_is' => 'replaced',
         ]);
+
+        app(EmailNotificationService::class)->queueSubscriptionUpgradeAdminAlert($newSubscription->fresh(['user', 'subscriptionPlan']));
+        app(InAppNotificationService::class)->notifySuperAdmins(
+            app(InAppNotificationService::class)->buildPayload(
+                'Subscription upgraded',
+                ($user->name ?? 'A user').' upgraded to '.($newPlan->title ?? 'a new plan').'.',
+                'subscription_upgraded',
+                [
+                    'related_model_type' => UserSubscription::class,
+                    'related_model_id' => $newSubscription->id,
+                    'meta' => [
+                        'old_plan' => $expiredSubscription->subscriptionPlan?->title,
+                        'new_plan' => $newPlan->title,
+                        'amount' => $newSubscription->amount,
+                        'currency' => $newSubscription->currency,
+                    ],
+                ]
+            )
+        );
 
         return $newSubscription;
     }
@@ -489,6 +572,11 @@ class UserSubscriptionService
         ], $additionalData);
 
         $newSubscription = UserSubscription::create($subscriptionData);
+        app(AuditService::class)->logCreate(
+            'Subscription',
+            $newSubscription->fresh(),
+            'Pending subscription upgrade created'
+        );
 
         Log::info('New subscription created as pending_upgrade', [
             'new_subscription_id' => $newSubscription->id,
@@ -522,10 +610,18 @@ class UserSubscriptionService
         ]);
 
         // Activate the new subscription
+        $oldSubscription = clone $newSubscription;
         $newSubscription->update([
             'status' => 'active',
             'payment_status' => 'paid',
         ]);
+
+        app(AuditService::class)->logUpdate(
+            'Subscription',
+            $oldSubscription,
+            $newSubscription->fresh(),
+            'Subscription upgrade completed'
+        );
 
         Log::info('New subscription activated', [
             'new_subscription_id' => $newSubscription->id,
@@ -537,6 +633,25 @@ class UserSubscriptionService
             'new_plan_id' => $newSubscription->subscription_plan_id,
             'new_status' => 'active',
         ]);
+
+        app(EmailNotificationService::class)->queueSubscriptionUpgradeAdminAlert($newSubscription->fresh(['user', 'subscriptionPlan']));
+        app(InAppNotificationService::class)->notifySuperAdmins(
+            app(InAppNotificationService::class)->buildPayload(
+                'Subscription changed',
+                ($newSubscription->user?->name ?? 'A user').' changed subscription to '.($newSubscription->subscriptionPlan?->title ?? 'a new plan').'.',
+                'subscription_changed',
+                [
+                    'related_model_type' => UserSubscription::class,
+                    'related_model_id' => $newSubscription->id,
+                    'meta' => [
+                        'previous_subscription_id' => $newSubscription->upgraded_from,
+                        'new_plan' => $newSubscription->subscriptionPlan?->title,
+                        'amount' => $newSubscription->amount,
+                        'currency' => $newSubscription->currency,
+                    ],
+                ]
+            )
+        );
 
         return $newSubscription->fresh();
     }

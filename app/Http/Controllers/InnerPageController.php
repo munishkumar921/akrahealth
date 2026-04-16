@@ -158,16 +158,22 @@ class InnerPageController extends Controller
      */
     public function pricing(): Response
     {
-        // Get user's location (you can use a service like GeoIP or get from user profile)
+        // Temporarily get all
         $currency = $this->getUserLocation();
 
-        // Get all active plans
+        // Get all active plans for user's currency and USD as fallback
         $plans = SubscriptionPlan::where('status', true)
-            ->where('currency', $currency['currency'] ?? 'USD')
+            ->whereIn('currency', [$currency['currency'] ?? 'INR'])
             ->get();
 
         return Inertia::render('Inner/Pricing', [
             'plans' => $plans,
+            'authUser' => auth()->user() ? [
+            'id'    => auth()->user()->id,
+            'name'  => auth()->user()->name,
+            'email' => auth()->user()->email,
+            'phone' => auth()->user()->phone ?? '',
+          ] : null,
         ]);
     }
 

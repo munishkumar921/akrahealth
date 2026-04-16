@@ -9,7 +9,6 @@ class InsuranceService
 {
     public function store($input)
     {
-
         $addedInsurance = Address::updateOrCreate(
             [
                 'id' => $input['address_id'] ?? null,
@@ -23,15 +22,16 @@ class InsuranceService
                 'zip' => $input['pincode'] ?? null,
             ]);
 
-        Insurance::updateOrCreate([
+        $insurance = Insurance::updateOrCreate([
             'id' => $input['id'] ?? null,
         ], [
             'plan_name' => $input['facility'], // Using facility as plan_name for now
             'insurance_company' => $input['facility'], // Using facility as insurance_company for now
             'address_id' => $addedInsurance->id,
             'patient_id' => auth()->user()->doctor?->selected_patient_id,
-
+            'comment' => $input['comments'] ?? null,
         ]);
 
+        return $insurance;
     }
 }

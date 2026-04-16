@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, defineEmits, ref, watch, onMounted } from "vue";
+import { ref, watch, onMounted } from "vue";
 import DatePicker from "vue-datepicker-next";
 import "vue-datepicker-next/index.css";
 
@@ -13,6 +13,7 @@ const props = defineProps({
   error: String,
   placeholder: String,
   required: { type: Boolean, default: false },
+  marginBottom: { type: String, default: "mb-2" },
 });
 
 const emit = defineEmits(["update:modelValue"]);
@@ -149,7 +150,7 @@ watch(internalDate, (val) => {
 
 
 <template>
-  <div class="mb-2">
+  <div :class="marginBottom">
     <label v-if="label" class="form-label">
       {{ label }}
       <span v-if="required" class="text-danger">*</span>
@@ -186,7 +187,7 @@ watch(internalDate, (val) => {
 
 <style>
 .mx-datepicker-popup {
-  z-index: 9999 !important;
+  z-index: 30000 !important;
 }
 .mx-input{
     height: 40px;

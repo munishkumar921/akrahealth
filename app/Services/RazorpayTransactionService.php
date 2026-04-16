@@ -148,6 +148,22 @@ class RazorpayTransactionService
                 'amount' => $refund['amount'] / 100,
             ]);
 
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'Refund issued',
+                    'A Razorpay refund has been issued for payment '.$paymentId.'.',
+                    'refund_issued',
+                    [
+                        'meta' => [
+                            'payment_id' => $paymentId,
+                            'refund_id' => $refund['id'],
+                            'amount' => $refund['amount'] / 100,
+                            'status' => $refund['status'],
+                        ],
+                    ]
+                )
+            );
+
             return [
                 'success' => true,
                 'data' => [
@@ -162,6 +178,20 @@ class RazorpayTransactionService
                 'payment_id' => $paymentId,
                 'error' => $e->getMessage(),
             ]);
+
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'Payment gateway failure',
+                    'Refund creation failed for payment '.$paymentId.'.',
+                    'payment_gateway_failure',
+                    [
+                        'meta' => [
+                            'payment_id' => $paymentId,
+                            'error' => $e->getMessage(),
+                        ],
+                    ]
+                )
+            );
 
             return [
                 'success' => false,

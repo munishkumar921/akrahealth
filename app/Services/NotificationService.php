@@ -5,11 +5,14 @@ namespace App\Services;
 use App\Mail\LabVerifiedMail;
 use App\Models\Notification;
 use App\Models\User;
-use App\Notifications\GenericNotification;
 use Illuminate\Support\Facades\Mail;
 
 class NotificationService
 {
+    public function __construct(private readonly InAppNotificationService $inAppNotificationService)
+    {
+    }
+
     /**
      * list
      *
@@ -20,18 +23,17 @@ class NotificationService
     {
         $search = $request->search;
 
-        return Notification::query()
-            ->when($request->search, function ($q) use ($search) {
-                $q->where(function ($query) use ($search) {
-                    $query->where('message', 'LIKE', "%$search%")
-                        ->orWhere('title', 'LIKE', "%$search%")
-                        ->orWhere('type', 'LIKE', "%$search%")
-                        ->orWhere('channel', 'LIKE', "%$search%")
-                        ->orWhere('status', 'LIKE', "%$search%");
-                });
-            })
+        return Notification::query()->when($request->search, function ($q) use ($search) {
+            $q->where(function ($query) use ($search) {
+                $query->where('type', 'LIKE', "%$search%")
+                    ->orWhere('data->title', 'LIKE', "%$search%")
+                    ->orWhere('data->message', 'LIKE', "%$search%")
+                    ->orWhere('data->channel', 'LIKE', "%$search%");
+            });
+        })
             ->orderBy('created_at', 'desc')
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
     }
 
     /**
@@ -49,20 +51,23 @@ class NotificationService
                 ! empty($data['user_ids']),
                 fn ($q) => $q->whereIn('id', $data['user_ids'])
             )
-            ->get();
+            ->get()
+            ->map(function ($recipient) {
+                return $recipient->user ?? $recipient;
+            })
+            ->filter();
 
-        foreach ($users as $user) {
-            $user->notify(new GenericNotification($data['title'], $data['message']));
-        }
+        $payload = $this->inAppNotificationService->buildPayload(
+            $data['title'],
+            $data['message'],
+            $data['type'] ?? 'system',
+            [
+                'recipient_role' => $data['user_type'] ?? null,
+                'channel' => $data['channel'] ?? 'in_app',
+            ]
+        );
 
-        foreach ($users as $user) {
-            Notification::create([
-                'title' => $data['title'],
-                'message' => $data['message'],
-                'user_type' => $data['user_type'],
-                'user_id' => $user->id,
-            ]);
-        }
+        $this->inAppNotificationService->notifyUsers($users, $payload);
 
         return ['message' => 'Notification sent successfully'];
     }
@@ -81,6 +86,7 @@ class NotificationService
             'lab' => \App\Models\Lab::class,
             'pharmacy' => \App\Models\Pharmacy::class,
             'delivery_partner' => \App\Models\DeliveryPartner::class,
+            default => User::class,
         };
     }
 
@@ -110,15 +116,6 @@ class NotificationService
             return;
         }
 
-        $data = [
-            'name' => $user->name,
-            'email' => $user->email,
-            'password' => $password,
-        ];
-        try {
-            Mail::to($user->email)->queue(new \App\Mail\UserCredentialsMail($data));
-        } catch (\Throwable $th) {
-            \Log::error("Failed to queue welcome mail to {$user->email}: ".$th->getMessage());
-        }
+        app(EmailNotificationService::class)->queueCredentialsEmail($user, $password);
     }
 }

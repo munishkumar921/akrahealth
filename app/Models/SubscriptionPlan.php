@@ -27,7 +27,7 @@ class SubscriptionPlan extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
-        'permissions' => 'array',   // ✅ REQUIRED
+        'permissions' => 'array', 
         'status' => 'boolean',
         'active' => 'boolean',
     ];

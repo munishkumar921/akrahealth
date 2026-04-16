@@ -24,6 +24,8 @@ class ProviderExceptionController extends Controller
     {
         $filters = [
             'keyword' => $request->input('keyword'),
+            'doctor_id' => $request->input('doctor_id'),
+            'status' => $request->input('status'),
             'hospital_id' => $this->service->getHospitalIdFromAdmin(),
             'per_page' => $request->input('per_page', 10),
             'sort' => $request->input('sort', 'exception_date'),
@@ -41,8 +43,12 @@ class ProviderExceptionController extends Controller
 
         return Inertia::render('Admin/ProviderException/Index', [
             'doctors' => $doctors,
-            'keyword' => $filters['keyword'],
             'data' => $data,
+            'filters' => [
+                'keyword' => $filters['keyword'] ?? '',
+                'doctor_id' => $filters['doctor_id'] ?? '',
+                'status' => $filters['status'] ?? '',
+            ],
         ]);
     }
 

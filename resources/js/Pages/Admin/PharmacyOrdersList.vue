@@ -2,286 +2,291 @@
 import AuthLayout from "@/Layouts/AuthLayout.vue";
 import Table from "@/Components/Table/Table.vue";
 import { router } from "@inertiajs/vue3";
-import { ref, computed } from "vue";
-
+import { computed, ref } from "vue";
+import { route } from "ziggy-js";
 
 const props = defineProps({
-	keyword: {
-		type: String,
-		default: ''
-	},
-	pharmacyOrders: {
-		type: [Array, Object],
-		default: () => []
-	},
-	filters: {
-		type: Object,
-		default: () => ({
-			status: '',
-			payment_status: ''
-		})
-	},
-	route: Array,
+    pharmacyOrders: {
+        type: [Array, Object],
+        default: () => [],
+    },
+    filters: {
+        type: Object,
+        default: () => ({
+            keyword: "",
+            status: "",
+        }),
+    },
 });
 
-const columns = [
-	{ label: "Pharmacy", key: "pharmacy.name" },
- 	{ label: "Patient", key: "patient.name" },
-	{ label: "Doctor", key: "doctor.name" },
-	 { label: "Active Date", key: "date_active" },
-    { label: "Inactive Date", key: "date_inactive" },
-    { label:"Due Date", key:"due_date" },
-    { label: "Prescription Status", type:"status", key: "prescription" },
- ];
+const filterForm = ref({
+    keyword: props.filters?.keyword || "",
+    status: props.filters?.status || "",
+});
 
-const searchKeyword = ref(props.keyword || '');
-const selectedStatus = ref(props.filters.status || '');
-const selectedPaymentStatus = ref(props.filters.payment_status || '');
-
-// Status filter options
 const statusOptions = [
-	{ value: '', label: 'All Status' },
-	{ value: 'pending', label: 'Pending' },
-	{ value: 'accepted', label: 'Accepted' },
-	{ value: 'processing', label: 'Processing' },
-	{ value: 'ready', label: 'Ready' },
-	{ value: 'dispensed', label: 'Dispensed' },
-	{ value: 'completed', label: 'Completed' },
-	{ value: 'cancelled', label: 'Cancelled' },
-	{ value: 'rejected', label: 'Rejected' },
+    { value: "", label: "All status" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
 ];
 
-// Payment status options
-const paymentStatusOptions = [
-	{ value: '', label: 'All Payment' },
-	{ value: 'paid', label: 'Paid' },
-	{ value: 'pending', label: 'Pending' },
-	{ value: 'failed', label: 'Failed' },
-	{ value: 'refunded', label: 'Refunded' },
+const columns = [
+    { label: "Pharmacy", key: "pharmacy_name", type: "slot", slot: "pharmacy", align: "left" },
+    { label: "Patient", key: "patient_name", type: "slot", slot: "patient", align: "left" },
+    { label: "Doctor", key: "doctor_name", type: "slot", slot: "doctor", align: "left" },
+    { label: "Medication", key: "medication_name", type: "slot", slot: "medication", align: "left" },
+    { label: "Active Date", key: "active_date", type: "slot", slot: "activeDate", align: "left" },
+    { label: "Due Date", key: "due_date", type: "slot", slot: "dueDate", align: "left" },
+    { label: "Status", key: "status", type: "slot", slot: "status", align: "center" },
 ];
 
-// Search function
-const search = () => {
-	router.get(route('admin.pharmacy-orders.list'), {
-		keyword: searchKeyword.value,
-		status: selectedStatus.value,
-		payment_status: selectedPaymentStatus.value,
-	}, {
-		preserveState: true,
-		replace: true,
-	});
+const perPageOptions = [10, 15, 25, 50, 100];
+const perPage = ref(Number(new URLSearchParams(window.location.search).get("per_page")) || 10);
+const rows = computed(() => props.pharmacyOrders?.data ?? []);
+const activeFilterCount = computed(() =>
+    Object.values(filterForm.value).filter((value) => value !== null && value !== "").length
+);
+const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+const resultSummary = computed(() => {
+    const total = props.pharmacyOrders?.total ?? rows.value.length;
+    const from = props.pharmacyOrders?.from ?? (rows.value.length ? 1 : 0);
+    const to = props.pharmacyOrders?.to ?? rows.value.length;
+
+    if (!total) {
+        return "No pharmacy orders found";
+    }
+
+    return `Showing ${from}-${to} of ${total} pharmacy orders`;
+});
+
+const buildQuery = (overrides = {}) => {
+    const params = new URLSearchParams(window.location.search);
+    const query = {
+        per_page: params.get("per_page") || undefined,
+        sort: params.get("sort") || undefined,
+        direction: params.get("direction") || undefined,
+        ...filterForm.value,
+        ...overrides,
+    };
+
+    return Object.fromEntries(
+        Object.entries(query).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+    );
 };
 
-// Clear filters
+const applyFilters = () => {
+    router.get(route("admin.pharmacy-orders.list"), buildQuery(), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
 const clearFilters = () => {
-	searchKeyword.value = '';
-	selectedStatus.value = '';
-	selectedPaymentStatus.value = '';
-	search();
+    filterForm.value = {
+        keyword: "",
+        status: "",
+    };
+
+    router.get(route("admin.pharmacy-orders.list"), buildQuery(), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
 };
 
-// Status badge class
+const updatePerPage = () => {
+    router.get(route("admin.pharmacy-orders.list"), buildQuery({ per_page: perPage.value, page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
 const getStatusClass = (status) => {
-	const statusMap = {
-		'pending': 'badge bg-warning',
-		'accepted': 'badge bg-info',
-		'processing': 'badge bg-primary',
-		'ready': 'badge bg-secondary',
-		'dispensed': 'badge bg-success',
-		'completed': 'badge bg-success',
-		'cancelled': 'badge bg-danger',
-		'rejected': 'badge bg-danger',
-		'active': 'badge bg-success',
-		'inactive': 'badge bg-secondary',
-	};
-	const lowerStatus = status?.toLowerCase();
-	return statusMap[lowerStatus] || 'badge bg-secondary';
-};
+    const lowerStatus = String(status || "").toLowerCase();
 
-// Payment status badge class
-const getPaymentStatusClass = (status) => {
-	const statusMap = {
-		'paid': 'badge bg-success',
-		'pending': 'badge bg-warning',
-		'failed': 'badge bg-danger',
-		'refunded': 'badge bg-info',
-	};
-	const lowerStatus = status?.toLowerCase();
-	return statusMap[lowerStatus] || 'badge bg-secondary';
-};
-
-// Amount formatting
-const formatAmount = (amount) => {
-	if (!amount) return '₹0.00';
-	return '₹' + Number(amount).toFixed(2);
+    return lowerStatus === "active" ? "status-pill--active" : "status-pill--inactive";
 };
 </script>
 
 <template>
-	<AuthLayout
-		title="Pharmacy Orders"
-		description="Manage pharmacy orders"
-		heading="Pharmacy Orders"
-	>
-		<!-- ================= HEADER ================= -->
-		<div class="">
-			<!-- ================= DESKTOP VIEW - Title and Controls in Same Row ================= -->
-			<div class="d-none d-md-flex align-items-center justify-content-between mb-3">
-				<!-- Title -->
-				<h3 class="text-xl mb-0">Pharmacy Orders</h3>
+    <AuthLayout title="Pharmacy Orders" description="Manage pharmacy orders" heading="Pharmacy Orders">
+        <div class="pharmacy-orders-page">
+            <div class="users-toolbar card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div
+                        class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+                        <div>
+                            <h3 class="mb-1">Pharmacy Orders</h3>
+                            <p class="text-muted mb-0">{{ resultSummary }}</p>
+                        </div>
 
-				<!-- Controls -->
-				<div class="d-flex align-items-center gap-3">
-					<!-- Status Filter -->
-					<select 
-						class="form-select form-select-sm" 
-						style="width: 140px;"
-						v-model="selectedStatus"
-						@change="search"
-					>
-						<option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-							{{ opt.label }}
-						</option>
-					</select>
+                        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+                            <span v-if="hasActiveFilters" class="filter-count-badge">
+                                {{ activeFilterCount }} filter{{ activeFilterCount > 1 ? "s" : "" }} active
+                            </span>
+                            <button
+                                v-if="hasActiveFilters"
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                @click="clearFilters"
+                            >
+                                <i class="bi bi-x-circle me-1"></i>Clear filters
+                            </button>
+                        </div>
+                    </div>
 
-					<!-- Payment Status Filter -->
-					<select 
-						class="form-select form-select-sm" 
-						style="width: 140px;"
-						v-model="selectedPaymentStatus"
-						@change="search"
-					>
-						<option v-for="opt in paymentStatusOptions" :key="opt.value" :value="opt.value">
-							{{ opt.label }}
-						</option>
-					</select>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-xl-4">
+                            <label class="form-label text-muted small text-uppercase mb-2">Search</label>
+                            <div class="input-group pharmacy-orders-search-control">
+                                <span class="input-group-text bg-white border-end-0 border col-1 rounded-circle-left">
+                                    <i class="bi bi-search text-muted"></i>
+                                </span>
+                                <input
+                                    v-model="filterForm.keyword"
+                                    type="search"
+                                    class="form-control border-start-0"
+                                    placeholder="Search by pharmacy, patient, doctor, medication, date, or status"
+                                    @keydown.enter.prevent="applyFilters"
+                                />
+                                <button type="button" class="btn btn-primary" @click="applyFilters">Search</button>
+                            </div>
+                        </div>
 
-					<!-- Clear Filters -->
-					<button 
-						v-if="searchKeyword || selectedStatus || selectedPaymentStatus"
-						class="btn btn-outline-danger btn-sm" 
-						type="button" 
-						@click="clearFilters"
-						title="Clear filters"
-					>
-						<i class="bi bi-x-lg"></i>
-					</button>
-				</div>
-			</div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <label class="form-label text-muted small text-uppercase mb-2">Status</label>
+                            <select v-model="filterForm.status" class="form-select" @change="applyFilters">
+                                <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                                    {{ option.label }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-			<!-- ================= MOBILE VIEW - Title ================= -->
-			<div class="d-md-none">
-				<h3 class="text-xl mb-3">Pharmacy Orders</h3>
-			</div>
-		</div>
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0 p-md-3">
+                    <div class="d-flex justify-content-end align-items-center px-3 px-md-0 pt-3 pt-md-0 pb-2">
+                        <div class="d-flex align-items-center gap-2 rows-select-wrap">
+                            <select
+                                id="pharmacy-orders-per-page"
+                                v-model="perPage"
+                                class="form-select form-select-sm top-page-select"
+                                @change="updatePerPage"
+                            >
+                                <option v-for="option in perPageOptions" :key="option" :value="option">
+                                    {{ option }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
 
-		<!-- ================= TABLE + PAGINATION ================= -->
-		<div class="table-responsive">
-			<Table :columns="columns" :data="{ data: pharmacyOrders.data }" :search="keyword">
-				<template #order_id="{ row }">
-					<span class="fw-semibold text-primary">{{ row.order_id || 'N/A' }}</span>
-				</template>
-				<template #patient="{ row }">
-					<div>
-						<span class="d-block">{{ row.patient || 'N/A' }}</span>
-						<small v-if="row.medication_count" class="text-muted">
-							{{ row.medication_count }} medication(s)
-						</small>
-					</div>
-				</template>
-				<template #pharmacy="{ row }">
-					<span>{{ row.pharmacy || 'N/A' }}</span>
-				</template>
-				<template #doctor="{ row }">
-					<span>{{ row.doctor || 'N/A' }}</span>
-				</template>
-				<template #status="{ row }">
-					<span :class="getStatusClass(row.status)">
-						{{ row.status_label || row.status || 'N/A' }}
-					</span>
-				</template>
-				<template #payment_status="{ row }">
-					<span :class="getPaymentStatusClass(row.payment_status)">
-						{{ row.payment_status_label || row.payment_status || 'N/A' }}
-					</span>
-				</template>
-				<template #total="{ row }">
-					<span class="fw-semibold">{{ formatAmount(row.total) }}</span>
-				</template>
-				<template #created_at="{ row }">
-					<span class="text-muted small">{{ row.created_at }}</span>
-				</template>
-			</Table>
-		</div>
-	</AuthLayout>
+                    <Table :columns="columns" :data="pharmacyOrders" :search-show="false" :PageOptions="false">
+                        <template #pharmacy="{ row }">
+                            <div class="text-start">
+                                <div class="fw-semibold text-dark">{{ row.pharmacy_name || "-" }}</div>
+                                <div class="text-muted small">{{ row.created_label || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #patient="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.patient_name || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #doctor="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.doctor_name || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #medication="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.medication_name || "-" }}</div>
+                                <div v-if="row.prescription_notes" class="text-muted small">
+                                    {{ row.prescription_notes }}
+                                </div>
+                            </div>
+                        </template>
+
+                        <template #activeDate="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.active_date || "-" }}</div>
+                                <div v-if="row.inactive_date && row.inactive_date !== '-'" class="text-muted small">
+                                    Inactive: {{ row.inactive_date }}
+                                </div>
+                            </div>
+                        </template>
+
+                        <template #dueDate="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.due_date || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #status="{ row }">
+                            <span class="status-pill" :class="getStatusClass(row.status)">
+                                {{ row.status_label || row.status || "N/A" }}
+                            </span>
+                        </template>
+                    </Table>
+                </div>
+            </div>
+        </div>
+    </AuthLayout>
 </template>
 
 <style scoped>
-.status-check {
-	appearance: none;
-	width: 16px;
-	height: 16px;
-	border: 2px solid #d1d5db;
-	border-radius: 4px;
-	display: inline-block;
-	position: relative;
-	cursor: pointer;
-	background: #fff;
-}
-.status-check:focus { outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
-
-.status-check--green:checked {
-	border-color: #06c270;
-	background-color: #06c270;
-}
-.status-check--grey:checked {
-    border-color: #9ca3af;
-	background-color: #9ca3af;
-}
-.status-check--red:checked {
-    border-color: #f35353;
-	background-color: #f35353;
+.users-toolbar {
+    border-radius: 20px;
 }
 
-/* tick icon */
-.status-check:checked::after {
-	content: "";
-	position: absolute;
-	left: 4px;
-	top: 1px;
-	width: 4px;
-	height: 8px;
-	border: solid #fff;
-	border-width: 0 2px 2px 0;
-	transform: rotate(45deg);
+.filter-count-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
-.badge {
-	font-size: 0.75rem;
-	padding: 0.35em 0.65em;
-	font-weight: 500;
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 84px;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
 }
 
-/* Colored badges for different statuses */
-.bg-primary {
-	background-color: #0d6efd !important;
+.status-pill--active {
+    background: #dcfce7;
+    color: #166534;
 }
-.bg-secondary {
-	background-color: #6c757d !important;
+
+.status-pill--inactive {
+    background: #f1f5f9;
+    color: #475569;
 }
-.bg-success {
-	background-color: #198754 !important;
+
+.top-page-select {
+    min-width: 74px;
+    width: 74px;
 }
-.bg-warning {
-	background-color: #ffc107 !important;
-	color: #000 !important;
+
+.rows-select-wrap {
+    flex: 0 0 auto;
 }
-.bg-danger {
-	background-color: #dc3545 !important;
-}
-.bg-info {
-	background-color: #0dcaf0 !important;
-	color: #000 !important;
+
+.pharmacy-orders-search-control {
+    max-width: 720px;
 }
 </style>
-

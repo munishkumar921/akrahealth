@@ -41,44 +41,26 @@ const closeModal = () => {
 </script>
 
 <template>
-<form @submit.prevent="submitForm">
+    <form @submit.prevent="submitForm">
         <div v-for="field in fieldsOne" :key="field.key">
-            <BaseInput
-                v-model="form[field.key]"
-                :name="field.key"
-                :placeholder="field.placeholder"
-                :type="field.type"
-                required
-            />
+            <BaseInput v-model="form[field.key]" :name="field.key" :placeholder="field.placeholder" :type="field.type"
+                required />
         </div>
 
         <BaseSelect v-model="form.state" placeholder="Select State" required>
-            <option
-                v-for="state in states"
-                :key="state.value"
-                :value="state.value"
-            >
+            <option v-for="state in states" :key="state.value" :value="state.value">
                 {{ state.label }}
             </option>
         </BaseSelect>
 
         <div v-for="field in fieldsTwo" :key="field.key">
-            <BaseInput
-                v-model="form[field.key]"
-                :name="field.key"
-                :placeholder="field.placeholder"
-                :type="field.type"
-                required
-            />
+            <BaseInput v-model="form[field.key]" :name="field.key" :placeholder="field.placeholder" :type="field.type"
+                required />
         </div>
 
         <div class="form-button mt-4 px-3 d-flex justify-content-end gap-3">
             <button type="submit" class="btn btn-primary">Save</button>
-            <button
-                type="button"
-                class="btn btn-danger"
-                @click="closeModal"
-            >
+            <button type="button" class="btn btn-danger" @click="closeModal">
                 Cancel
             </button>
         </div>

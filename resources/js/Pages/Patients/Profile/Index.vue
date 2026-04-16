@@ -628,24 +628,24 @@ const googleMapsUrl = computed(() => {
                                 <div class="iq-card-body">
                                     <div class="about-info">
                                          <div class="row">
-                                            <div class="col-4 fw-semibold text-end">Email</div>
+                                            <div class="col-4 fw-semibold">Email</div>
                                             <div class="col-8 d-flex align-items-center">
                                                 <a v-if="patient.email" class="text-break" :href="'mailto:' + patient.email">{{ patient.email }}</a>
                                                 <span v-else class="text-secondary">Not provided</span>
                                             </div>
 
-                                            <div class="col-4 fw-semibold text-end">Phone</div>
+                                            <div class="col-4 fw-semibold">Phone</div>
                                             <div class="col-8">
                                                 <a v-if="patient.mobile" :href="'tel:' + patient.mobile">{{ patient.mobile }}</a>
                                                 <span v-else class="text-secondary">Not provided</span>
                                             </div>
-                                            <div class="col-4 fw-semibold text-end">Gender</div>
+                                            <div class="col-4 fw-semibold">Gender</div>
                                             <div class="col-8">{{ patient.sex || 'Not specified' }}</div>
 
-                                            <div class="col-4 fw-semibold text-end">Age</div>
+                                            <div class="col-4 fw-semibold">Age</div>
                                             <div class="col-8">{{ patient.dob ? calculateAge(patient.dob) + ' years' : 'Not specified' }}</div>
 
-                                            <div class="col-4 fw-semibold text-end">Joined</div>
+                                            <div class="col-4 fw-semibold">Joined</div>
                                             <div class="col-8">{{ patient.created_at ? new Date(patient.created_at).toLocaleDateString() : 'Not specified' }}</div>
                                         </div>
                                     </div>
@@ -901,56 +901,6 @@ const googleMapsUrl = computed(() => {
     </AuthLayout>
 </template>
 <style scoped>
-.header-nav {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-}
-
-.news-icon {
-    font-size: 20px;
-    margin-right: 5px !important;
-}
-
-.header-nav li {
-    list-style: none;
-    margin-left: 10px;
-}
-
-.header-nav div {
-    background: rgba(255, 255, 255, 0.9);
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #333;
-    text-decoration: none;
-    transition: all 0.3s ease;
-}
-
-.header-nav div:hover {
-    background: #fff;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-.iq-card .iq-card-header{
-    padding: 1rem 0.5rem!important;
-}
-.cover-container {
-    background: #09acff2b;
-    height: 250px;
-}
-.overlay:after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background:#09acff2b;
-}
 .profile-img {
     margin-top: -60px;
     position: relative;

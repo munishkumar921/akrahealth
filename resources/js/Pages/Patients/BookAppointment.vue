@@ -73,4 +73,16 @@ const buttons = [
     </div>
   </AuthLayout>
 </template>
-<style scoped></style>
+<style scoped>
+:deep(.fc .fc-day-past) {
+  background-color: #f1f5f9;
+}
+
+:deep(.fc .fc-day-past .fc-daygrid-day-number) {
+  color: #94a3b8;
+}
+
+:deep(.fc .fc-day-past .fc-daygrid-day-frame) {
+  background-color: #f1f5f9;
+}
+</style>

@@ -212,6 +212,13 @@ const getSortUpIcon = (columnKey) =>
 const getSortDownIcon = (columnKey) =>
     sortedColumn.value === columnKey && sortOrder.value === "desc" ? "bi bi-caret-down-fill" : "bi bi-chevron-down";
 
+const getAlignmentClass = (column, index) => {
+    if (column?.align === "left") return "";
+    if (column?.align === "right") return "text-right";
+
+    return index !== 0 ? "text-center" : "";
+};
+
 </script>
 
 <template>
@@ -244,7 +251,7 @@ const getSortDownIcon = (columnKey) =>
                     <tr>
                         <th v-for="(column, index) in columns" :key="index"
                             @click="column.key ? sortTable(column.key) : null"
-                            :class="[index != 0 ? 'text-center' : '', column.key ? 'cursor-pointer' : '']">
+                            :class="[getAlignmentClass(column, index), column.key ? 'cursor-pointer' : '']">
                             <slot v-if="column.headerSlot" :name="`header-${column.headerSlot}`"></slot>
                             <template v-else>
                                 {{ column.label }}
@@ -263,20 +270,16 @@ const getSortDownIcon = (columnKey) =>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(row, index) in (Array.isArray(data) ? data : data.data)" :key="index">
+                    <tr v-for="(row, index) in sortedRows" :key="index">
                         <td v-for="(column, index) in columns" :key="index" style="padding-top: 13px"
-                            :class="index != 0 ? 'text-center' : ''" @click="$emit('cell-click', { row, column })">
+                            :class="getAlignmentClass(column, index)" @click="$emit('cell-click', { row, column })">
                             <template v-if="column.type === 'checkbox'">
                                 <input type="checkbox" :value="row.id" v-model="localSelectedRows" />
                             </template>
                             <template v-else-if="column.type === 'image'">
-                                    <img
-                                        :src="resolveImageSrc(getValue(row, column.key))"
-                                        @error="onImageError"
-                                        alt="avatar"
-                                        style="width:36px;height:36px;border-radius:50%;object-fit:cover"
-                                        />
-                             </template>
+                                <img :src="resolveImageSrc(getValue(row, column.key))" @error="onImageError"
+                                    alt="avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover" />
+                            </template>
                             <template v-else-if="column.type === 'boolean'">
                                 <template v-if="row[column.key] === 1">
                                     <span class="badge">Yes</span>
@@ -287,7 +290,8 @@ const getSortDownIcon = (columnKey) =>
                             </template>
                             <template v-else-if="column.type === 'toggle'">
                                 <label class="ah-switch">
-                                    <input type="checkbox" :checked="!!row[column.key]" @change="updateStatus(row)" />
+                                    <input type="checkbox" :checked="!!row[column.key]"
+                                        @change="column.onToggle ? column.onToggle(row) : updateStatus(row)" />
                                     <span class="ah-slider">
                                         <i class="bi bi-check2"></i>
                                     </span>
@@ -328,7 +332,7 @@ const getSortDownIcon = (columnKey) =>
                                 {{ formatValue(row, column) }}
                             </template>
                         </td>
-                        <td v-if="slots.actions" >
+                        <td v-if="slots.actions">
                             <div class="d-flex gap-1 flex-nowrap">
                                 <slot name="actions" :row="row"></slot>
 
@@ -346,7 +350,7 @@ const getSortDownIcon = (columnKey) =>
             </table>
             <!-- Mobile Card View -->
             <div class="mobile-table d-md-none">
-                <div v-for="row in (Array.isArray(data) ? data : data.data)" :key="row.id" class="mobile-row-card">
+                <div v-for="row in sortedRows" :key="row.id" class="mobile-row-card">
                     <div v-for="column in columns" :key="column.key" class="mobile-row-item">
                         <span class="mobile-label">{{ column.label }}</span>
                         <span class="mobile-value">
@@ -367,7 +371,8 @@ const getSortDownIcon = (columnKey) =>
                             </template>
                             <template v-else-if="column.type === 'toggle'">
                                 <label class="ah-switch">
-                                    <input type="checkbox" :checked="!!row[column.key]" @change="updateStatus(row)" />
+                                    <input type="checkbox" :checked="!!row[column.key]"
+                                        @change="column.onToggle ? column.onToggle(row) : updateStatus(row)" />
                                     <span class="ah-slider">
                                         <i class="bi bi-check2"></i>
                                     </span>
@@ -435,9 +440,7 @@ const getSortDownIcon = (columnKey) =>
     color: #97973e !important;
 }
 
-.cursor-pointer {
-    cursor: pointer;
-}
+
 
 .datatable-controls {
     align-items: center;

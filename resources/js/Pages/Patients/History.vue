@@ -2,7 +2,6 @@
 <script setup>
 import AuthLayout from "@/Layouts/AuthLayout2.vue";
 import PatientTimeline from "@/Components/PatientTimeline.vue";
-import { defineProps } from "vue";
 
 const props = defineProps({
   patient: {

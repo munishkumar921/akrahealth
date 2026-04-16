@@ -181,7 +181,7 @@ const onInput = (e) => {
 }
 
 .mx-datepicker-popup {
-  z-index: 9999 !important;
+  z-index: 30000 !important;
 }
 .input-group > .form-control, .input-group > .form-select:hover
 {

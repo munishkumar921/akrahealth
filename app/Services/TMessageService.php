@@ -134,15 +134,12 @@ class TMessageService extends BaseService
                 'mailbox' => $recipientId,
             ]);
 
-            if ($recipient->hasRole('patient') && $recipient->email) {
-                $this->sendMail($recipient->email, $tMessage->subject, $data['message'], $patientName, $senderName);
-            }
         }
 
         $toEmails = $recipients->pluck('email')->filter()->toArray();
 
         if (! empty($toEmails)) {
-            Mail::to($toEmails)->send(new \App\Mail\MessageMail([
+            Mail::to($toEmails)->queue(new \App\Mail\MessageMail([
                 'subject' => $tMessage->subject,
                 'message' => $data['message'],
                 'patient_name' => $patientName,
@@ -225,16 +222,4 @@ class TMessageService extends BaseService
         return array_filter(array_map('trim', preg_split('/[,;]/', (string) $recipients)));
     }
 
-    /**
-     * Helper: Send mail
-     */
-    protected function sendMail(string $email, string $subject, string $message, string $patientName, string $senderName): void
-    {
-        Mail::to($email)->send(new \App\Mail\MessageMail([
-            'subject' => $subject,
-            'message' => $message,
-            'patient_name' => $patientName,
-            'sender_name' => $senderName,
-        ]));
-    }
 }

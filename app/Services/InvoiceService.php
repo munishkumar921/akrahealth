@@ -21,6 +21,7 @@ class InvoiceService
     public function createInvoice(array $data): Invoice
     {
         return DB::transaction(function () use ($data) {
+            $notificationService = app(InAppNotificationService::class);
             // Generate invoice number
             $invoiceNumber = Invoice::generateInvoiceNumber();
 
@@ -61,6 +62,51 @@ class InvoiceService
                 'invoice_id' => $invoice->id,
                 'invoice_number' => $invoiceNumber,
             ]);
+
+            if ($invoice->patient_id) {
+                $notificationService->notifyPatient(
+                    $invoice->patient_id,
+                    $notificationService->buildPayload(
+                        'Billing update',
+                        'A new invoice has been generated for your account.',
+                        'billing_updated',
+                        [
+                            'recipient_role' => 'Patient',
+                            'invoice_id' => $invoice->id,
+                            'appointment_id' => $invoice->appointment_id,
+                            'patient_id' => $invoice->patient_id,
+                            'doctor_id' => $invoice->doctor_id,
+                            'action_url' => route('patient.billing'),
+                            'related_model_type' => Invoice::class,
+                            'related_model_id' => $invoice->id,
+                        ]
+                    )
+                );
+            }
+
+            $notificationService->notifyAdminsForHospital(
+                $invoice->hospital_id,
+                $notificationService->buildPayload(
+                    'New invoice created',
+                    'Invoice '.$invoice->invoice_number.' has been created.',
+                    'invoice_created',
+                    [
+                        'recipient_role' => 'Admin',
+                        'invoice_id' => $invoice->id,
+                        'appointment_id' => $invoice->appointment_id,
+                        'patient_id' => $invoice->patient_id,
+                        'doctor_id' => $invoice->doctor_id,
+                        'related_model_type' => Invoice::class,
+                        'related_model_id' => $invoice->id,
+                    ]
+                )
+            );
+
+            app(EmailNotificationService::class)->queueDoctorBillingEmail(
+                $invoice->fresh(['doctor.user'])->doctor?->user,
+                $invoice,
+                'A new billing record has been created for your patient.'
+            );
 
             return $invoice;
         });

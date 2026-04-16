@@ -26,6 +26,9 @@ const columns = [
     { label: "From", key: "from" },
     { label: "Subject", key: "subject" },
     { label: "Message", key: "message", type: "slot", slot: "message" },
+    { label: "Lab", key: "lab.name"},
+    { label: "Pharmacy", key: "pharmacy.name"},
+
     { label: "Status", key: "read_status", type: "slot", slot: "read_status" },
 ];
  

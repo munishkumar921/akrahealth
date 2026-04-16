@@ -20,19 +20,73 @@ class DSupplementController extends Controller
      */
     public function index(Request $request): Response
     {
-        $supplements = PatientSupplement::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null);
-        if ($request->has('search')) {
-            $keyword = $request->get('search');
-            $supplements = $supplements->where('supplement', 'Like', '%'.$keyword.'%');
+        $selectedPatientId = auth()->user()->doctor->selected_patient_id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = trim((string) $request->input('status', ''));
+        $route = trim((string) $request->input('route_name', ''));
+
+        $supplements = PatientSupplement::where('patient_id', $selectedPatientId);
+
+        if ($keyword !== '') {
+            $supplements = $supplements->where(function ($query) use ($keyword) {
+                $query->where('supplement', 'like', '%' . $keyword . '%')
+                    ->orWhere('dosage', 'like', '%' . $keyword . '%')
+                    ->orWhere('dosage_unit', 'like', '%' . $keyword . '%')
+                    ->orWhere('sig', 'like', '%' . $keyword . '%')
+                    ->orWhere('route', 'like', '%' . $keyword . '%')
+                    ->orWhere('frequency', 'like', '%' . $keyword . '%')
+                    ->orWhere('instructions', 'like', '%' . $keyword . '%')
+                    ->orWhere('reason', 'like', '%' . $keyword . '%');
+            });
         }
-        $encounters = Encounter::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null)->whereDate('encounter_date_of_service', today())->latest()->first();
-        $supplements = $supplements->paginate(request('per_page', paginateLimit()))->withQueryString();
+
+        if ($status === 'active') {
+            $supplements->whereNull('date_inactive');
+        }
+
+        if ($status === 'inactive') {
+            $supplements->whereNotNull('date_inactive');
+        }
+
+        if ($route !== '') {
+            $supplements->where('route', $route);
+        }
+
+        $encounters = Encounter::where('patient_id', $selectedPatientId)
+            ->whereDate('encounter_date_of_service', today())
+            ->latest()
+            ->first();
+
+        $supplements = $supplements
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $supplements->through(function (PatientSupplement $supplement) {
+            return array_merge($supplement->toArray(), [
+                'status_label' => $supplement->date_inactive ? 'Inactive' : 'Active',
+                'active_date_label' => $supplement->date_active?->format('d M, Y') ?? '-',
+                'inactive_date_label' => $supplement->date_inactive?->format('d M, Y') ?? '-',
+            ]);
+        });
+
+        $routeOptions = PatientSupplement::where('patient_id', $selectedPatientId)
+            ->whereNotNull('route')
+            ->where('route', '!=', '')
+            ->distinct()
+            ->orderBy('route')
+            ->pluck('route')
+            ->values();
 
         return Inertia::render('Doctors/Patient/Supplements/Supplements', [
             'supplements' => $supplements,
             'encounters' => $encounters,
-            'keyword' => $request->get('search'),
-            'route' => config('route'),
+            'routeOptions' => $routeOptions,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+                'route_name' => $route,
+            ],
         ]);
     }
 

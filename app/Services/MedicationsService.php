@@ -16,6 +16,7 @@ class MedicationsService
      */
     public function store($input)
     {
+        $notificationService = app(InAppNotificationService::class);
         $encounter = Encounter::where('id', $input['encounter_id'])->first();
         $due_date = null;
         $days = null;
@@ -26,7 +27,7 @@ class MedicationsService
             $days = (int) $input['days'];
         }
 
-        Prescription::updateOrCreate(
+        $prescription = Prescription::updateOrCreate(
             ['id' => $input['id'] ?? null],
             [
 
@@ -53,6 +54,24 @@ class MedicationsService
                 'due_date' => $due_date ?? null,
 
             ]);
+
+        $notificationService->notifyPatient(
+            $encounter?->patient_id,
+            $notificationService->buildPayload(
+                'New medication added',
+                'A medication has been added or updated in your chart.',
+                'medication_added',
+                [
+                    'recipient_role' => 'Patient',
+                    'prescription_id' => $prescription->id,
+                    'patient_id' => $encounter?->patient_id,
+                    'doctor_id' => $encounter?->doctor_id,
+                    'action_url' => route('patient.medications'),
+                    'related_model_type' => Prescription::class,
+                    'related_model_id' => $prescription->id,
+                ]
+            )
+        );
     }
 
     /**

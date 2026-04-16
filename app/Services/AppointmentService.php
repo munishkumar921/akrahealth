@@ -3,9 +3,10 @@
 namespace App\Services;
 
 use App\Models\Appointment;
+use App\Models\Doctor;
 use App\Models\Notification;
-use App\Models\User;
 use App\Notifications\AppointmentCreated;
+use Carbon\Carbon;
 
 class AppointmentService
 {
@@ -59,6 +60,13 @@ class AppointmentService
     */
     public function upsert($data)
     {
+        $existingAppointment = ! empty($data['id'])
+            ? Appointment::find($data['id'])
+            : null;
+        $doctorHospitalId = ! empty($data['doctor_id'])
+            ? Doctor::whereKey($data['doctor_id'])->value('hospital_id')
+            : ($existingAppointment?->doctor?->hospital_id);
+
         // Set user tracking
         if (isset($data['id']) && $data['id'] > 0) {
             $data['updated_by'] = auth()->id();
@@ -68,6 +76,10 @@ class AppointmentService
 
         // Calculate total amount safely
         $data['total_amount'] = ($data['fee_amount'] ?? 0) - ($data['discount'] ?? 0);
+
+        $createdAt = $data['createdAt'] ?? $data['created_at'] ?? now();
+        $data['created_at'] = Carbon::parse($createdAt)->format('Y-m-d H:i:s');
+        $data['updated_at'] = Carbon::parse($createdAt)->format('Y-m-d H:i:s');
 
         // Use updateOrCreate for better efficiency
         $appointment = Appointment::updateOrCreate(
@@ -83,11 +95,33 @@ class AppointmentService
         // Send notifications
         $this->sendAppointmentNotifications($appointment);
 
+        $auditService = app(AuditService::class);
+        if ($existingAppointment) {
+            $auditService->create([
+                'module' => 'Appointment',
+                'action' => 'update',
+                'hospital_id' => $doctorHospitalId,
+                'description' => 'Appointment updated',
+                'old_values' => $existingAppointment->toArray(),
+                'new_values' => $appointment->fresh()->toArray(),
+            ]);
+        } else {
+            $auditService->create([
+                'module' => 'Appointment',
+                'action' => 'create',
+                'hospital_id' => $doctorHospitalId,
+                'description' => 'Appointment created',
+                'new_values' => $appointment->fresh()->toArray(),
+            ]);
+        }
+
         return $appointment;
     }
 
     private function sendAppointmentNotifications(Appointment $appointment)
     {
+        $notificationService = app(InAppNotificationService::class);
+
         // ----------------------------------------------
         // PATIENT NOTIFICATION
         // ----------------------------------------------
@@ -106,20 +140,23 @@ class AppointmentService
             );
         }
 
-        // // ----------------------------------------------
-        // // ADMIN NOTIFICATIONS
-        // // ----------------------------------------------
-        // if ($appointment->wasRecentlyCreated) {
-        //     $adminUsers = User::whereHas('roles', function ($query) {
-        //         $query->whereIn('name', ['Admin', 'Super Admin']);
-        //     })->get();
-
-        //     foreach ($adminUsers as $admin) {
-        //         $admin->notify(
-        //             new AppointmentCreated($appointment, 'Admin')
-        //         );
-        //     }
-        // }
+        $notificationService->notifyAdminsForHospital(
+            $appointment->doctor?->hospital_id,
+            $notificationService->buildPayload(
+                'New appointment booked',
+                'A new appointment was booked for '.$appointment->patient?->name.'.',
+                'appointment_created',
+                [
+                    'recipient_role' => 'Admin',
+                    'action_url' => route('admin.allAppointments'),
+                    'appointment_id' => $appointment->id,
+                    'patient_id' => $appointment->patient_id,
+                    'doctor_id' => $appointment->doctor_id,
+                    'related_model_type' => Appointment::class,
+                    'related_model_id' => $appointment->id,
+                ]
+            )
+        );
     }
 
     /*
@@ -211,6 +248,7 @@ class AppointmentService
      */
     public function updateStatus($data)
     {
+        $oldAppointment = Appointment::find($data['id']);
         $appointment = Appointment::with(['doctor.user', 'patient.user'])->find($data['id']);
 
         if (! $appointment) {
@@ -228,11 +266,22 @@ class AppointmentService
         }
         $this->sendStatusUpdateNotifications($appointment);
 
+        app(AuditService::class)->create([
+            'module' => 'Appointment',
+            'action' => 'update',
+            'hospital_id' => $appointment->doctor?->hospital_id,
+            'description' => 'Appointment status updated to '.$appointment->status,
+            'old_values' => $oldAppointment?->toArray(),
+            'new_values' => $appointment->fresh()->toArray(),
+        ]);
+
         return $appointment;
     }
 
     private function sendStatusUpdateNotifications(Appointment $appointment)
     {
+        $notificationService = app(InAppNotificationService::class);
+
         // Send payment link if confirmed
         if ($appointment->status === 'confirmed' && $appointment->patient?->user) {
             $appointment->patient->user->notify(
@@ -258,17 +307,23 @@ class AppointmentService
             );
         }
 
-        // // Notify Admins
-        // $admins = User::whereHas(
-        //     'roles',
-        //     fn($q) =>
-        //     $q->whereIn('name', ['Admin', 'Super Admin'])
-        // )->get();
-
-        // foreach ($admins as $admin) {
-        //     $admin->notify(
-        //         new $notificationClass($appointment, 'Admin')
-        //     );
-        // }
+        $notificationService->notifyAdminsForHospital(
+            $appointment->doctor?->hospital_id,
+            $notificationService->buildPayload(
+                'Appointment updated',
+                'Appointment for '.$appointment->patient?->name.' was '.$appointment->status.'.',
+                'appointment_updated',
+                [
+                    'recipient_role' => 'Admin',
+                    'action_url' => route('admin.allAppointments'),
+                    'appointment_id' => $appointment->id,
+                    'patient_id' => $appointment->patient_id,
+                    'doctor_id' => $appointment->doctor_id,
+                    'status' => $appointment->status,
+                    'related_model_type' => Appointment::class,
+                    'related_model_id' => $appointment->id,
+                ]
+            )
+        );
     }
 }

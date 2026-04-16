@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\VisitTypeRequest;
+use App\Http\Requests\VisitTypeStatusRequest;
 use App\Models\Doctor;
 use App\Models\Hospital;
 use App\Models\VisitType;
@@ -23,10 +25,8 @@ class AVisitTypeController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $request = request();
-        $keyword = $request->get('keyword') ?? '';
         $visittypes = $this->VisitTypeService->list(request());
 
         $doctors = [];
@@ -41,7 +41,18 @@ class AVisitTypeController extends Controller
             ->whereIn('hospital_id', $hospitalIds)
             ->get();
 
-        return Inertia::render('Admin/VisitTypeList', compact('visittypes', 'request', 'keyword', 'doctors'));
+        return Inertia::render('Admin/VisitTypeList', [
+            'visittypes' => $visittypes,
+            'filters' => [
+                'keyword' => $request->get('keyword', ''),
+                'status' => $request->get('status', ''),
+                'doctor_id' => $request->get('doctor_id', ''),
+            ],
+            'doctors' => $doctors->map(fn ($doctor) => [
+                'id' => $doctor->id,
+                'name' => $doctor->user?->name ?? 'Unknown Doctor',
+            ])->values(),
+        ]);
     }
 
     /**
@@ -57,7 +68,7 @@ class AVisitTypeController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(VisitTypeRequest $request)
     {
         $this->VisitTypeService->upsert($request->all());
 
@@ -79,7 +90,7 @@ class AVisitTypeController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(VisitTypeStatusRequest $request, string $id)
     {
         $visitType = VisitType::findOrFail($id);
         $visitType->update($request->only(['is_active']));

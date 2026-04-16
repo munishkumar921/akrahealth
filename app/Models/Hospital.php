@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Hospital extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, SoftDeletes;
 
     protected $keyType = 'string';
 
@@ -43,6 +44,7 @@ class Hospital extends Model
         'zip',
         'website',
         'primary_contact',
+        'timezone',
         'npi',
         'medicare',
         'tax_id',

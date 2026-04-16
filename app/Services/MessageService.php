@@ -25,6 +25,7 @@ class MessageService extends BaseService
         $hospital = Auth::user()->hospital->id;
 
         return Message::with(['patient', 'doctor.user'])
+            ->where('hospital_id', auth()->user()->doctor->hospital_id)
             ->when($request->patient_id, fn ($q, $pid) => $q->where('patient_id', $pid))
             ->when($request->search, fn ($q, $keyword) => $q->where(fn ($q2) => $q2
                 ->where('subject', 'like', "%{$keyword}%")
@@ -142,9 +143,6 @@ class MessageService extends BaseService
                 'cc' => $ccString,
             ]);
 
-            if ($recipient->hasRole('patient') && $recipient->email) {
-                $this->sendMail($recipient->email, $message->subject, $data['message'], $patientName, $senderName);
-            }
         }
 
         $toEmails = $recipients->pluck('email')->filter()->toArray();
@@ -153,7 +151,7 @@ class MessageService extends BaseService
         if (! empty($toEmails)) {
             $mail = Mail::to($toEmails);
             $mail->when(! empty($ccEmails), fn ($m) => $m->cc($ccEmails));
-            $mail->send(new \App\Mail\MessageMail([
+            $mail->queue(new \App\Mail\MessageMail([
                 'subject' => $message->subject,
                 'message' => $data['message'],
                 'patient_name' => $patientName,
@@ -328,13 +326,4 @@ class MessageService extends BaseService
     /**
      * Helper: Send mail
      */
-    protected function sendMail(string $email, string $subject, string $message, string $patientName, string $senderName): void
-    {
-        Mail::to($email)->send(new \App\Mail\MessageMail([
-            'subject' => $subject,
-            'message' => $message,
-            'patient_name' => $patientName,
-            'sender_name' => $senderName,
-        ]));
-    }
 }

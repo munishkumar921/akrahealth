@@ -11,7 +11,7 @@ class AllowClarityBot
     {
         $userAgent = $request->header('User-Agent');
 
-        // ✅ Allow Microsoft Clarity bot to pass through
+        // Allow Microsoft Clarity bot to pass through
         if (stripos($userAgent, 'Clarity-Bot') !== false) {
             return $next($request);
         }

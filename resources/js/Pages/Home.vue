@@ -66,12 +66,12 @@ const signup = () => {
      <template v-slot:images>
         <div class="device-twin free-width align-items-center mt-4 mt-lg-0">
             <div class="browser shadow aos-init aos-animate shadow" style="border-radius: 15px;" >
-                <img src="images/webpages/appss_1.webp" alt="..." class="img-fluid shadow" style="border-radius: 15px;">
+                <img src="images/appss_1.png" alt="..." class="img-fluid shadow" style="border-radius: 15px;">
             </div>
 
             <div class="front iphone-x absolute d-none d-lg-block aos-init aos-animate mt-6 ms-xxl-n5" data-aos="fade-right">
                 <div class="screen">
-                    <img src="images/webpages/mobiless_2.webp" alt="...">
+                    <img src="images/mobiless_2.png" alt="...">
                 </div>
                 <div class="notch"></div>
             </div>
@@ -105,13 +105,13 @@ const signup = () => {
                     <div class="device-twin mx-auto align-items-center">
                         <div class="mockup absolute aos-init aos-animate" data-aos=" fade-left ">
                             <div class="screen">
-                                <img src="/images/EMR-18.webp" alt="emr-eighteen" />
+                                <img src="/images/EMR-18.png" alt="emr-eighteen" />
                             </div>
                             <span class="button"></span>
                         </div>
                         <div class="iphone-x front me-0">
                             <div class="screen shadow-box">
-                                <img src="/images/EMR-9.webp" alt="emr-nine" />
+                                <img src="/images/EMR-9.png" alt="emr-nine" />
                             </div>
                             <div class="notch"></div>
                         </div>

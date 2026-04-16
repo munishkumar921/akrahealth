@@ -2,7 +2,7 @@
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import axios from "axios";
 import Template from '@/Pages/Common/template.vue';
-import { ref, defineEmits } from "vue";
+import { ref } from "vue";
 const props = defineProps({
     form: Object,
 });

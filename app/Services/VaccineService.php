@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Hospital;
 use App\Models\Vaccine;
 use App\Models\VaccineTemperature;
+use Carbon\Carbon;
 
 class VaccineService
 {
@@ -41,13 +42,15 @@ class VaccineService
         $hospital = Hospital::where('user_id', auth()->user()->id)->first();
         $hospitalId = $hospital?->id;
 
+        $time = Carbon::parse($input['date'].' '.$input['time'])->format('Y-m-d H:i:s');
+
         return VaccineTemperature::updateOrCreate(
             ['id' => $input['id'] ?? null],
             [
                 'hospital_id' => $hospitalId ?? null,
                 'temperature' => $input['temperature'] ?? null,
                 'date' => $input['date'] ?? null,
-                'time' => $input['time'] ?? null,
+                'time' => $time,
                 'action' => $input['action'] ?? null,
             ]
         );

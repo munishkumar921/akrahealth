@@ -7,23 +7,23 @@ import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 
 const props = defineProps({
-     doctors: {
+    doctors: {
         type: Array,
         default: () => [],
-     },
+    },
 });
 
 const emit = defineEmits(["close", "submit"]);
- 
+
 const countries = Country.getAllCountries();
 const personalStates = ref([]);
-const isProcessing=ref(false);
+const isProcessing = ref(false);
 
 
 const form = useForm({
     id: "",
     doctor_id: "",
-    user_id:"",
+    user_id: "",
     first_name: "",
     last_name: "",
     sex: "",
@@ -40,37 +40,37 @@ const form = useForm({
     password: "",
     password_confirmation: "",
 
- 
+
 });
 
 // Method to update form with patient data (for editing)
 const update = (patient) => {
-        form.id = patient?.id || patient.id || "";
-        form.doctor_id = patient.doctor_patients?.[0]?.doctor_id || patient.doctorPatients?.[0]?.doctor_id || "";
-        form.user_id = patient?.user_id || patient.user_id || "";
-        form.first_name = patient?.first_name || patient.first_name || "";
-        form.last_name = patient?.last_name || patient.last_name || "";
-        form.sex = patient?.sex || patient.sex || "";
-        form.email = patient?.email || patient.email || "";
-        form.mobile = patient?.mobile || patient.mobile || "";
-        form.is_active = patient.is_active??1;
-        
-        // Address info
-        form.street_address1 = patient?.address_1 || "";
-        form.street_address2 = patient?.address_2 || "";
-        form.city = patient?.city || "";
-        form.state = patient?.state || "";
-        form.country = patient?.country || "";
-        form.zip = patient?.zip || "";
-         
-        // Populate states if country is set
-        if (form.country) {
-            const selectedCountry = countries.find(c => c.name === form.country);
-            if (selectedCountry) {
-                personalStates.value = State.getStatesOfCountry(selectedCountry.isoCode);
-            }
+    form.id = patient?.id || patient.id || "";
+    form.doctor_id = patient.doctor_patients?.[0]?.doctor_id || patient.doctorPatients?.[0]?.doctor_id || "";
+    form.user_id = patient?.user_id || patient.user_id || "";
+    form.first_name = patient?.first_name || patient.first_name || "";
+    form.last_name = patient?.last_name || patient.last_name || "";
+    form.sex = patient?.sex || patient.sex || "";
+    form.email = patient?.email || patient.email || "";
+    form.mobile = patient?.mobile || patient.mobile || "";
+    form.is_active = patient.is_active ?? 1;
+
+    // Address info
+    form.street_address1 = patient?.address_1 || "";
+    form.street_address2 = patient?.address_2 || "";
+    form.city = patient?.city || "";
+    form.state = patient?.state || "";
+    form.country = patient?.country || "";
+    form.zip = patient?.zip || "";
+
+    // Populate states if country is set
+    if (form.country) {
+        const selectedCountry = countries.find(c => c.name === form.country);
+        if (selectedCountry) {
+            personalStates.value = State.getStatesOfCountry(selectedCountry.isoCode);
         }
-    };
+    }
+};
 
 
 // Handle country change to populate states
@@ -115,10 +115,10 @@ const submitForm = () => {
     const isEdit = !!form.id;
     const password = randomPassword();
     if (!isEdit) {
-    form.password = password;
-    form.password_confirmation = password;
+        form.password = password;
+        form.password_confirmation = password;
     }
-      form.post(route("admin.patients.store"), {
+    form.post(route("admin.patients.store"), {
         onSuccess: () => {
             isProcessing.value = false;
             emit("submit");
@@ -134,30 +134,32 @@ const submitForm = () => {
 const closeModal = () => {
     emit("close");
     form.reset();
- };
+};
 
 // Expose the update method to parent component
- defineExpose({
-  update,
-  resetForm: () => form.reset(),
+defineExpose({
+    update,
+    resetForm: () => form.reset(),
 });
 
 </script>
 
 <template>
-     
-    <div class="modal-body">
+
+    <div class="">
         <form @submit.prevent="submitForm">
             <div class="row g-3">
                 <!-- First Name -->
                 <div class="col-md-6 ">
-                      <BaseInput v-model="form.first_name"  label="First Name" required placeholder="First Name" :error="form.errors.first_name"/>
-                  </div>
+                    <BaseInput v-model="form.first_name" label="First Name" required placeholder="First Name"
+                        :error="form.errors.first_name" />
+                </div>
 
                 <!-- Last Name -->
                 <div class="col-md-6 ">
-                     <BaseInput v-model="form.last_name"  label="Last Name" required placeholder="Last Name"  :error="form.errors.last_name"/>
-                  </div>
+                    <BaseInput v-model="form.last_name" label="Last Name" required placeholder="Last Name"
+                        :error="form.errors.last_name" />
+                </div>
 
                 <!-- Sex -->
                 <div class="col-md-6 ">
@@ -166,67 +168,77 @@ const closeModal = () => {
                         <option value="Female">Female</option>
                         <option value="Other">Other</option>
                     </BaseSelect>
-                     
-                    <InputError :message="form.errors.sex"/>
-                  </div>
+
+                    <InputError :message="form.errors.sex" />
+                </div>
 
                 <!-- Email -->
                 <div class="col-md-6 ">
-                     <BaseInput v-model="form.email" label="Email" type="email" placeholder="Email" required :error="form.errors.email" /> 
-                 </div>
+                    <BaseInput v-model="form.email" label="Email" type="email" placeholder="Email" required
+                        :error="form.errors.email" />
+                </div>
 
                 <!-- Mobile -->
                 <div class="col-md-6 ">
-                   <BaseInput v-model="form.mobile" label="Mobile" type="text" placeholder="Mobile" required :error="form.errors.mobile" />
-                 </div>
+                    <BaseInput v-model="form.mobile" label="Mobile" type="text" placeholder="Mobile" required
+                        :error="form.errors.mobile" />
+                </div>
 
                 <!-- Doctor -->
-                 <div class="col-md-6 ">
-                    <BaseSelect v-model="form.doctor_id" label="Doctor" type="select" placeholder="Select Provider" :error="form.errors.doctor_id">
+                <div class="col-md-6 ">
+                    <BaseSelect v-model="form.doctor_id" label="Doctor" type="select" placeholder="Select Provider"
+                        :error="form.errors.doctor_id">
                         <option v-for="doctor in doctors" :key="doctor.id" :value="doctor.id">{{ doctor.name }}</option>
                     </BaseSelect>
                 </div>
 
                 <!-- Street Address 1 -->
                 <div class="col-md-6 ">
-                    <BaseInput v-model="form.street_address1" label="Street Address 1" type="text" placeholder="Street Address 1" required :error="form.errors.street_address1" />
+                    <BaseInput v-model="form.street_address1" label="Street Address 1" type="text"
+                        placeholder="Street Address 1" required :error="form.errors.street_address1" />
                 </div>
 
                 <!-- Street Address 2 -->
                 <div class="col-md-6 ">
-                    <BaseInput v-model="form.street_address2" label="Street Address 2" type="text" placeholder="Street Address 2" :error="form.errors.street_address2" />
+                    <BaseInput v-model="form.street_address2" label="Street Address 2" type="text"
+                        placeholder="Street Address 2" :error="form.errors.street_address2" />
                 </div>
 
                 <!-- City -->
                 <div class="col-md-6 ">
-                    <BaseInput v-model="form.city" label="City" type="text" placeholder="City" required :error="form.errors.city" />
+                    <BaseInput v-model="form.city" label="City" type="text" placeholder="City" required
+                        :error="form.errors.city" />
                 </div>
 
                 <!-- Country -->
                 <div class="col-md-6 ">
-                    <BaseSelect :modelValue="form.country" @update:modelValue="handleCountryChange" label="Country" type="select" required placeholder="Select Country" :error="form.errors.country">
-                         <option value="">Select Country</option>
+                    <BaseSelect :modelValue="form.country" @update:modelValue="handleCountryChange" label="Country"
+                        type="select" required placeholder="Select Country" :error="form.errors.country">
+                        <option value="">Select Country</option>
                         <template v-for="country in countries" :key="country.isoCode">
-                        <option :value="country.name">{{ country.name }}</option>
+                            <option :value="country.name">{{ country.name }}</option>
                         </template>
                     </BaseSelect>
-                 </div>
+                </div>
                 <!-- State -->
                 <div class="col-md-6 ">
-                    <BaseSelect v-model="form.state" label="State" type="select"   placeholder="Select State" :error="form.errors.state">
-                         <option value="">Select State</option>
-                         <template v-for="state in personalStates" :key="state.isoCode">
-                         <option :value="state.name">{{ state.name }}</option>
+                    <BaseSelect v-model="form.state" label="State" type="select" placeholder="Select State"
+                        :error="form.errors.state">
+                        <option value="">Select State</option>
+                        <template v-for="state in personalStates" :key="state.isoCode">
+                            <option :value="state.name">{{ state.name }}</option>
                         </template>
-                     </BaseSelect>
-                 </div>
+                    </BaseSelect>
+                </div>
                 <!-- Zip Code -->
                 <div class="col-md-6 ">
-                    <BaseInput v-model="form.zip" label="Zip Code" type="text" placeholder="Zip Code" required :error="form.errors.zip" />
-                 </div>
-                 <!-- Status -->
+                    <BaseInput v-model="form.zip" label="Zip Code" type="text" placeholder="Zip Code" required
+                        :error="form.errors.zip" />
+                </div>
+                <!-- Status -->
                 <div class="col-md-6 ">
-                    <BaseSelect v-model="form.is_active" label="Status" type="select" required placeholder="Select Status" :error="form.errors.status">
+                    <BaseSelect v-model="form.is_active" label="Status" type="select" required
+                        placeholder="Select Status" :error="form.errors.status">
                         <option :value="true">Active</option>
                         <option :value="false">Inactive</option>
                     </BaseSelect>
@@ -234,12 +246,15 @@ const closeModal = () => {
             </div>
 
             <div class="mt-4 d-flex justify-content-end gap-2">
-                <button type="submit" class="btn btn-primary" :disabled="isProcessing">{{  isProcessing? 'Saving...' : 'Submit' }}</button>
-                   <button type="button" class="btn btn-danger" @click="closeModal" :disabled="isProcessing">Cancel</button>
+                <button type="submit" class="btn btn-primary" :disabled="isProcessing">{{ isProcessing ? 'Saving...' :
+                    'Submit'
+                    }}</button>
+                <button type="button" class="btn btn-danger" @click="closeModal"
+                    :disabled="isProcessing">Cancel</button>
             </div>
         </form>
     </div>
- </template>
+</template>
 <style scoped>
 .profile-photo-preview {
     transition: all 0.3s ease;

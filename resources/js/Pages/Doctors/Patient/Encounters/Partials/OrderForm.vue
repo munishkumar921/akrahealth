@@ -1,17 +1,17 @@
- <script setup>
+<script setup>
 import axios from "axios";
-import { ref, defineEmits, onMounted, watch, reactive } from "vue";
+import { ref, onMounted, watch, reactive } from "vue";
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import { routeOptions } from "@/Data/commonData";
- import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
+import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
 import "@vueform/multiselect/themes/default.css";
 import Search from "@/Components/Common/Search.vue";
-import {useForm } from "@inertiajs/vue3";
+import { useForm } from "@inertiajs/vue3";
 import Modal from "@/Components/Common/Modal.vue";
 import LabProviderModal from "@/Pages/Modals/AddLab.vue";
- 
+
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { route } from "ziggy-js";
 
@@ -27,7 +27,7 @@ const cardiopulmonaryErrors = ref({});
 const referralErrors = ref({});
 const supplementErrors = ref({});
 
- 
+
 
 // Helper to clear previous errors
 const clearErrors = (errorRef) => {
@@ -107,7 +107,7 @@ const labForm = useForm({
     notes: "",
     pending_date: "",
     is_completed: "",
-    action_after_saving:'save_only',
+    action_after_saving: 'save_only',
 
 });
 
@@ -123,7 +123,7 @@ const radiologyForm = useForm({
     notes: "",
     pending_date: "",
     is_completed: "",
-    action_after_saving:'save_only',
+    action_after_saving: 'save_only',
 
 });
 
@@ -139,7 +139,7 @@ const cardiopulmonaryForm = useForm({
     notes: "",
     pending_date: "",
     is_completed: "",
-    action_after_saving:'save_only',
+    action_after_saving: 'save_only',
 
 });
 
@@ -157,14 +157,14 @@ const referralForm = useForm({
     is_completed: "",
     specialty: "",
     doctor_id: "",
-    action_after_saving:"save_only",
+    action_after_saving: "save_only",
 
 });
 
 const advanceToNextCollapse = (currentId, nextId) => {
     const currentCollapse = document.getElementById(currentId);
     const nextCollapse = document.getElementById(nextId);
-     if (currentCollapse && nextCollapse) {
+    if (currentCollapse && nextCollapse) {
         // Using jQuery's collapse method which seems to be in use by the template
         $(currentCollapse).collapse('hide');
         $(nextCollapse).collapse('show');
@@ -183,32 +183,32 @@ const savedSupplements = ref([]);
 const upsertSupplement = () => {
     supplementLoading.value = true;
     supplementForm.encounter_id = props.form.id;
-    
+
     // Clear previous errors
     clearErrors(supplementErrors);
 
     axios.post(route('doctor.upsert.supplement'), supplementForm).then(response => {
-        if(response.data.length > 0) {
-        savedSupplements.value = response.data;
-         advanceToNextCollapse('order-supplement-collapse', 'lab-order-collapse');
-         toast('The supplement order saved successfully!');
-          }
+        if (response.data.length > 0) {
+            savedSupplements.value = response.data;
+            advanceToNextCollapse('order-supplement-collapse', 'lab-order-collapse');
+            toast('The supplement order saved successfully!');
+        }
     }).catch(error => {
         console.error('Error saving supplement:', error);
-        
+
         // Extract and display validation errors
         if (error.response && error.response.data) {
             if (error.response.data.errors) {
                 // Laravel validation errors
                 const errors = error.response.data.errors;
-                 
+
                 // Store errors for field-level display
                 Object.keys(errors).forEach(key => {
                     supplementErrors.value[key] = Array.isArray(errors[key]) ? errors[key][0] : errors[key];
                     toast(config.errorRef.value[key], 'error');
 
                 });
-             } else if (error.response.data.message) {
+            } else if (error.response.data.message) {
                 // Generic error message
                 toast(error.response.data.message, 'error');
             } else {
@@ -256,52 +256,52 @@ const referralLoading = ref(false);
 const handleUpsert = (config) => {
     config.loading.value = true;
     config.form.encounter_id = props.form.id;
-    
+
     // Clear previous errors
     clearErrors(config.errorRef);
 
     axios.post(route('doctor.upsert.encounter.order'), config.form)
         .then(response => {
-            if(response.data.length > 0) {
-                
-          
-            config.list.value = response.data;
+            if (response.data.length > 0) {
 
-            toast(`The ${config.name} order saved successfully!`);
 
-            if (config.form.action_after_saving === 'print') {
-                const newOrder = response.data[response.data.length - 1];
-                if (newOrder) {
-                    window.location.href = route('doctor.download.encounter.order', newOrder.id);
+                config.list.value = response.data;
+
+                toast(`The ${config.name} order saved successfully!`);
+
+                if (config.form.action_after_saving === 'print') {
+                    const newOrder = response.data[response.data.length - 1];
+                    if (newOrder) {
+                        window.location.href = route('doctor.download.encounter.order', newOrder.id);
+                    }
                 }
-            }
 
-            if (config.nextCollapseId) {
-                advanceToNextCollapse(config.currentCollapseId, config.nextCollapseId);
-            } else {
-                emit('save'); // Emit save on the last step
-            }
+                if (config.nextCollapseId) {
+                    advanceToNextCollapse(config.currentCollapseId, config.nextCollapseId);
+                } else {
+                    emit('save'); // Emit save on the last step
+                }
             }
         })
         .catch(error => {
             console.error(`Error saving ${config.name} order:`, error);
-            
+
             // Extract and display validation errors
             if (error.response && error.response.data) {
                 if (error.response.data.errors) {
                     // Laravel validation errors
                     const errors = error.response.data.errors;
-                     
+
                     // Store errors for field-level display
                     Object.keys(errors).forEach(key => {
                         config.errorRef.value[key] = Array.isArray(errors[key]) ? errors[key][0] : errors[key];
                         toast(config.errorRef.value[key], 'error');
                     });
-                    
+
                 } else if (error.response.data.message) {
                     // Generic error message
                     toast(error.response.data.message, 'error');
-                 } else {
+                } else {
                     // Fallback
                     toast(`Failed to save ${config.name} order. Please try again.`, 'error');
                 }
@@ -322,7 +322,7 @@ const handleUpsert = (config) => {
                     props.form[propKey] = defaultValue;
                 });
             }
-            
+
             config.loading.value = false;
         });
 };
@@ -506,10 +506,10 @@ onMounted(() => {
 
 const isOpenRadiologyProviderModal = ref(false);
 const openRadiologyProviderModal = () => {
-      isOpenRadiologyProviderModal.value = true;
+    isOpenRadiologyProviderModal.value = true;
 };
 const closeRadiologyProviderModal = () => {
-     isOpenRadiologyProviderModal.value = false;
+    isOpenRadiologyProviderModal.value = false;
 };
 
 const isOpenCardiopulmonaryProviderModal = ref(false);
@@ -547,6 +547,10 @@ const getDoctorsBySpecialty = () => {
     }
 }
 
+const setLabId = () => {
+    //
+}
+
 </script>
 
 <template>
@@ -561,7 +565,7 @@ const getDoctorsBySpecialty = () => {
                     </h6>
                 </div>
             </div>
-             <div id="order-supplement-collapse" class="collapse show" data-parent="#order-accordion">
+            <div id="order-supplement-collapse" class="collapse show" data-parent="#order-accordion">
                 <div class="card-body">
                     <div class="row">
 
@@ -604,23 +608,25 @@ const getDoctorsBySpecialty = () => {
                         </template>
 
                         <div class="col-md-6 mt-5">
-                            <BaseInput v-model="supplementForm.supplement" label="Supplement" required 
+                            <BaseInput v-model="supplementForm.supplement" label="Supplement" required
                                 placeholder="Search for supplement" :error="supplementErrors.supplement" />
                         </div>
                         <div class="col-md-3 mt-5">
-                            <BaseInput v-model="supplementForm.dosage" label="Dosage" placeholder="e.g., 100" :error="supplementErrors.dosage" required />
+                            <BaseInput v-model="supplementForm.dosage" label="Dosage" placeholder="e.g., 100"
+                                :error="supplementErrors.dosage" required />
                         </div>
                         <div class="col-md-3 mt-5">
                             <BaseInput v-model="supplementForm.dosage_unit" label="Dosage Unit" required
                                 placeholder="e.g., mg" :error="supplementErrors.dosage_unit" />
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseInput v-model="supplementForm.sig" label="Sig" placeholder="e.g., Take one daily" :error="supplementErrors.sig" />
+                            <BaseInput v-model="supplementForm.sig" label="Sig" placeholder="e.g., Take one daily"
+                                :error="supplementErrors.sig" />
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseSelect v-model="supplementForm.route" label="Route" placeholder="Select Route"
-                                required :error="supplementErrors.route">
-                                    <option value="" disabled selected>Select Route</option>
+                            <BaseSelect v-model="supplementForm.route" label="Route" placeholder="Select Route" required
+                                :error="supplementErrors.route">
+                                <option value="" disabled selected>Select Route</option>
 
                                 <option v-for="route in routeOptions" :key="route" :value="route">
                                     {{ route }}
@@ -628,14 +634,16 @@ const getDoctorsBySpecialty = () => {
                             </BaseSelect>
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseInput v-model="supplementForm.frequency" label="Frequency" placeholder="e.g., Daily" :error="supplementErrors.frequency" />
+                            <BaseInput v-model="supplementForm.frequency" label="Frequency" placeholder="e.g., Daily"
+                                :error="supplementErrors.frequency" />
                         </div>
                         <div class="col-md-6 mt-3">
                             <BaseInput v-model="supplementForm.instructions" label="Special Instructions"
                                 placeholder="Enter special instructions" :error="supplementErrors.instructions" />
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseInput v-model="supplementForm.reason" label="Reason" placeholder="Enter reason" :error="supplementErrors.reason" />
+                            <BaseInput v-model="supplementForm.reason" label="Reason" placeholder="Enter reason"
+                                :error="supplementErrors.reason" />
                         </div>
                         <div class="col-md-6 mt-3">
                             <BaseDatePicker v-model="supplementForm.date_active" label="Date Active"
@@ -643,11 +651,14 @@ const getDoctorsBySpecialty = () => {
                         </div>
                     </div>
                     <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button type="button" @click="upsertSupplement()" class="btn btn-sm btn-primary" :disabled="supplementLoading">
-                            <span v-if="supplementLoading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <button type="button" @click="upsertSupplement()" class="btn btn-sm btn-primary"
+                            :disabled="supplementLoading">
+                            <span v-if="supplementLoading" class="spinner-border spinner-border-sm" role="status"
+                                aria-hidden="true"></span>
                             {{ supplementLoading ? 'Saving...' : 'Save' }}
                         </button>
-                        <button type="button" class="btn btn-sm btn-danger" :disabled="supplementLoading">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-danger"
+                            :disabled="supplementLoading">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -704,28 +715,32 @@ const getDoctorsBySpecialty = () => {
                         </div>
 
                         <div class="col-md-12">
-                            <BaseInput v-model="labForm.labs" label="Test" type="textarea" placeholder="lab test" required
-                                @click="getDateMeta('orders_labs')" :error="labErrors.labs" />
+                            <BaseInput v-model="labForm.labs" label="Test" type="textarea" placeholder="lab test"
+                                required @click="getDateMeta('orders_labs')" :error="labErrors.labs" />
                         </div>
                         <div class="col-md-12 mt-3">
-                            <BaseTagsInput v-model="labForm.labs_icd" label="Diagnosis Codes" placeholder="Type diagnosis codes" :error="labErrors.labs_icd" />
+                            <BaseTagsInput v-model="labForm.labs_icd" label="Diagnosis Codes"
+                                placeholder="Type diagnosis codes" :error="labErrors.labs_icd" />
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseSelect v-model="labForm.encounter_provider" label="Laboratory Provider" placeholder="Select Laboratory Provider" required :error="labErrors.encounter_provider">
-                                 <option v-for="lab in data.labs" :key="lab.id" :value="lab.id">
+                            <BaseSelect v-model="labForm.encounter_provider" @change="setLabId()"
+                                label="Laboratory Provider" placeholder="Select Laboratory Provider" required
+                                :error="labErrors.encounter_provider">
+                                <option v-for="lab in data.labs" :key="lab.id" :value="lab.id">
                                     {{ lab?.name }}
-
                                 </option>
                             </BaseSelect>
-                            <p class="text-primary cursor-pointer" @click="openLaboratoryProviderModal"><i class="bi bi-plus-circle mr-1"></i>Add Laboratory Provider</p>
+                            <p class="text-primary cursor-pointer" @click="openLaboratoryProviderModal"><i
+                                    class="bi bi-plus-circle mr-1"></i>Add Laboratory Provider</p>
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseDatePicker v-model="labForm.pending_date" label="Order Pending Date" placeholder="Select Date" :error="labErrors.pending_date"  />
+                            <BaseDatePicker v-model="labForm.pending_date" label="Order Pending Date"
+                                placeholder="Select Date" :error="labErrors.pending_date" />
                         </div>
                         <div class="col-md-12 mt-3">
                             <BaseSelect v-model="labForm.insurance_id" label="Insurance" placeholder="Select Insurance"
                                 required :error="labErrors.insurance_id">
-                                 <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
+                                <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
                                     {{ insurance.insurance_company }} - {{ insurance.plan_name }}
                                 </option>
                             </BaseSelect>
@@ -735,8 +750,9 @@ const getDoctorsBySpecialty = () => {
                                 @click="getDateMeta('orders_labs_notes')" :error="labErrors.notes" />
                         </div>
                         <div class="col-md-12 mt-3">
-                            <BaseSelect v-model="labForm.action_after_saving" placeholder="Select an action" label="Action After Saving" :error="labErrors.action_after_saving">
-                                 <option v-for="option in actionOptions" :key="option.value" :value="option.value">
+                            <BaseSelect v-model="labForm.action_after_saving" placeholder="Select an action"
+                                label="Action After Saving" :error="labErrors.action_after_saving">
+                                <option v-for="option in actionOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </option>
                             </BaseSelect>
@@ -744,8 +760,10 @@ const getDoctorsBySpecialty = () => {
 
                     </div>
                     <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button type="button" @click="upsertLab()" class="btn btn-sm btn-primary" :disabled="labLoading">
-                            <span v-if="labLoading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <button type="button" @click="upsertLab()" class="btn btn-sm btn-primary"
+                            :disabled="labLoading">
+                            <span v-if="labLoading" class="spinner-border spinner-border-sm" role="status"
+                                aria-hidden="true"></span>
                             {{ labLoading ? 'Saving...' : 'Save' }}
                         </button>
                         <button type="button" class="btn btn-sm btn-danger" :disabled="labLoading">Cancel</button>
@@ -805,48 +823,57 @@ const getDoctorsBySpecialty = () => {
                         </div>
 
                         <div class="col-md-12 mt-3">
-                            <BaseInput v-model="radiologyForm.radiology" label="Imaging Test(s)" type="textarea" required
-                                placeholder="Search for imaging test" @click="getDateMeta('orders_radiology')" :error="radiologyErrors.radiology" />
-                        </div> 
+                            <BaseInput v-model="radiologyForm.radiology" label="Imaging Test(s)" type="textarea"
+                                required placeholder="Search for imaging test" @click="getDateMeta('orders_radiology')"
+                                :error="radiologyErrors.radiology" />
+                        </div>
                         <div class="col-md-12 mt-3">
                             <BaseTagsInput v-model="radiologyForm.radiology_icd" label="Diagnosis Codes"
                                 placeholder="Enter diagnosis codes" :error="radiologyErrors.radiology_icd" />
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseSelect v-model="radiologyForm.encounter_provider" label="Radiology Provider" placeholder="Select Radiology Provider" required :error="radiologyErrors.encounter_provider">
-                                 <option v-for="radiology in data.radiologies" :key="radiology.id" :value="radiology.id">
+                            <BaseSelect v-model="radiologyForm.encounter_provider" label="Radiology Provider"
+                                placeholder="Select Radiology Provider" required
+                                :error="radiologyErrors.encounter_provider">
+                                <option v-for="radiology in data.radiologies" :key="radiology.id" :value="radiology.id">
                                     {{ radiology?.name }}
                                 </option>
                             </BaseSelect>
-                            <a  class="text-primary cursor-pointer " @click="openRadiologyProviderModal"><i class="bi bi-plus-circle mr-1"></i>Add radiology Provider</a>
+                            <a class="text-primary cursor-pointer " @click="openRadiologyProviderModal"><i
+                                    class="bi bi-plus-circle mr-1"></i>Add radiology Provider</a>
 
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseDatePicker v-model="radiologyForm.pending_date" label="Order Pending Date" placeholder="Select Date" :error="radiologyErrors.pending_date" />
+                            <BaseDatePicker v-model="radiologyForm.pending_date" label="Order Pending Date"
+                                placeholder="Select Date" :error="radiologyErrors.pending_date" />
                         </div>
                         <div class="col-md-12 mt-3">
                             <BaseSelect v-model="radiologyForm.insurance_id" label="Insurance"
                                 placeholder="Select Insurance" required :error="radiologyErrors.insurance_id">
-                                 <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
+                                <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
                                     {{ insurance.insurance_company }} - {{ insurance.plan_name }}
                                 </option>
                             </BaseSelect>
                         </div>
                         <div class="col-md-12 mt-3">
                             <BaseInput v-model="radiologyForm.notes" label="Notes about Order" type="textarea"
-                                placeholder="Enter notes" @click="getDateMeta('orders_radiology_notes')" :error="radiologyErrors.notes" />
+                                placeholder="Enter notes" @click="getDateMeta('orders_radiology_notes')"
+                                :error="radiologyErrors.notes" />
                         </div>
                         <div class="col-md-12 mt-3">
-                            <BaseSelect v-model="radiologyForm.action_after_saving" placeholder="Select an action" label="Action After Saving" :error="radiologyErrors.action_after_saving">
-                                 <option v-for="option in actionOptions" :key="option.value" :value="option.value">
+                            <BaseSelect v-model="radiologyForm.action_after_saving" placeholder="Select an action"
+                                label="Action After Saving" :error="radiologyErrors.action_after_saving">
+                                <option v-for="option in actionOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </option>
                             </BaseSelect>
                         </div>
                     </div>
                     <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button type="button" @click="upsertRadiology()" class="btn btn-sm btn-primary" :disabled="radiologyLoading">
-                            <span v-if="radiologyLoading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <button type="button" @click="upsertRadiology()" class="btn btn-sm btn-primary"
+                            :disabled="radiologyLoading">
+                            <span v-if="radiologyLoading" class="spinner-border spinner-border-sm" role="status"
+                                aria-hidden="true"></span>
                             {{ radiologyLoading ? 'Saving...' : 'Save' }}
                         </button>
                         <button type="button" class="btn btn-sm btn-danger" :disabled="radiologyLoading">Cancel</button>
@@ -891,51 +918,62 @@ const getDoctorsBySpecialty = () => {
 
                         <div class="col-md-12">
                             <BaseInput v-model="cardiopulmonaryForm.cp" label="Test" type="textarea"
-                                @click="getDateMeta('orders_cp')" placeholder="Search for cardiopulmonary test" required :error="cardiopulmonaryErrors.cp" />
+                                @click="getDateMeta('orders_cp')" placeholder="Search for cardiopulmonary test" required
+                                :error="cardiopulmonaryErrors.cp" />
                         </div>
                         <div class="col-md-12 mt-3">
-                            <BaseTagsInput v-model="cardiopulmonaryForm.cp_icd" label="Diagnosis Codes" 
+                            <BaseTagsInput v-model="cardiopulmonaryForm.cp_icd" label="Diagnosis Codes"
                                 placeholder="Type diagnosis codes" :error="cardiopulmonaryErrors.cp_icd" />
                         </div>
- 
+
                         <div class="col-md-12 mt-3">
-                               <BaseSelect v-model="cardiopulmonaryForm.encounter_provider" label="Cardiopulmonary Provider"  placeholder="Select Cardiopulmonary Provider" required :error="cardiopulmonaryErrors.encounter_provider">
-                                 <option v-for="radiology in data.cardiopulmonary" :key="radiology.id" :value="radiology.id">
+                            <BaseSelect v-model="cardiopulmonaryForm.encounter_provider"
+                                label="Cardiopulmonary Provider" placeholder="Select Cardiopulmonary Provider" required
+                                :error="cardiopulmonaryErrors.encounter_provider">
+                                <option v-for="radiology in data.cardiopulmonary" :key="radiology.id"
+                                    :value="radiology.id">
                                     {{ radiology?.name }}
                                 </option>
                             </BaseSelect>
-                            <a class="text-primary cursor-pointer " @click="openCardiopulmonaryProviderModal"><i class="bi bi-plus-circle mr-1"></i>Add Cardiopulmonary Provider</a>
+                            <a class="text-primary cursor-pointer " @click="openCardiopulmonaryProviderModal"><i
+                                    class="bi bi-plus-circle mr-1"></i>Add Cardiopulmonary Provider</a>
 
                         </div>
                         <div class="col-md-6 mt-3">
-                            <BaseDatePicker v-model="cardiopulmonaryForm.pending_date" label="Order Pending Date" placeholder="Select Date"  required :error="cardiopulmonaryErrors.pending_date" />
+                            <BaseDatePicker v-model="cardiopulmonaryForm.pending_date" label="Order Pending Date"
+                                placeholder="Select Date" required :error="cardiopulmonaryErrors.pending_date" />
                         </div>
                         <div class="col-md-6 mt-3">
                             <BaseSelect v-model="cardiopulmonaryForm.insurance_id" label="Insurance"
                                 placeholder="Select Insurance" required :error="cardiopulmonaryErrors.insurance_id">
-                                 <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
+                                <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
                                     {{ insurance.insurance_company }} - {{ insurance.plan_name }}
                                 </option>
                             </BaseSelect>
                         </div>
                         <div class="col-md-12 mt-3">
                             <BaseInput v-model="cardiopulmonaryForm.notes" label="Notes about Order" type="textarea"
-                                placeholder="Enter notes" @click="getDateMeta('orders_cp_notes')" :error="cardiopulmonaryErrors.notes" />
+                                placeholder="Enter notes" @click="getDateMeta('orders_cp_notes')"
+                                :error="cardiopulmonaryErrors.notes" />
                         </div>
                         <div class="col-md-12 mt-3">
-                            <BaseSelect v-model="cardiopulmonaryForm.action_after_saving" placeholder="Select an action" label="Action After Saving" :error="cardiopulmonaryErrors.action_after_saving">
-                                 <option v-for="option in actionOptions" :key="option.value" :value="option.value">
+                            <BaseSelect v-model="cardiopulmonaryForm.action_after_saving" placeholder="Select an action"
+                                label="Action After Saving" :error="cardiopulmonaryErrors.action_after_saving">
+                                <option v-for="option in actionOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
                                 </option>
                             </BaseSelect>
                         </div>
                     </div>
                     <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button type="button" @click="upsertCardiopulmonary()" class="btn btn-sm btn-primary" :disabled="cardiopulmonaryLoading">
-                            <span v-if="cardiopulmonaryLoading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <button type="button" @click="upsertCardiopulmonary()" class="btn btn-sm btn-primary"
+                            :disabled="cardiopulmonaryLoading">
+                            <span v-if="cardiopulmonaryLoading" class="spinner-border spinner-border-sm" role="status"
+                                aria-hidden="true"></span>
                             {{ cardiopulmonaryLoading ? 'Saving...' : 'Save' }}
                         </button>
-                        <button type="button" class="btn btn-sm btn-danger" :disabled="cardiopulmonaryLoading">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-danger"
+                            :disabled="cardiopulmonaryLoading">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -975,39 +1013,46 @@ const getDoctorsBySpecialty = () => {
 
                         <div class="col-md-12 mb-3">
                             <BaseInput v-model="referralForm.referrals" label="Referral" type="textarea"
-                                @click="getDateMeta('orders_referrals')" placeholder="Search for referral" required :error="referralErrors.referrals" />
+                                @click="getDateMeta('orders_referrals')" placeholder="Search for referral" required
+                                :error="referralErrors.referrals" />
                         </div>
                         <div class="col-md-12 mt-3">
                             <BaseTagsInput v-model="referralForm.referrals_icd" label="Diagnosis Codes"
                                 placeholder="Type diagnosis codes" :error="referralErrors.referrals_icd" />
                         </div>
 
-                    <div class="col-md-6 mb-3 mt-3">
-                          <BaseSelect v-model="cardiopulmonaryForm.encounter_provider" label="Referral Provider"  placeholder="Select Provider" :error="referralErrors.encounter_provider" required>
-                                 <option v-for="radiology in data.cardiopulmonary" :key="radiology.id" :value="radiology.id">
+                        <div class="col-md-6 mb-3 mt-3">
+                            <BaseSelect v-model="cardiopulmonaryForm.encounter_provider" label="Referral Provider"
+                                placeholder="Select Provider" :error="referralErrors.encounter_provider" required>
+                                <option v-for="radiology in data.cardiopulmonary" :key="radiology.id"
+                                    :value="radiology.id">
                                     {{ radiology?.name }}
                                 </option>
                             </BaseSelect>
-                        <a class="text-primary cursor-pointer " @click="openReferralProviderModal"><i class="bi bi-plus-circle mr-1"></i>Add Referral Provider</a>
+                            <a class="text-primary cursor-pointer " @click="openReferralProviderModal"><i
+                                    class="bi bi-plus-circle mr-1"></i>Add Referral Provider</a>
 
-                    </div>
+                        </div>
                         <div class="col-md-6 mt-3">
-                            <BaseDatePicker v-model="referralForm.pending_date" label="Order Pending Date" placeholder="Select Date" :error="referralErrors.pending_date" />
+                            <BaseDatePicker v-model="referralForm.pending_date" label="Order Pending Date"
+                                placeholder="Select Date" :error="referralErrors.pending_date" />
                         </div>
                         <div class="col-md-6 mt-3">
                             <BaseSelect v-model="referralForm.insurance_id" label="Insurance"
                                 placeholder="Select Insurance" required :error="referralErrors.insurance_id">
-                                 <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
+                                <option v-for="insurance in data.insurances" :key="insurance.id" :value="insurance.id">
                                     {{ insurance.insurance_company }} - {{ insurance.plan_name }}
                                 </option>
                             </BaseSelect>
                         </div>
                         <div class="col-md-12 mt-3">
                             <BaseInput v-model="referralForm.notes" label="Notes about Order" type="textarea"
-                                placeholder="Enter notes" @click="getDateMeta('orders_referral_notes')" :error="referralErrors.notes" />
+                                placeholder="Enter notes" @click="getDateMeta('orders_referral_notes')"
+                                :error="referralErrors.notes" />
                         </div>
                         <div class="col-md-12 mt-3">
-                            <BaseSelect v-model="referralForm.action_after_saving" label="Action After Saving" :error="referralErrors.action_after_saving">
+                            <BaseSelect v-model="referralForm.action_after_saving" label="Action After Saving"
+                                :error="referralErrors.action_after_saving">
                                 <option value="" disabled selected>Select Action</option>
                                 <option v-for="option in actionOptions" :key="option.value" :value="option.value">
                                     {{ option.label }}
@@ -1016,8 +1061,10 @@ const getDoctorsBySpecialty = () => {
                         </div>
                     </div>
                     <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button type="button" @click="upsertReferral()" class="btn btn-sm btn-primary" :disabled="referralLoading">
-                            <span v-if="referralLoading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <button type="button" @click="upsertReferral()" class="btn btn-sm btn-primary"
+                            :disabled="referralLoading">
+                            <span v-if="referralLoading" class="spinner-border spinner-border-sm" role="status"
+                                aria-hidden="true"></span>
                             {{ referralLoading ? 'Saving...' : 'Save' }}
                         </button>
                         <button type="button" class="btn btn-sm btn-danger" :disabled="referralLoading">Cancel</button>
@@ -1026,17 +1073,21 @@ const getDoctorsBySpecialty = () => {
             </div>
         </div>
     </div>
-     <Modal :isOpen="isOpenRadiologyProviderModal" title="Add Radiology Provider" size="xl" @close="closeRadiologyProviderModal">
-        <LabProviderModal :labCategory="data.LabCategories" @close="closeRadiologyProviderModal"/>
+    <Modal :isOpen="isOpenRadiologyProviderModal" title="Add Radiology Provider" size="xl"
+        @close="closeRadiologyProviderModal">
+        <LabProviderModal :labCategory="data.LabCategories" @close="closeRadiologyProviderModal" />
     </Modal>
-    <Modal :isOpen="isOpenCardiopulmonaryProviderModal" title="Add Cardiopulmonary Provider" size="xl" @close="closeCardiopulmonaryProviderModal">
-        <LabProviderModal :labCategory="data.LabCategories" @close="closeCardiopulmonaryProviderModal"/>
+    <Modal :isOpen="isOpenCardiopulmonaryProviderModal" title="Add Cardiopulmonary Provider" size="xl"
+        @close="closeCardiopulmonaryProviderModal">
+        <LabProviderModal :labCategory="data.LabCategories" @close="closeCardiopulmonaryProviderModal" />
     </Modal>
-      <Modal :isOpen="isOpenLaboratoryProviderModal" title="Add Laboratory Provider" size="xl" @close="closeLaboratoryProviderModal" >
-            <LabProviderModal  :labCategory="data.LabCategories"  @close="closeLaboratoryProviderModal"/>
-        </Modal>
-        <Modal :isOpen="isOpenReferralProviderModal" title="Add Referral Provider" size="xl" @close="closeReferralProviderModal">
-        <LabProviderModal :labCategory="data.LabCategories"  @close="closeReferralProviderModal"/>
+    <Modal :isOpen="isOpenLaboratoryProviderModal" title="Add Laboratory Provider" size="xl"
+        @close="closeLaboratoryProviderModal">
+        <LabProviderModal :labCategory="data.LabCategories" @close="closeLaboratoryProviderModal" />
+    </Modal>
+    <Modal :isOpen="isOpenReferralProviderModal" title="Add Referral Provider" size="xl"
+        @close="closeReferralProviderModal">
+        <LabProviderModal :labCategory="data.LabCategories" @close="closeReferralProviderModal" />
 
-        </Modal>
+    </Modal>
 </template>

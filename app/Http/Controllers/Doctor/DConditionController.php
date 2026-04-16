@@ -22,11 +22,19 @@ class DConditionController extends Controller
     public function index(Request $request): Response
     {
         $selectedPatientId = auth()->user()->doctor->selected_patient_id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $recordType = trim((string) $request->input('record_type', ''));
+        $status = trim((string) $request->input('status', ''));
+
+        $typeMap = [
+            'problem' => 'Problem',
+            'past' => 'MedicalHistory',
+            'surgery' => 'SurgicalHistory',
+        ];
 
         // If no patient is selected, return empty data
         if (! $selectedPatientId) {
             return Inertia::render('Doctors/Patient/Conditions', [
-                'keyword' => $request->get('search'),
                 'issues' => [
                     'data' => [],
                     'current_page' => 1,
@@ -36,29 +44,64 @@ class DConditionController extends Controller
                     'links' => [],
                 ],
                 'encounters' => null,
+                'filters' => [
+                    'keyword' => $keyword,
+                    'record_type' => $recordType,
+                    'status' => $status,
+                ],
             ]);
         }
 
         $issues = Issue::where('patient_id', $selectedPatientId);
-        if ($request->has('search')) {
-            $keyword = $request->get('search');
 
+        if ($keyword !== '') {
             $issues = $issues->where(function ($query) use ($keyword) {
-                $query->where('issue', 'like', '%'.$keyword.'%')
-                    ->orWhere('type', 'like', '%'.$keyword.'%')
-                    ->orWhere('notes', 'like', '%'.$keyword.'%')
-                    ->orWhere('reconcile', 'like', '%'.$keyword.'%')
-                    ->orWhere('rcopia_sync', 'like', '%'.$keyword.'%');
+                $query->where('issue', 'like', '%' . $keyword . '%')
+                    ->orWhere('type', 'like', '%' . $keyword . '%')
+                    ->orWhere('notes', 'like', '%' . $keyword . '%')
+                    ->orWhere('reconcile', 'like', '%' . $keyword . '%')
+                    ->orWhere('rcopia_sync', 'like', '%' . $keyword . '%');
             });
         }
+
+        if ($recordType !== '' && isset($typeMap[$recordType])) {
+            $issues->where('type', $typeMap[$recordType]);
+        }
+
+        if ($status === 'active') {
+            $issues->whereNull('date_inactive');
+        }
+
+        if ($status === 'inactive') {
+            $issues->whereNotNull('date_inactive');
+        }
+
         $encounters = Encounter::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null)->latest()->first();
-        $data = $issues->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $data = $issues
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $data->through(function (Issue $issue) {
+            return array_merge($issue->toArray(), [
+                'status_label' => $issue->date_inactive ? 'Inactive' : 'Active',
+                'type_label' => $issue->type ?: 'N/A',
+                'active_date_label' => $issue->date_active?->format('d M, Y') ?? '-',
+                'inactive_date_label' => $issue->date_inactive?->format('d M, Y') ?? '-',
+                'can_move_to_problem' => $issue->type !== 'Problem',
+                'can_move_to_medical_history' => $issue->type !== 'MedicalHistory',
+                'can_move_to_surgical_history' => $issue->type !== 'SurgicalHistory',
+            ]);
+        });
 
         return Inertia::render('Doctors/Patient/Conditions', [
-            'keyword' => $request->get('search'),
             'issues' => $data,
             'encounters' => $encounters,
-
+            'filters' => [
+                'keyword' => $keyword,
+                'record_type' => $recordType,
+                'status' => $status,
+            ],
         ]);
     }
 
@@ -94,7 +137,6 @@ class DConditionController extends Controller
             return Redirect::route('doctor.conditions.index')->with('success', 'The new condition has been updated successfully.');
         } catch (\Exception $e) {
             return Redirect::back()->with('error', 'An error occurred while updating the condition.');
-
         }
     }
 
@@ -113,11 +155,10 @@ class DConditionController extends Controller
 
             return Redirect::route('doctor.conditions.index')->with('success', 'The new condition has been saved successfully.');
         } catch (\Exception $e) {
-            Log::error('Error saving condition: '.$e->getMessage());
+            Log::error('Error saving condition: ' . $e->getMessage());
 
             return Redirect::back()->with('error', 'An error occurred while saving the condition.');
         }
-
     }
 
     /**
@@ -133,7 +174,6 @@ class DConditionController extends Controller
             return Redirect::route('doctor.conditions.index')->with('success', 'The selected condition has been deleted successfully.');
         } catch (\Exception) {
             return Redirect::back()->with('error', 'An error occurred while deleting the condition.');
-
         }
     }
 }

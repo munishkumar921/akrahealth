@@ -139,15 +139,15 @@ const options = reactive({
     contentHeight: "auto",
 
     dateClick(info) {
-        
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const selectedDate = new Date(info.dateStr)
 
-    if (selectedDate < today) {
-      toast('You cannot book an appointment on a past date.', 'error', 5000)
-      return
-    }
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const selectedDate = new Date(info.dateStr)
+
+        if (selectedDate < today) {
+            toast('You cannot book an appointment on a past date.', 'error', 5000)
+            return
+        }
         // Set default times
         const defaultTimes = getDefaultTimes();
         selectedStartTime.value = defaultTimes.start;
@@ -173,14 +173,14 @@ const options = reactive({
     },
 
     eventClick(info) {
-         selectedEvent.value = {
+        selectedEvent.value = {
             id: info.event.id,
             title: info.event.title,
             start: info.event.start,
             ...info.event.extendedProps,
         };
         showAppointmentDetailsModal.value = true;
-     },
+    },
     eventMouseEnter: (info) => {
         const rect = info.el.getBoundingClientRect();
         tooltipState.value = {
@@ -290,62 +290,39 @@ const closeAppointmentDetailsModal = () => {
 <template>
     <AuthLayout title="Schedule" description="View and manage your calendar" heading="Schedule">
         <div class="calendar-container">
-             <Calender v-bind:options="options" />
+            <Calender v-bind:options="options" />
 
             <!-- Custom Tooltip -->
-            <div v-if="tooltipState.visible" class="calendar-tooltip" :style="{ top: tooltipState.y + 'px', left: tooltipState.x + 'px' }">
-                <div v-if="tooltipState.data.patient_name"><strong>Patient:</strong> {{ tooltipState.data.patient_name }}</div>
-                <div v-if="tooltipState.data.doctor_name"><strong>Doctor:</strong> {{ tooltipState.data.doctor_name }}</div>
+            <div v-if="tooltipState.visible" class="calendar-tooltip"
+                :style="{ top: tooltipState.y + 'px', left: tooltipState.x + 'px' }">
+                <div v-if="tooltipState.data.patient_name"><strong>Patient:</strong> {{ tooltipState.data.patient_name
+                }}</div>
+                <div v-if="tooltipState.data.doctor_name"><strong>Doctor:</strong> {{ tooltipState.data.doctor_name }}
+                </div>
                 <div v-if="tooltipState.data.appointment_date && tooltipState.data.appointment_time">
-                    <strong>When:</strong> {{ tooltipState.data.appointment_date }} {{ tooltipState.data.appointment_time }}
+                    <strong>When:</strong> {{ tooltipState.data.appointment_date }} {{
+                        tooltipState.data.appointment_time }}
                 </div>
                 <div v-if="tooltipState.data.status">
-                    <strong>Status:</strong> 
+                    <strong>Status:</strong>
                     <span class="badge ms-1" :style="{ backgroundColor: getStatusColor(tooltipState.data.status) }">
                         {{ tooltipState.data.status }}
                     </span>
                 </div>
                 <div v-if="!tooltipState.data.patient_name && !tooltipState.data.doctor_name">
-                     {{ tooltipState.data.title }}
+                    {{ tooltipState.data.title }}
                 </div>
             </div>
 
             <Modal :isOpen="showAppointmentModal" v-if="isDoctor" title="Add Appointment" @close="closeAppointmentModal"
                 size="lg">
-                <nav class="tab-nav mb-5">
-                    <div :class="{
-                        'active-tab':
-                            selectedPopup === 'patient_appointment',
-                    }" @click="selectedPopup = 'patient_appointment'" style="cursor: pointer">
-                        Patient Appointment
-                    </div>
-                    <div :class="{ 'active-tab': selectedPopup === 'other' }" @click="selectedPopup = 'other'"
-                        style="cursor: pointer">
-                        Other Event
-                    </div>
-                    <div class="tab-underline" :style="{
-                        transform:
-                            selectedPopup === 'patient_appointment'
-                                ? 'translateX(0%)'
-                                : 'translateX(100%)',
-                    }">
-                        <div class="justify-content-center text-white d-flex align-items-center bg-primary rounded">
-                            {{
-                                selectedPopup === "patient_appointment"
-                                    ? "Patient Appointment"
-                                    : "Other Event"
-                            }}
-                        </div>
-                    </div>
-                </nav>
-
                 <transition name="fade" mode="out-in">
                     <AddAppointmentModal v-if="selectedPopup === 'patient_appointment'" key="patient_appointment"
                         @close="closeAppointmentModal" :doctor="doctor" :loading="loading" :patient="patient"
                         :selected-date="selectedDate" :selected-start-time="selectedStartTime"
                         :selected-end-time="selectedEndTime" />
-                    <AddOtherAppointmentModal v-else key="other_event" @close="closeAppointmentModal" :doctor="doctor"
-                        :loading="loading" :patient="patient" :selected-date="selectedDate" />
+                    <!-- <AddOtherAppointmentModal v-else key="other_event" @close="closeAppointmentModal" :doctor="doctor"
+                        :loading="loading" :patient="patient" :selected-date="selectedDate" /> -->
                 </transition>
             </Modal>
 
@@ -525,10 +502,10 @@ const closeAppointmentDetailsModal = () => {
 }
 
 /* Past dates */
-/* .fc-day-past,
+:deep(.fc-day-past),
 :deep(.past-date) {
-    background-color: #0aadff !important;
-} */
+    background-color: #f1f5f9 !important;
+}
 
 .fc-day-past .fc-daygrid-day-number,
 :deep(.past-date .fc-daygrid-day-number) {
@@ -660,7 +637,7 @@ const closeAppointmentDetailsModal = () => {
     border: 1px solid #e0e0e0;
     border-radius: 8px;
     padding: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     pointer-events: none;
     transform: translate(-50%, -100%);
     margin-top: -8px;
@@ -668,6 +645,7 @@ const closeAppointmentDetailsModal = () => {
     color: #333;
     min-width: 200px;
 }
+
 .calendar-tooltip::after {
     content: "";
     position: absolute;

@@ -31,6 +31,7 @@ class Insurance extends Model
         'insurance_company',
         'address_id',
         'patient_id',
+        'comment',
     ];
 
     public function address()

@@ -27,6 +27,7 @@ class Notification extends Model
      * @var array
      */
     protected $fillable = [
+        'type',
         'notifiable_type',
         'notifiable_id',
         'patient_id',
@@ -41,6 +42,7 @@ class Notification extends Model
      * @var array
      */
     protected $casts = [
+        'data' => 'array',
         'read_at' => 'datetime:M d, Y',
         'created_at' => 'datetime:M d, Y',
         'updated_at' => 'datetime:M d, Y',

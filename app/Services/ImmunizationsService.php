@@ -14,7 +14,9 @@ class ImmunizationsService
      */
     public function store($input)
     {
-        Immunization::updateOrCreate(
+        $notificationService = app(InAppNotificationService::class);
+
+        $immunization = Immunization::updateOrCreate(
             ['id' => $input['id'] ?? null],
             [
                 'encounter_id' => $input['encounter_id'] ?? null,
@@ -34,6 +36,23 @@ class ImmunizationsService
                 'expiration' => $input['expiration'] ?? null,
                 'reconcile' => $input['action'] ?? null,
             ]
+        );
+
+        $notificationService->notifyPatient(
+            auth()->user()->doctor?->selected_patient_id,
+            $notificationService->buildPayload(
+                'New immunization added',
+                'An immunization record has been added or updated in your chart.',
+                'immunization_added',
+                [
+                    'recipient_role' => 'Patient',
+                    'patient_id' => auth()->user()->doctor?->selected_patient_id,
+                    'doctor_id' => auth()->user()->doctor?->id,
+                    'action_url' => route('patient.immunizations'),
+                    'related_model_type' => Immunization::class,
+                    'related_model_id' => $immunization->id,
+                ]
+            )
         );
 
     }

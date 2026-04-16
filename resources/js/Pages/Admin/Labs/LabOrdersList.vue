@@ -2,190 +2,289 @@
 import AuthLayout from "@/Layouts/AuthLayout.vue";
 import Table from "@/Components/Table/Table.vue";
 import { router } from "@inertiajs/vue3";
-import { ref, computed } from "vue";
+import { computed, ref } from "vue";
+import { route } from "ziggy-js";
 
 const props = defineProps({
-	keyword: String,
-	labOrders: {
-		type: [Array, Object],
-		default: () => []
-	},
-	filters: {
-		type: Object,
-		default: () => ({
-			status: '',
-			payment_status: ''
-		})
-	},
-	route: Array,
+    labOrders: {
+        type: [Array, Object],
+        default: () => [],
+    },
+    filters: {
+        type: Object,
+        default: () => ({
+            keyword: "",
+            status: "",
+        }),
+    },
 });
 
- const columns = [
-  { label: 'Lab Name', key: 'lab_name' },
-  { label: 'Order Type', key: 'order_type' },
-  { label: 'Pending Date', key: 'pending_date' },
-  { label: 'Notes', key: 'notes' },
+const filterForm = ref({
+    keyword: props.filters?.keyword || "",
+    status: props.filters?.status || "",
+});
+
+const statusOptions = [
+    { value: "", label: "All status" },
+    { value: "pending", label: "Pending" },
+    { value: "completed", label: "Completed" },
+    { value: "cancelled", label: "Cancelled" },
+    { value: "in_progress", label: "In Progress" },
 ];
 
-const filterActive = ref(true);
-const filterInactive = ref(true);
-const searchKeyword = ref(props.keyword || '');
- 
-const selectedStatus = ref(props.filters.status || '');
-const selectedPaymentStatus = ref(props.filters.payment_status || '');
+const columns = [
+    { label: "Lab", key: "lab_name", type: "slot", slot: "lab", align: "left" },
+    { label: "Order Type", key: "order_type", type: "slot", slot: "type", align: "left" },
+    { label: "Patient", key: "patient", type: "slot", slot: "patient", align: "left" },
+    { label: "Doctor", key: "doctor", type: "slot", slot: "doctor", align: "left" },
+    { label: "Pending Date", key: "pending_date", type: "slot", slot: "pendingDate", align: "left" },
+    { label: "Status", key: "status", type: "slot", slot: "status", align: "center" },
+];
 
-const filteredRows = computed(() => {
-	if (!props.labOrders || !props.labOrders.data) {
-		return [];
-	}
-	
-	return props.labOrders.data.filter(r => {
-		const active = r.is_active;
-		return (filterActive.value && active) ||
-			   (filterInactive.value && !active);
-	});
+const perPageOptions = [10, 15, 25, 50, 100];
+const perPage = ref(Number(new URLSearchParams(window.location.search).get("per_page")) || 10);
+const rows = computed(() => props.labOrders?.data ?? []);
+const activeFilterCount = computed(() =>
+    Object.values(filterForm.value).filter((value) => value !== null && value !== "").length
+);
+const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+const resultSummary = computed(() => {
+    const total = props.labOrders?.total ?? rows.value.length;
+    const from = props.labOrders?.from ?? (rows.value.length ? 1 : 0);
+    const to = props.labOrders?.to ?? rows.value.length;
+
+    if (!total) {
+        return "No lab orders found";
+    }
+
+    return `Showing ${from}-${to} of ${total} lab orders`;
 });
 
-// Search function
-const search = () => {
-	router.get(route('admin.lab-orders.list'), {
-		keyword: searchKeyword.value,
-		status: selectedStatus.value,
-		payment_status: selectedPaymentStatus.value,
-	}, {
-		preserveState: true,
-		replace: true,
-	});
+const buildQuery = (overrides = {}) => {
+    const params = new URLSearchParams(window.location.search);
+    const query = {
+        per_page: params.get("per_page") || undefined,
+        sort: params.get("sort") || undefined,
+        direction: params.get("direction") || undefined,
+        ...filterForm.value,
+        ...overrides,
+    };
+
+    return Object.fromEntries(
+        Object.entries(query).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+    );
 };
 
-// Clear filters
+const applyFilters = () => {
+    router.get(route("admin.lab-orders.list"), buildQuery(), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
 const clearFilters = () => {
-	searchKeyword.value = '';
-	selectedStatus.value = '';
-	selectedPaymentStatus.value = '';
-	search();
+    filterForm.value = {
+        keyword: "",
+        status: "",
+    };
+
+    router.get(route("admin.lab-orders.list"), buildQuery(), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
 };
 
-// Status badge class
+const updatePerPage = () => {
+    router.get(route("admin.lab-orders.list"), buildQuery({ per_page: perPage.value, page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
 const getStatusClass = (status) => {
-	const statusMap = {
-		'completed': 'badge bg-success',
-		'pending': 'badge bg-warning',
-		'cancelled': 'badge bg-danger',
-		'in_progress': 'badge bg-info',
-		'active': 'badge bg-success',
-		'inactive': 'badge bg-secondary',
-	};
-	const lowerStatus = status?.toLowerCase();
-	return statusMap[lowerStatus] || 'badge bg-secondary';
-};
+    const lowerStatus = String(status || "").toLowerCase();
 
-// Payment status badge class
-const getPaymentStatusClass = (status) => {
-	const statusMap = {
-		'paid': 'badge bg-success',
-		'unpaid': 'badge bg-danger',
-		'refunded': 'badge bg-info',
-		'pending': 'badge bg-warning',
-	};
-	const lowerStatus = status?.toLowerCase();
-	return statusMap[lowerStatus] || 'badge bg-secondary';
-};
+    if (lowerStatus === "completed") return "status-pill--active";
+    if (lowerStatus === "pending" || lowerStatus === "in_progress") return "status-pill--pending";
 
-// Amount formatting
-const formatAmount = (amount) => {
-	if (!amount) return '₹0.00';
-	return '₹' + Number(amount).toFixed(2);
+    return "status-pill--inactive";
 };
 </script>
 
 <template>
-	<AuthLayout
-		title="Lab Orders"
-		description="Manage lab orders"
-		heading="Lab Orders"
-	>
-		<!-- ================= HEADER ================= -->
-		<div class="">
-			<!-- ================= DESKTOP VIEW - Title and Controls in Same Row ================= -->
-			<div class="d-none d-md-flex align-items-center justify-content-between mb-3">
-				<!-- Title -->
-				<h3 class="text-xl mb-0">Lab Orders</h3>
+    <AuthLayout title="Lab Orders" description="Manage lab orders" heading="Lab Orders">
+        <div class="lab-orders-page">
+            <div class="users-toolbar card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div
+                        class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+                        <div>
+                            <h3 class="mb-1">Lab Orders</h3>
+                            <p class="text-muted mb-0">{{ resultSummary }}</p>
+                        </div>
 
-				 
-			</div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+                            <span v-if="hasActiveFilters" class="filter-count-badge">
+                                {{ activeFilterCount }} filter{{ activeFilterCount > 1 ? "s" : "" }} active
+                            </span>
+                            <button
+                                v-if="hasActiveFilters"
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                @click="clearFilters"
+                            >
+                                <i class="bi bi-x-circle me-1"></i>Clear filters
+                            </button>
+                        </div>
+                    </div>
 
-			<!-- ================= MOBILE VIEW - Title ================= -->
-			<div class="d-md-none">
-				<h3 class="text-xl mb-3">Lab Orders</h3>
-			</div>
-		</div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-xl-4">
+                            <label class="form-label text-muted small text-uppercase mb-2">Search</label>
+                            <div class="input-group lab-orders-search-control">
+                                <span class="input-group-text bg-white border-end-0 border col-1 rounded-circle-left">
+                                    <i class="bi bi-search text-muted"></i>
+                                </span>
+                                <input
+                                    v-model="filterForm.keyword"
+                                    type="search"
+                                    class="form-control border-start-0"
+                                    placeholder="Search by lab, patient, doctor, notes, or status"
+                                    @keydown.enter.prevent="applyFilters"
+                                />
+                                <button type="button" class="btn btn-primary" @click="applyFilters">Search</button>
+                            </div>
+                        </div>
 
-		<!-- ================= TABLE + PAGINATION ================= -->
-		<div class="table-responsive">
-			<Table :columns="columns" :data="{ data: labOrders.data }" :search="keyword">
-				<template #status="{ row }">
-					<span :class="getStatusClass(row.status)">
-						{{ row.status || 'N/A' }}
-					</span>
-				</template>
-				<template #payment_status="{ row }">
-					<span :class="getPaymentStatusClass(row.payment_status)">
-						{{ row.payment_status || 'N/A' }}
-					</span>
-				</template>
-				<template #total_amount="{ row }">
-					{{ formatAmount(row.total_amount) }}
-				</template>
-			</Table>
-		</div>
-	</AuthLayout>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <label class="form-label text-muted small text-uppercase mb-2">Status</label>
+                            <select v-model="filterForm.status" class="form-select" @change="applyFilters">
+                                <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                                    {{ option.label }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0 p-md-3">
+                    <div class="d-flex justify-content-end align-items-center px-3 px-md-0 pt-3 pt-md-0 pb-2">
+                        <div class="d-flex align-items-center gap-2 rows-select-wrap">
+                            <select
+                                id="lab-orders-per-page"
+                                v-model="perPage"
+                                class="form-select form-select-sm top-page-select"
+                                @change="updatePerPage"
+                            >
+                                <option v-for="option in perPageOptions" :key="option" :value="option">
+                                    {{ option }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <Table :columns="columns" :data="labOrders" :search-show="false" :PageOptions="false">
+                        <template #lab="{ row }">
+                            <div class="text-start">
+                                <div class="fw-semibold text-dark">{{ row.lab_name || "-" }}</div>
+                                <div class="text-muted small">{{ row.created_label }}</div>
+                            </div>
+                        </template>
+
+                        <template #type="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.order_type || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #patient="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.patient || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #doctor="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.doctor || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #pendingDate="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.pending_date || "-" }}</div>
+                                <div v-if="row.notes" class="text-muted small">{{ row.notes }}</div>
+                            </div>
+                        </template>
+
+                        <template #status="{ row }">
+                            <span class="status-pill" :class="getStatusClass(row.status)">
+                                {{ row.status_label || row.status || "N/A" }}
+                            </span>
+                        </template>
+                    </Table>
+                </div>
+            </div>
+        </div>
+    </AuthLayout>
 </template>
 
 <style scoped>
-.status-check {
-	appearance: none;
-	width: 16px;
-	height: 16px;
-	border: 2px solid #d1d5db;
-	border-radius: 4px;
-	display: inline-block;
-	position: relative;
-	cursor: pointer;
-	background: #fff;
-}
-.status-check:focus { outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
-
-.status-check--green:checked {
-	border-color: #06c270;
-	background-color: #06c270;
-}
-.status-check--grey:checked {
-    border-color: #9ca3af;
-	background-color: #9ca3af;
-}
-.status-check--red:checked {
-    border-color: #f35353;
-	background-color: #f35353;
+.users-toolbar {
+    border-radius: 20px;
 }
 
-/* tick icon */
-.status-check:checked::after {
-	content: "";
-	position: absolute;
-	left: 4px;
-	top: 1px;
-	width: 4px;
-	height: 8px;
-	border: solid #fff;
-	border-width: 0 2px 2px 0;
-	transform: rotate(45deg);
+.filter-count-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
-.badge {
-	font-size: 0.75rem;
-	padding: 0.35em 0.65em;
-	font-weight: 500;
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 84px;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.status-pill--active {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-pill--inactive {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.status-pill--pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.top-page-select {
+    min-width: 74px;
+    width: 74px;
+}
+
+.rows-select-wrap {
+    flex: 0 0 auto;
+}
+
+.lab-orders-search-control {
+    max-width: 720px;
 }
 </style>
-

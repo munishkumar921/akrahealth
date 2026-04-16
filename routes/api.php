@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ChatsController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LivekitController;
 use App\Http\Controllers\RazorpayWebhookController;

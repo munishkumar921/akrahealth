@@ -6,7 +6,7 @@ import BaseFileInput from "@/Components/Common/Input/BaseFileInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import { Country, State } from 'country-state-city';
-  
+
 const emit = defineEmits(["close", "submit"]);
 
 const isValidated = ref(false);
@@ -99,18 +99,18 @@ const submitForm = () => {
 
         // Add new user
         form.password = password;
-     }
-        form.post(route(`${prefix}.labs.store`), {
-            onSuccess: () => {
-                isValidated.value = false;
-                emit("submit");
-                closeModal();
-            },
-            onError: () => {
-                isValidated.value = true;
-            }
-        });
     }
+    form.post(route(`${prefix}.labs.store`), {
+        onSuccess: () => {
+            isValidated.value = false;
+            emit("submit");
+            closeModal();
+        },
+        onError: () => {
+            isValidated.value = true;
+        }
+    });
+}
 
 const closeModal = () => {
     emit("close");
@@ -133,18 +133,18 @@ const update = (lab) => {
     form.street_address1 = lab.user?.address?.address_1 || lab.address || '';
     form.street_address2 = lab.user?.address?.address_2 || lab.street_address2 || '';
     form.city = lab.user?.address?.city || lab.city || '';
-    form.country = lab.user?.address?.country|| lab.country || '';
-    form.state = lab.user?.address?.state|| lab.state || '';
+    form.country = lab.user?.address?.country || lab.country || '';
+    form.state = lab.user?.address?.state || lab.state || '';
     form.lab_mobile = lab.mobile;
     form.lab_email = lab.email;
     form.zip = lab.user?.address?.zip || lab.pincode || '';
-    form.opening_time = lab.opening_time||'';
-    form.closing_time = lab.closing_time||'';
+    form.opening_time = lab.opening_time || '';
+    form.closing_time = lab.closing_time || '';
     form.is_active = lab.is_active;
     form.is_verified = lab.is_verified;
     form.about = lab.about;
     form.banner = lab.banner;
-    
+
     // Handle categories - normalize to array of strings
     if (lab.categories && Array.isArray(lab.categories)) {
         form.categories = lab.categories.map(s => {
@@ -159,7 +159,7 @@ const update = (lab) => {
     } else {
         form.categories = [];
     }
-    
+
     form.website = lab.website || '';
     form.pickup = lab.sample_pickup_supported || 0;
 
@@ -169,7 +169,7 @@ const update = (lab) => {
             personalStates.value = State.getStatesOfCountry(selectedCountry.isoCode);
         }
     }
-    if(form.banner){
+    if (form.banner) {
         photoPreview.value = lab.banner_url;
     } else {
         photoPreview.value = null;
@@ -178,10 +178,10 @@ const update = (lab) => {
     nextTick(() => {
         isUpdating.value = false;
     });
-    
+
 };
 const photoPreview = ref(null);
- 
+
 // Handle file upload
 const onChangeFileUpload = (event) => {
     const file = event.target.files[0];
@@ -222,7 +222,7 @@ defineExpose({ update });
                 <BaseInput v-model="form.email" label="Email" placeholder="Email" required :error="form.errors.email" />
             </div>
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.mobile" label="Mobile" placeholder="Mobile" required
+                <BaseInput v-model="form.mobile" label="Mobile" placeholder="Mobile" type="number" required
                     :error="form.errors.mobile" />
             </div>
         </div>
@@ -235,15 +235,8 @@ defineExpose({ update });
             </div>
 
             <div class="col-md-12 mb-3">
-                  <BaseFileInput 
-                     v-model="form.banner" 
-                    label="Banner Upload" 
-                    placeholder="upload Banner"
-                    accept="image/*"
-                    id="inputFileUpload"
-                    @change="onChangeFileUpload($event)" 
-                     :error="form.errors.banner" 
-                />
+                <BaseFileInput v-model="form.banner" label="Banner Upload" placeholder="upload Banner" accept="image/*"
+                    id="inputFileUpload" @change="onChangeFileUpload($event)" :error="form.errors.banner" />
             </div>
 
             <div class="col-md-6 mb-3">
@@ -256,16 +249,16 @@ defineExpose({ update });
             </div>
 
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.lab_mobile" label="Lab Mobile" placeholder="Lab Mobile" required
+                <BaseInput v-model="form.lab_mobile" label="Lab Mobile" type="number" placeholder="Lab Mobile" required
                     :error="form.errors.lab_mobile" />
             </div>
             <div class="col-md-6 mb-3">
                 <BaseInput v-model="form.lab_email" label="Lab Email" placeholder="Lab Email" required
                     :error="form.errors.lab_email" />
             </div>
-             <div class="col-md-6 mb-3">
-                <BaseSelect v-model="form.categories" label="Lab Categories" type="select" placeholder="Select Categories"
-                    :error="form.errors.categories" required multiple>
+            <div class="col-md-6 mb-3">
+                <BaseSelect v-model="form.categories" label="Lab Categories" type="select"
+                    placeholder="Select Categories" :error="form.errors.categories" required multiple>
                     <option v-for="row in labCategory" :key="row.id" :value="row.name">{{ row.name }}
                     </option>
                 </BaseSelect>
@@ -303,6 +296,9 @@ defineExpose({ update });
                     :error="form.errors.zip" />
             </div>
 
+            <div class="col-md-6 mb-3">
+                <BaseInput v-model="form.website" label="Website" placeholder="Website" :error="form.errors.website" />
+            </div>
 
             <div class="col-md-6 mb-3">
                 <BaseDatePicker v-model="form.opening_time" type="time" label="Opening Time" placeholder="Opening Time"
@@ -312,9 +308,6 @@ defineExpose({ update });
             <div class="col-md-6 mb-3">
                 <BaseDatePicker v-model="form.closing_time" type="time" label="Closing Time" placeholder="Closing Time"
                     required :error="form.errors.closing_time" />
-            </div>
-            <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.website" label="Website" placeholder="Website" :error="form.errors.website" />
             </div>
 
             <div class="col-md-6 mb-3">
@@ -347,7 +340,7 @@ defineExpose({ update });
 
         <div class="mt-4 d-flex justify-content-end gap-2">
             <button type="submit" class="btn btn-primary">Save</button>
-                        <button type="button" class="btn btn-danger" @click="closeModal">Close</button>
+            <button type="button" class="btn btn-danger" @click="closeModal">Close</button>
 
         </div>
     </form>

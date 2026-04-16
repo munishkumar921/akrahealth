@@ -11,11 +11,11 @@ import Aura from '@primeuix/themes/aura';
 import ConfirmationService from 'primevue/confirmationservice';
 import ToastService from 'primevue/toastservice';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import 'sweetalert2/src/sweetalert2.scss';
+import 'sweetalert2/dist/sweetalert2.min.css';
 import VueKonva from "vue-konva";
 
 /* Sweet alert */
-window.toast = function (message, type = 'success', timer = 2000) {
+window.toast = function (message, type = 'success', timer = 5000) {
     Swal.fire({
         title: '',
         text: message,

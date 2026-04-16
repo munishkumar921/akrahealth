@@ -15,7 +15,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->uuid('user_id');
             $table->uuid('subscription_plan_id');
-            $table->enum('status', ['pending', 'active', 'suspend', 'reject'])->default('pending');
+            $table->enum('status', ['pending', 'active', 'suspend', 'reject', 'pending_upgrade'])->default('pending');
             $table->date('start_date');
             $table->date('end_date')->nullable();
             $table->string('razorpay_subscription_id')->nullable();

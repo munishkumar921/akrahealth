@@ -21,9 +21,9 @@ class AuditLogsExport implements FromCollection, WithHeadings, WithMapping
      */
     public function collection()
     {
-        $auditService = new AuditService;
+        $auditService = app(AuditService::class);
 
-        return $auditService->getLogs($this->filters, 1000);
+        return $auditService->getLogsForExport($this->filters);
     }
 
     /**

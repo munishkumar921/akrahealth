@@ -81,8 +81,8 @@ class Patient extends Model
     {
         return $this->name
             ?? trim(
-                ($this->first_name ?? $this->user?->first_name ?? '').
-                    ' '.
+                ($this->first_name ?? $this->user?->first_name ?? '') .
+                    ' ' .
                     ($this->last_name ?? $this->user?->last_name ?? '')
             );
     }
@@ -97,6 +97,16 @@ class Patient extends Model
     public function scopeForHospital($query, $hospitalId)
     {
         return $query->where('hospital_id', $hospitalId);
+    }
+
+    /**
+     * appointments
+     *
+     * @return void
+     */
+    public function appointments()
+    {
+        return $this->hasMany(Patient::class);
     }
 
     /**

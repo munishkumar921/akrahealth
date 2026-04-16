@@ -18,7 +18,7 @@ class SignupRequest extends FormRequest
      */
     public function rules(): array
     {
-        $user_id = (int) $this->request->get('id');
+        $userId = $this->request->get('id');
 
         return [
             'profile_photo_path' => ['nullable', 'mimes:png,jpg', 'max:1000'],
@@ -33,12 +33,13 @@ class SignupRequest extends FormRequest
             'zip' => ['nullable', 'string', 'max:20'],
             'country' => ['nullable', 'string', 'max:100'],
             'mobile' => ['required', 'numeric', 'min:10'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user_id)],
+            'timezone' => ['nullable', 'string', 'max:64'],
+            'email' => ['required', 'email', 'max:255'],
             'password' => ['required', 'confirmed', 'string', new isValidPasswordRule],
             'password_confirmation' => ['required', 'string', 'max:255'],
             'file' => ['nullable', 'mimes:pdf,docx,doc', 'max:10000'],
             'practice_name' => ['required', 'string', 'max:255'],
-            'practice_email' => ['required', 'email', 'max:255'],
+            'practice_email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'practice_primary_contact' => ['nullable', 'numeric', 'min:10'],
             'practice_phone' => ['nullable', 'numeric', 'min:10', 'max:15'],
             'practice_street_address1' => ['nullable', 'string', 'max:500'],
@@ -64,6 +65,7 @@ class SignupRequest extends FormRequest
             'sex' => 'Gender must be Male, Female, or Other.',
             'speciality_id.required' => 'Speciality is required.',
             'question_id.required' => 'Secret Question is required.',
+            'practice_email.unique' => 'This practice email is already registered.',
         ];
     }
 }

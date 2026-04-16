@@ -120,7 +120,7 @@ Route::group(['middleware' => ['auth:sanctum', 'is.admin', config('jetstream.aut
     // My Reports Route
     Route::get('/my-reports', fn () => \Inertia\Inertia::render('Admin/Reports/MyReports'))->name('myReports');
 
-    Route::get('/financial/transactions', [AdminController::class, 'transactionlist'])->name('transaction.list');
+    Route::get('/financial/transactions', [AdminController::class, 'transactionList'])->name('transaction.list');
 
     // New Invoice Management Routes
     Route::resource('/invoices', \App\Http\Controllers\InvoiceController::class);
@@ -144,6 +144,7 @@ Route::group(['middleware' => ['auth:sanctum', 'is.admin', config('jetstream.aut
     Route::get('/reports/pharmacy-reports', [AdminController::class, 'pharmacyReports'])->name('pharmacyReports');
     Route::get('/reports/lab-reports', [AdminController::class, 'labReports'])->name('labReports');
     Route::get('/reports/CCDA-reports', [AdminController::class, 'CCDAReports'])->name('CCDAReports');
+    Route::get('/reports/CCR-reports', [AdminController::class, 'CCRReports'])->name('CCRReports');
     Route::get('/reports/chart-reports', [AdminController::class, 'chartReports'])->name('chartReports');
     Route::get('/log/call-logs', [CallLogController::class, 'index'])->name('callLogs.list');
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');

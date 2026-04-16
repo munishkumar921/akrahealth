@@ -26,6 +26,7 @@ use App\Services\PatientService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -317,24 +318,62 @@ class PatientController extends Controller
 
     public function conditions(Request $request)
     {
-        $issues = Issue::where('patient_id', auth()->user()->patient->id ?? null);
-        if ($request->has('search')) {
-            $keyword = $request->get('search');
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $recordType = trim((string) $request->input('record_type', ''));
 
-            $issues = $issues->where(function ($query) use ($keyword) {
-                $query->where('issue', 'like', '%'.$keyword.'%')
-                    ->orWhere('type', 'like', '%'.$keyword.'%')
-                    ->orWhere('notes', 'like', '%'.$keyword.'%')
-                    ->orWhere('reconcile', 'like', '%'.$keyword.'%')
-                    ->orWhere('rcopia_sync', 'like', '%'.$keyword.'%');
+        $issues = Issue::where('patient_id', auth()->user()->patient->id ?? null)
+            ->when($keyword !== '', function ($issues) use ($keyword) {
+                $issues->where(function ($query) use ($keyword) {
+                    $query->where('issue', 'like', '%'.$keyword.'%')
+                        ->orWhere('type', 'like', '%'.$keyword.'%')
+                        ->orWhere('notes', 'like', '%'.$keyword.'%')
+                        ->orWhere('reconcile', 'like', '%'.$keyword.'%')
+                        ->orWhere('rcopia_sync', 'like', '%'.$keyword.'%')
+                        ->orWhere('date_active', 'like', '%'.$keyword.'%')
+                        ->orWhere('date_inactive', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->when($recordType !== '' && $recordType !== 'all', function ($issues) use ($recordType) {
+                $typeMap = [
+                    'problem' => 'Problem',
+                    'past' => 'MedicalHistory',
+                    'surgery' => 'SurgicalHistory',
+                ];
+
+                if (isset($typeMap[$recordType])) {
+                    $issues->where('type', $typeMap[$recordType]);
+                }
             });
-        }
+
         $encounters = Encounter::where('patient_id', auth()->user()->patient->id ?? null)->latest()->first();
-        $data = $issues->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $data = $issues->orderByDesc('date_active')->paginate(request('per_page', paginateLimit()))->withQueryString();
+
+        $data->getCollection()->transform(function ($issue) {
+            return [
+                'id' => $issue->id,
+                'issue' => $issue->issue,
+                'type' => $issue->type,
+                'type_label' => match ($issue->type) {
+                    'Problem' => 'Problem',
+                    'MedicalHistory' => 'Past Medical History',
+                    'SurgicalHistory' => 'Surgical History',
+                    default => $issue->type,
+                },
+                'notes' => $issue->notes,
+                'date_active' => $issue->date_active,
+                'date_inactive' => $issue->date_inactive,
+                'can_move_to_problem' => $issue->type !== 'Problem',
+                'can_move_to_medical_history' => $issue->type !== 'MedicalHistory',
+                'can_move_to_surgical_history' => $issue->type !== 'SurgicalHistory',
+            ];
+        });
 
         return Inertia::render('Patients/Conditions', [
             'issues' => $data,
-            'keyword' => $request->get('search'),
+            'filters' => [
+                'keyword' => $keyword,
+                'record_type' => $recordType,
+            ],
             'encounters' => $encounters,
         ]);
     }
@@ -373,77 +412,371 @@ class PatientController extends Controller
 
     public function medications(Request $request)
     {
-        $medication = Prescription::where('patient_id', auth()->user()->patient->id ?? null);
-        $keyword = '';
-        if ($request->has('keyword')) {
-            $keyword = $request->get('keyword');
-            $medication = $medication->where('medication', 'Like', '%'.$keyword.'%');
-        }
+        $keyword = trim((string) $request->input('keyword', ''));
+        $status = trim((string) $request->input('status', ''));
+        $prescriptionStatus = trim((string) $request->input('prescription_status', ''));
 
-        $medications = $medication->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $medications = Prescription::where('patient_id', auth()->user()->patient->id ?? null)
+            ->when($keyword !== '', function ($medications) use ($keyword) {
+                $medications->where(function ($query) use ($keyword) {
+                    $query->where('medication', 'like', '%'.$keyword.'%')
+                        ->orWhere('dosage', 'like', '%'.$keyword.'%')
+                        ->orWhere('dosage_unit', 'like', '%'.$keyword.'%')
+                        ->orWhere('route', 'like', '%'.$keyword.'%')
+                        ->orWhere('frequency', 'like', '%'.$keyword.'%')
+                        ->orWhere('reason', 'like', '%'.$keyword.'%')
+                        ->orWhere('prescription', 'like', '%'.$keyword.'%')
+                        ->orWhere('date_active', 'like', '%'.$keyword.'%')
+                        ->orWhere('date_inactive', 'like', '%'.$keyword.'%')
+                        ->orWhere('due_date', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->when($status !== '', function ($medications) use ($status) {
+                if ($status === 'active') {
+                    $medications->whereNull('date_inactive');
+                } elseif ($status === 'inactive') {
+                    $medications->whereNotNull('date_inactive');
+                }
+            })
+            ->when($prescriptionStatus !== '', function ($medications) use ($prescriptionStatus) {
+                $medications->where('prescription', $prescriptionStatus);
+            })
+            ->orderByDesc('date_active')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $medications->getCollection()->transform(function ($medication) {
+            return [
+                'id' => $medication->id,
+                'medication' => $medication->medication,
+                'date_active' => $medication->date_active,
+                'date_inactive' => $medication->date_inactive,
+                'due_date' => $medication->due_date,
+                'prescription' => $medication->prescription,
+                'status_label' => $medication->date_inactive ? 'Inactive' : 'Active',
+            ];
+        });
+
+        $prescriptionStatuses = Prescription::where('patient_id', auth()->user()->patient->id ?? null)
+            ->whereNotNull('prescription')
+            ->pluck('prescription')
+            ->map(fn ($value) => is_string($value) ? trim($value) : $value)
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->merge(['pending'])
+            ->unique()
+            ->sort()
+            ->values();
 
         return Inertia::render('Patients/Medications', [
             'medications' => $medications,
-
-            'keyword' => $keyword,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+                'prescription_status' => $prescriptionStatus,
+            ],
+            'prescriptionStatuses' => $prescriptionStatuses,
         ]);
     }
 
     public function supplements(Request $request)
     {
-        $supplements = PatientSupplement::where('patient_id', auth()->user()->patient->id ?? null);
-        if ($request->has('search')) {
-            $keyword = $request->get('search');
-            $supplements = $supplements->where('supplement', 'Like', '%'.$keyword.'%');
-        }
-        $supplements = $supplements->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $patientId = auth()->user()->patient->id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = trim((string) $request->input('status', ''));
+        $route = trim((string) $request->input('route_name', ''));
+
+        $supplements = PatientSupplement::where('patient_id', $patientId)
+            ->when($keyword !== '', function ($supplements) use ($keyword) {
+                $supplements->where(function ($query) use ($keyword) {
+                    $query->where('supplement', 'like', '%'.$keyword.'%')
+                        ->orWhere('dosage', 'like', '%'.$keyword.'%')
+                        ->orWhere('dosage_unit', 'like', '%'.$keyword.'%')
+                        ->orWhere('sig', 'like', '%'.$keyword.'%')
+                        ->orWhere('route', 'like', '%'.$keyword.'%')
+                        ->orWhere('frequency', 'like', '%'.$keyword.'%')
+                        ->orWhere('instructions', 'like', '%'.$keyword.'%')
+                        ->orWhere('reason', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->when($status !== '', function ($supplements) use ($status) {
+                if ($status === 'active') {
+                    $supplements->whereNull('date_inactive');
+                } elseif ($status === 'inactive') {
+                    $supplements->whereNotNull('date_inactive');
+                }
+            })
+            ->when($route !== '', function ($supplements) use ($route) {
+                $supplements->where('route', $route);
+            })
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $supplements->through(function (PatientSupplement $supplement) {
+            return array_merge($supplement->toArray(), [
+                'status_label' => $supplement->date_inactive ? 'Inactive' : 'Active',
+                'active_date_label' => $supplement->date_active?->format('d M, Y') ?? '-',
+                'inactive_date_label' => $supplement->date_inactive?->format('d M, Y') ?? '-',
+            ]);
+        });
+
+        $routeOptions = PatientSupplement::where('patient_id', $patientId)
+            ->whereNotNull('route')
+            ->pluck('route')
+            ->map(fn ($value) => is_string($value) ? trim($value) : $value)
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->unique()
+            ->sort()
+            ->values();
 
         return Inertia::render('Patients/Supplements', [
             'supplements' => $supplements,
-            'keyword' => $request->get('search'),
+            'routeOptions' => config('route'),
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+                'route_name' => $route,
+            ],
         ]);
     }
 
     public function immunizations(Request $request)
     {
-        $immunization = Immunization::where('patient_id', auth()->user()->patient->id ?? null);
-        if ($request->has('keyword')) {
-            $keyword = $request->get('keyword');
-            $immunization = $immunization->where('immunization', 'Like', '%'.$keyword.'%');
-        }
-        $immunizations = $immunization->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $patientId = auth()->user()->patient->id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $routeName = trim((string) $request->input('route_name', ''));
+        $bodySite = trim((string) $request->input('body_site', ''));
+
+        $immunizations = Immunization::where('patient_id', $patientId)
+            ->when($keyword !== '', function ($immunization) use ($keyword) {
+                $immunization->where(function ($query) use ($keyword) {
+                    $query->where('immunization', 'like', '%'.$keyword.'%')
+                        ->orWhere('dosage', 'like', '%'.$keyword.'%')
+                        ->orWhere('dosage_unit', 'like', '%'.$keyword.'%')
+                        ->orWhere('sequence', 'like', '%'.$keyword.'%')
+                        ->orWhere('route', 'like', '%'.$keyword.'%')
+                        ->orWhere('body_site', 'like', '%'.$keyword.'%')
+                        ->orWhere('manufacturer', 'like', '%'.$keyword.'%')
+                        ->orWhere('brand', 'like', '%'.$keyword.'%')
+                        ->orWhere('cvx_code', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->when($routeName !== '', function ($immunization) use ($routeName) {
+                $immunization->where('route', $routeName);
+            })
+            ->when($bodySite !== '', function ($immunization) use ($bodySite) {
+                $immunization->where('body_site', $bodySite);
+            })
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
 
         return Inertia::render('Patients/Immunizations', [
             'immunizations' => $immunizations,
-            'keyword' => $request->get('keyword'),
+            'filters' => [
+                'keyword' => $keyword,
+                'route_name' => $routeName,
+                'body_site' => $bodySite,
+            ],
+            'routeOptions' => config('route'),
+            'bodySiteOptions' => config('bodyside'),
         ]);
     }
 
     public function allergies(Request $request)
     {
-        $allergies = Allergy::where('patient_id', auth()->user()->patient->id ?? null);
-        if ($request->has('search')) {
+        $patientId = auth()->user()->patient->id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = trim((string) $request->input('status', ''));
+        $severity = trim((string) $request->input('severity', ''));
 
-            $keyword = $request->get('search');
-            $allergies = $allergies->where('allergies_medicine', 'Like', '%'.$keyword.'%');
-        }
-        $allergies = $allergies->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $allergies = Allergy::where('patient_id', $patientId)
+            ->when($keyword !== '', function ($allergies) use ($keyword) {
+                $allergies->where(function ($query) use ($keyword) {
+                    $query->where('allergies_medicine', 'like', '%'.$keyword.'%')
+                        ->orWhere('allergies_reaction', 'like', '%'.$keyword.'%')
+                        ->orWhere('allergies_severity', 'like', '%'.$keyword.'%')
+                        ->orWhere('notes', 'like', '%'.$keyword.'%')
+                        ->orWhere('rcopia_sync', 'like', '%'.$keyword.'%')
+                        ->orWhere('medicine_ndcid', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->when($status !== '', function ($allergies) use ($status) {
+                if ($status === 'active') {
+                    $allergies->whereNull('date_inactive');
+                } elseif ($status === 'inactive') {
+                    $allergies->whereNotNull('date_inactive');
+                }
+            })
+            ->when($severity !== '', function ($allergies) use ($severity) {
+                $allergies->where('allergies_severity', $severity);
+            })
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $allergies->through(function (Allergy $allergy) {
+            return array_merge($allergy->toArray(), [
+                'status_label' => $allergy->date_inactive ? 'Inactive' : 'Active',
+                'active_date_label' => $allergy->date_active ?: '-',
+            ]);
+        });
+
+        $severityOptions = collect(['mild', 'moderate', 'severe']);
 
         return Inertia::render('Patients/Allergies', [
             'allergies' => $allergies,
-            'keyword' => $request->get('search'),
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+                'severity' => $severity,
+            ],
+            'severityOptions' => $severityOptions,
         ]);
     }
 
     public function orders(Request $request)
     {
-        $orders = Order::with('patient.user', 'doctor.user', 'encounter')->where('patient_id', auth()->user()->patient->id ?? null)->get();
+        $patientId = auth()->user()->patient->id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = trim((string) $request->input('status', ''));
+        $tab = trim((string) $request->input('tab', 'laboratory'));
+        $perPage = (int) $request->input('per_page', paginateLimit());
+
+        $orders = Order::with('patient.user', 'doctor.user', 'encounter')
+            ->where('patient_id', $patientId)
+            ->orderByDesc('orders_date')
+            ->get();
+
+        $parseOrderText = function ($data) {
+            if (blank($data)) {
+                return null;
+            }
+
+            if (is_array($data)) {
+                return collect($data)
+                    ->map(function ($item) {
+                        if (is_string($item)) {
+                            return $item;
+                        }
+
+                        if (is_array($item)) {
+                            return $item['name'] ?? $item['text'] ?? json_encode($item);
+                        }
+
+                        return data_get($item, 'name') ?? data_get($item, 'text') ?? json_encode($item);
+                    })
+                    ->filter()
+                    ->join(', ');
+            }
+
+            if (is_string($data)) {
+                try {
+                    $decoded = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
+
+                    if (is_array($decoded)) {
+                        return collect($decoded)
+                            ->map(function ($item) {
+                                if (is_string($item)) {
+                                    return $item;
+                                }
+
+                                return $item['name'] ?? $item['text'] ?? json_encode($item);
+                            })
+                            ->filter()
+                            ->join(', ');
+                    }
+                } catch (\Throwable $e) {
+                    return trim($data) !== '' ? $data : null;
+                }
+
+                return trim($data) !== '' ? $data : null;
+            }
+
+            return (string) $data;
+        };
+
+        $mappedOrders = $orders->flatMap(function ($order) use ($parseOrderText) {
+            $doctorName = $order->doctor?->user?->name ?? $order->doctor?->name ?? 'Unknown Doctor';
+            $statusLabel = $order->is_completed ? 'completed' : 'pending';
+            $base = [
+                'id' => $order->id,
+                'date' => $order->orders_date?->format('d M, Y') ?? '-',
+                'raw_date' => $order->orders_date?->format('Y-m-d') ?? null,
+                'description' => $order->notes ?: 'No description',
+                'status' => $statusLabel,
+                'doctor' => $doctorName,
+                'encounter_id' => $order->encounter_id,
+                'view_route' => route('patient.orders.show', $order->id),
+            ];
+
+            $types = [
+                'laboratory' => $parseOrderText($order->labs),
+                'imaging' => $parseOrderText($order->radiology),
+                'cardiopulmonary' => $parseOrderText($order->cp),
+                'referrals' => $parseOrderText($order->referrals),
+            ];
+
+            return collect($types)
+                ->filter()
+                ->map(fn ($text, $type) => array_merge($base, [
+                    'type' => $type,
+                    'text' => $text,
+                ]))
+                ->values();
+        });
+
+        $activeTab = in_array($tab, ['laboratory', 'imaging', 'cardiopulmonary', 'referrals']) ? $tab : 'laboratory';
+
+        $filteredOrders = $mappedOrders
+            ->where('type', $activeTab)
+            ->when($status !== '', function ($collection) use ($status) {
+                return $collection->where('status', $status);
+            })
+            ->when($keyword !== '', function ($collection) use ($keyword) {
+                $needle = strtolower($keyword);
+
+                return $collection->filter(function ($order) use ($needle) {
+                    return collect([
+                        $order['text'] ?? '',
+                        $order['description'] ?? '',
+                        $order['date'] ?? '',
+                        $order['doctor'] ?? '',
+                        $order['status'] ?? '',
+                    ])->contains(fn ($value) => str_contains(strtolower((string) $value), $needle));
+                });
+            })
+            ->values();
+
+        $offset = max(0, ((int) $request->input('page', 1) - 1) * $perPage);
+        $paginatedOrders = new LengthAwarePaginator(
+            $filteredOrders->slice($offset, $perPage)->values(),
+            $filteredOrders->count(),
+            $perPage,
+            (int) $request->input('page', 1),
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
         $patientId = auth()->user()->patient->id ?? null;
         $patient = \App\Models\Patient::with('user')->find($patientId);
 
         return Inertia::render('Patients/Orders', [
-            'orders' => $orders,
+            'orders' => $paginatedOrders,
             'patient' => $patient,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+                'tab' => $activeTab,
+            ],
+            'tabCounts' => [
+                'laboratory' => $mappedOrders->where('type', 'laboratory')->count(),
+                'imaging' => $mappedOrders->where('type', 'imaging')->count(),
+                'cardiopulmonary' => $mappedOrders->where('type', 'cardiopulmonary')->count(),
+                'referrals' => $mappedOrders->where('type', 'referrals')->count(),
+            ],
         ]);
     }
 
@@ -466,8 +799,8 @@ class PatientController extends Controller
 
     public function encounters(Request $request)
     {
-        $keyword = $request->get('search', ''); // get keyword or empty string
-        $status = $request->get('status');
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = trim((string) $request->input('status', ''));
 
         $query = Encounter::with('patient.user', 'doctor.user', 'appointment');
         if (auth()->user()->hasRole('Doctor')) {
@@ -506,8 +839,10 @@ class PatientController extends Controller
 
         return Inertia::render('Patients/Encounters', [
             'encounters' => $encounters,
-            'keyword' => $keyword,
-            'status' => $status,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+            ],
         ]);
     }
 
@@ -548,18 +883,34 @@ class PatientController extends Controller
 
     public function results(Request $request)
     {
-        $results = Test::where('patient_id', auth()->user()->patient->id ?? null)
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $keyword = '%'.$request->get('search').'%';
-                $q->where('name', 'like', $keyword)
-                    ->orWhere('code', 'like', 'like', $keyword)
-                    ->orWhere('result', 'like', $keyword);
+        $patientId = auth()->user()->patient->id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $tab = trim((string) $request->input('tab', 'Laboratory'));
+
+        $results = Test::where('patient_id', $patientId)
+            ->when($tab !== '', function ($query) use ($tab) {
+                $query->where('type', $tab);
             })
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($resultQuery) use ($keyword) {
+                    $resultQuery->where('name', 'like', '%'.$keyword.'%')
+                        ->orWhere('code', 'like', '%'.$keyword.'%')
+                        ->orWhere('result', 'like', '%'.$keyword.'%')
+                        ->orWhere('type', 'like', '%'.$keyword.'%')
+                        ->orWhere('units', 'like', '%'.$keyword.'%')
+                        ->orWhere('reference', 'like', '%'.$keyword.'%');
+                });
+            })
+            ->orderByDesc('created_at')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
 
         return Inertia::render('Patients/Results/Index', [
             'results' => $results,
-            'keyword' => $request->get('search'),
+            'filters' => [
+                'keyword' => $keyword,
+                'tab' => in_array($tab, ['Laboratory', 'Imaging']) ? $tab : 'Laboratory',
+            ],
         ]);
     }
 
@@ -578,7 +929,9 @@ class PatientController extends Controller
     {
         $sort = request('sort', 'appointment_date');
         $direction = request('direction', 'desc') === 'asc' ? 'asc' : 'desc';
-        $search = request('search');
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $paymentStatus = trim((string) $request->input('payment_status', ''));
+        $perPage = (int) $request->input('per_page', paginateLimit());
 
         $query = Appointment::query()
             ->with(['encounter'])
@@ -596,27 +949,38 @@ class PatientController extends Controller
         ];
 
         /* search */
-        if ($search) {
+        if ($keyword !== '') {
 
-            $query->where(function ($q) use ($search) {
+            $query->where(function ($q) use ($keyword) {
 
-                $q->where('appointments.appointment_date', 'like', "%{$search}%")
-                    ->orWhere('appointments.fee_amount', 'like', "%{$search}%")
-                    ->orWhere('appointments.payment_status', 'like', "%{$search}%")
+                $q->where('appointments.appointment_date', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.fee_amount', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.payment_status', 'like', "%{$keyword}%")
 
                     /* Invoice search */
-                    ->orWhereHas('invoice', function ($qq) use ($search) {
-                        $qq->where('invoice_number', 'like', "%{$search}%")
-                            ->orWhere('discount_amount', 'like', "%{$search}%")
-                            ->orWhere('tax_amount', 'like', "%{$search}%");
+                    ->orWhereHas('invoice', function ($qq) use ($keyword) {
+                        $qq->where('invoice_number', 'like', "%{$keyword}%")
+                            ->orWhere('discount_amount', 'like', "%{$keyword}%")
+                            ->orWhere('tax_amount', 'like', "%{$keyword}%");
                     })
 
                     /* Doctor search */
-                    ->orWhereHas('doctor.user', function ($qq) use ($search) {
-                        $qq->where('name', 'like', "%{$search}%");
+                    ->orWhereHas('doctor.user', function ($qq) use ($keyword) {
+                        $qq->where('name', 'like', "%{$keyword}%");
                     });
             });
         }
+
+        if ($paymentStatus !== '') {
+            $query->where('appointments.payment_status', $paymentStatus);
+        }
+
+        $summaryQuery = clone $query;
+        $summary = [
+            'records' => (clone $summaryQuery)->count(),
+            'balance' => (clone $summaryQuery)->sum('appointments.total_amount'),
+            'charges' => (clone $summaryQuery)->sum('appointments.fee_amount'),
+        ];
 
         /* sorting */
 
@@ -644,13 +1008,29 @@ class PatientController extends Controller
             $query->orderBy('appointments.appointment_date', 'desc');
         }
 
-        $invoices = $query->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $invoices = $query->paginate($perPage)->withQueryString();
+        $invoices->through(function (Appointment $appointment) {
+            return array_merge($appointment->toArray(), [
+                'invoice_number' => $appointment->invoice?->invoice_number
+                    ? 'INV-'.$appointment->invoice->invoice_number
+                    : '-',
+                'doctor_name' => $appointment->doctor?->user?->name ?: '-',
+                'appointment_date_label' => $appointment->appointment_date ?: '-',
+                'discount_amount' => $appointment->invoice?->discount_amount ?? 0,
+                'tax_amount_label' => $appointment->tax_amount ?? $appointment->invoice?->tax_amount ?? 0,
+                'payment_status_label' => ucfirst((string) ($appointment->payment_status ?: 'pending')),
+            ]);
+        });
 
         return Inertia::render(
             'Patients/Billing/Index',
             [
                 'invoices' => $invoices,
-                'search' => $search,
+                'summary' => $summary,
+                'filters' => [
+                    'keyword' => $keyword,
+                    'payment_status' => $paymentStatus,
+                ],
             ]
         );
     }
@@ -728,7 +1108,7 @@ class PatientController extends Controller
             return redirect()->route('patient.dashboard');
         }
 
-        $query = Message::with(['patient.user', 'doctor.user'])
+        $query = Message::with(['patient.user', 'doctor.user', 'lab', 'pharmacy'])
             ->where('patient_id', $patientId);
 
         if ($request->has('search')) {
@@ -794,38 +1174,114 @@ class PatientController extends Controller
 
     public function FamilyHistory(Request $request)
     {
-
-        $keyword = $request->get('search', '');
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $relationship = trim((string) $request->input('relationship', ''));
+        $gender = trim((string) $request->input('gender', ''));
+        $perPage = (int) $request->input('per_page', paginateLimit());
 
         $patientId = Patient::where('user_id', auth()->user()->id)->first()->id ?? null;
 
-        // Paginate and filter
-        $familyHistories = OtherHistory::where('patient_id', $patientId)
-            ->when($keyword, function ($query, $keyword) {
-                $query->where('family_history', 'like', "%{$keyword}%");
-            })
+        $familyRows = OtherHistory::where('patient_id', $patientId)
             ->orderByDesc('id')
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->get()
+            ->flatMap(function ($history) {
+                $familyHistory = [];
 
-        // Convert YAML data to arrays
-        $familyHistories->getCollection()->transform(function ($history) {
-            if (! empty($history->oh_fh)) {
-                try {
-                    $formatter = Formatter::make($history->oh_fh, Formatter::YAML);
-                    $history->oh_fh = $formatter->toArray();
-                } catch (\Exception $e) {
-                    $history->oh_fh = [];
+                if (! empty($history->oh_fh)) {
+                    try {
+                        $formatter = Formatter::make($history->oh_fh, Formatter::YAML);
+                        $familyHistory = $formatter->toArray();
+                    } catch (\Exception $e) {
+                        $familyHistory = [];
+                    }
                 }
-            } else {
-                $history->oh_fh = [];
-            }
 
-            return $history;
-        });
+                if (! is_array($familyHistory)) {
+                    return [];
+                }
+
+                return collect($familyHistory)->map(function ($item, $index) use ($history) {
+                    return [
+                        'id' => $history->id.'-'.$index,
+                        'parent_id' => $history->id,
+                        'name' => $item['name'] ?? $item['Name'] ?? '',
+                        'relationship' => $item['relationship'] ?? $item['Relationship'] ?? '',
+                        'living_status' => $item['living_status'] ?? $item['Status'] ?? $item['status'] ?? '',
+                        'gender' => $item['gender'] ?? $item['Gender'] ?? '',
+                        'dob' => $item['dob'] ?? $item['Date of Birth'] ?? $item['date_of_Birth'] ?? '',
+                        'marital_status' => $item['marital_status'] ?? $item['Marital Status'] ?? '',
+                        'mother' => $item['mother'] ?? $item['Mother'] ?? '',
+                        'father' => $item['father'] ?? $item['Father'] ?? '',
+                        'medical_history' => $item['medical_history'] ?? $item['Medical'] ?? $item['medical'] ?? '',
+                        'created_label' => optional($history->created_at)->format('M d, Y'),
+                    ];
+                });
+            })
+            ->filter(function ($item) {
+                return ! empty($item['name']) || ! empty($item['relationship']) || ! empty($item['medical_history']);
+            })
+            ->when($keyword !== '', function ($collection) use ($keyword) {
+                $search = strtolower($keyword);
+
+                return $collection->filter(function ($item) use ($search) {
+                    return collect([
+                        $item['name'] ?? '',
+                        $item['relationship'] ?? '',
+                        $item['gender'] ?? '',
+                        $item['dob'] ?? '',
+                        $item['marital_status'] ?? '',
+                        is_array($item['medical_history'] ?? null)
+                            ? implode(', ', $item['medical_history'])
+                            : ($item['medical_history'] ?? ''),
+                    ])->some(fn ($value) => str_contains(strtolower((string) $value), $search));
+                });
+            })
+            ->when($relationship !== '', function ($collection) use ($relationship) {
+                return $collection->filter(fn ($item) => ($item['relationship'] ?? '') === $relationship);
+            })
+            ->when($gender !== '', function ($collection) use ($gender) {
+                return $collection->filter(fn ($item) => ($item['gender'] ?? '') === $gender);
+            })
+            ->values();
+
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $paginatedRows = new LengthAwarePaginator(
+            $familyRows->slice(($currentPage - 1) * $perPage, $perPage)->values(),
+            $familyRows->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
+        $relationshipOptions = collect([
+            'Father',
+            'Mother',
+            'Brother',
+            'Sister',
+            'Son',
+            'Daughter',
+            'Grandfather',
+            'Grandmother',
+            'Uncle',
+            'Aunt',
+            'Cousin',
+            'Other',
+        ]);
+
+        $genderOptions = collect(['Male', 'Female', 'Other']);
 
         return Inertia::render('Patients/FamilyHistory', [
-            'familyHistory' => $familyHistories,
-            'keyword' => $keyword,
+            'familyHistory' => $paginatedRows,
+            'filters' => [
+                'keyword' => $keyword,
+                'relationship' => $relationship,
+                'gender' => $gender,
+            ],
+            'relationshipOptions' => $relationshipOptions,
+            'genderOptions' => $genderOptions,
             'patientId' => $patientId,
         ]);
     }
@@ -834,18 +1290,112 @@ class PatientController extends Controller
     {
         $patientId = auth()->user()->patient->id ?? null;
         $patient = Patient::with('user')->find($patientId);
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $speciality = trim((string) $request->input('speciality', ''));
 
         $connectedDoctors = Doctor::with(['user', 'specialities'])
             ->whereHas('doctorPatients', function ($query) use ($patientId) {
                 $query->where('patient_id', $patientId);
             })
-            ->get();
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($doctorQuery) use ($keyword) {
+                    $doctorQuery->whereHas('user', function ($userQuery) use ($keyword) {
+                        $userQuery->where('name', 'like', '%'.$keyword.'%')
+                            ->orWhere('email', 'like', '%'.$keyword.'%')
+                            ->orWhere('mobile', 'like', '%'.$keyword.'%');
+                    })->orWhereHas('specialities', function ($specialityQuery) use ($keyword) {
+                        $specialityQuery->where('name', 'like', '%'.$keyword.'%');
+                    });
+                });
+            })
+            ->when($speciality !== '', function ($query) use ($speciality) {
+                $query->whereHas('specialities', function ($specialityQuery) use ($speciality) {
+                    $specialityQuery->where('name', $speciality);
+                });
+            })
+            ->orderByDesc('created_at')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $connectedDoctors->through(function ($doctor) {
+            return [
+                'id' => $doctor->id,
+                'name' => $doctor->user?->name,
+                'email' => $doctor->user?->email,
+                'mobile' => $doctor->user?->mobile,
+                'specialities' => $doctor->specialities->pluck('name')->values(),
+                'avatar' => $doctor->user?->profile_photo_url
+                    ?? ($doctor->user?->profile_photo_path ? '/storage/'.$doctor->user->profile_photo_path : '/images/avatar.webp'),
+            ];
+        });
+
+        $specialityOptions = Doctor::whereHas('doctorPatients', function ($query) use ($patientId) {
+            $query->where('patient_id', $patientId);
+        })
+            ->with('specialities')
+            ->get()
+            ->flatMap(fn ($doctor) => $doctor->specialities->pluck('name'))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
 
         return Inertia::render('Patients/Providers', [
             'connectedDoctors' => $connectedDoctors,
             'patient' => $patient,
-            'keyword' => request('serach'),
+            'filters' => [
+                'keyword' => $keyword,
+                'speciality' => $speciality,
+            ],
+            'specialityOptions' => $specialityOptions,
         ]);
+    }
+
+    /**
+     * shareDetailProviders
+     *
+     * Return doctors from hospitals where the patient has had appointments in the past.
+     */
+    public function shareDetailProviders()
+    {
+        $patientId = auth()->user()?->patient?->id;
+
+        $appointments = Appointment::with('doctor:id,hospital_id')
+            ->where('patient_id', $patientId)
+            ->get();
+
+        $hospitalIds = $appointments
+            ->pluck('hospital_id')
+            ->filter()
+            ->merge(
+                $appointments->pluck('doctor.hospital_id')->filter()
+            )
+            ->unique()
+            ->values();
+
+        if ($hospitalIds->isEmpty()) {
+            return response()->json([]);
+        }
+
+        $doctors = Doctor::with(['user:id,name,email,mobile', 'hospital:id,name'])
+            ->whereIn('hospital_id', $hospitalIds)
+            ->whereHas('user', function ($query) {
+                $query->whereNotNull('email')->where('email', '!=', '');
+            })
+            ->get()
+            ->map(function ($doctor) {
+                return [
+                    'id' => $doctor->id,
+                    'name' => $doctor->user?->name ?? 'Unknown provider',
+                    'email' => $doctor->user?->email ?? '',
+                    'mobile' => $doctor->user?->mobile ?? '',
+                    'hospital_name' => $doctor->hospital?->name ?? '',
+                ];
+            })
+            ->sortBy('name')
+            ->values();
+
+        return response()->json($doctors);
     }
 
     /**
@@ -857,19 +1407,25 @@ class PatientController extends Controller
     public function shareDetails(Request $request)
     {
         $validated = $request->validate([
-            'provider_name' => 'required|string|max:255',
-            'email' => 'required|email',
+            'provider_id' => 'required|string|exists:doctors,id',
+            'provider_name' => 'nullable|string|max:255',
+            'email' => 'nullable|email',
             'sms' => 'nullable|string|max:20',
         ]);
+
+        $doctor = Doctor::with('user')->findOrFail($validated['provider_id']);
+        $providerName = $doctor->user?->name ?? $validated['provider_name'] ?? 'Provider';
+        $providerEmail = $doctor->user?->email ?? $validated['email'] ?? null;
+        $providerMobile = $doctor->user?->mobile ?? $validated['sms'] ?? null;
 
         // try {
         $data_message = [
             'temp_url' => URL::to('uma_auth'),
             'patient' => auth()->user()->name,
-            'provider_name' => $validated['provider_name'],
+            'provider_name' => $providerName,
         ];
 
-        $email = $validated['email'];
+        $email = $providerEmail;
 
         // Check if doctor already exists with this email
         $existingDoctor = Doctor::whereHas('user', function ($query) use ($email) {
@@ -878,28 +1434,28 @@ class PatientController extends Controller
 
         // Store invitation in database
         $invitation = UmaInvitation::create([
-            'email' => $validated['email'],
-            'name' => $validated['provider_name'],
+            'email' => $providerEmail,
+            'name' => $providerName,
             'timeout' => now()->addHour(),
             'resource_set_ids' => auth()->user()->patient->id,
         ]);
 
         // Create in-app notification for existing doctor
-        if ($existingDoctor) {
-            \App\Models\Notification::create([
-                'notifiable_type' => 'App\Models\Doctor',
-                'notifiable_id' => $existingDoctor->id,
-                'patient_id' => auth()->user()->patient->id,
-                'doctor_id' => $existingDoctor->id,
-                'data' => json_encode([
-                    'type' => 'patient_invitation',
+        if ($existingDoctor?->user) {
+            app(\App\Services\InAppNotificationService::class)->notifyUser(
+                $existingDoctor->user,
+                [
                     'title' => 'Patient Access Request',
                     'message' => 'Patient '.auth()->user()->name.' has requested to share their medical records with you.',
-                    'patient_name' => auth()->user()->name,
+                    'type' => 'patient_invitation',
+                    'recipient_role' => 'Doctor',
                     'patient_id' => auth()->user()->patient->id,
+                    'doctor_id' => $existingDoctor->id,
                     'action_url' => route('doctor.select.patient', auth()->user()->patient->id),
-                ]),
-            ]);
+                    'related_model_type' => \App\Models\Patient::class,
+                    'related_model_id' => auth()->user()->patient->id,
+                ]
+            );
         }
 
         if ($email) {
@@ -980,8 +1536,9 @@ class PatientController extends Controller
             return redirect()->route('patient.dashboard')->with('error', 'Patient not found.');
         }
 
-        $keyword = $request->get('search', '');
+        $keyword = trim((string) $request->get('keyword', $request->get('search', '')));
         $status = $request->get('status', '');
+        $perPage = (int) $request->get('per_page', 10);
         $sort = $request->get('sort', 'appointment_date');
         $direction = $request->get('direction', 'desc');
 
@@ -1018,16 +1575,29 @@ class PatientController extends Controller
 
         $appointments = $query->orderBy($sort, $direction)
             ->orderBy('appointment_time', 'desc')
-            ->paginate($request->get('per_page', 20))->withQueryString();
+            ->paginate($perPage)->withQueryString();
 
-        $appointments->map(function ($appointment) {
-            $appointment->doctor->speciality_names = implode(', ', $appointment->doctor->specialities->pluck('name')->toArray());
+        $appointments->getCollection()->transform(function ($appointment) {
+            $appointment->doctor_name = $appointment->doctor?->user?->name ?? '-';
+            $appointment->doctor_speciality = $appointment->doctor?->specialities?->pluck('name')->filter()->implode(', ') ?: '-';
+            $appointment->visit_type_label = $appointment->visitType?->name ?? $appointment->appointment_type ?? 'Consultation';
+            $appointment->appointment_date_label = $appointment->appointment_date ?: '-';
+            $appointment->appointment_time_label = $appointment->appointment_time ?: '-';
+            $appointment->reason_label = $appointment->reason ?: '-';
+            $appointment->status_label = ucfirst((string) ($appointment->status ?: 'pending'));
+            $appointment->payment_status_label = ucfirst((string) ($appointment->payment_status ?: 'pending'));
+            $appointment->can_join_live = $appointment->status === 'confirmed'
+                && strtolower((string) ($appointment->payment_status ?? '')) === 'paid';
+
+            return $appointment;
         });
 
         return Inertia::render('Patients/BookingList', [
             'appointments' => $appointments,
-            'keyword' => $keyword,
-            'status' => $status,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+            ],
         ]);
     }
 

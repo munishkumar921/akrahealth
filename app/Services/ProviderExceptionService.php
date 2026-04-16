@@ -19,6 +19,8 @@ class ProviderExceptionService extends BaseService
     {
         $hospitalId = $filters['hospital_id'] ?? null;
         $keyword = $filters['keyword'] ?? null;
+        $doctorId = $filters['doctor_id'] ?? null;
+        $status = $filters['status'] ?? null;
         $perPage = $filters['per_page'] ?? 10;
         $sort = $filters['sort'] ?? 'exception_date';
         $direction = $filters['direction'] ?? 'desc';
@@ -35,6 +37,12 @@ class ProviderExceptionService extends BaseService
                         ->orWhere('title', 'LIKE', '%'.$keyword.'%')
                         ->orWhere('reason', 'LIKE', '%'.$keyword.'%');
                 });
+            })
+            ->when($doctorId, function (Builder $q) use ($doctorId) {
+                $q->where('doctor_id', $doctorId);
+            })
+            ->when($status !== null && $status !== '', function (Builder $q) use ($status) {
+                $q->where('is_active', $status === 'true');
             });
 
         // Apply sorting
@@ -67,6 +75,7 @@ class ProviderExceptionService extends BaseService
             'hospital_id' => $exception->hospital_id,
             'hospital_name' => $exception->hospital?->name ?? 'N/A',
             'is_active' => $exception->is_active,
+            'status_label' => $exception->is_active ? 'Active' : 'Inactive',
             'created_by' => $exception->created_by,
             'created_at' => $exception->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $exception->updated_at?->format('Y-m-d H:i:s'),
@@ -86,7 +95,7 @@ class ProviderExceptionService extends BaseService
             ->get()
             ->map(fn (Doctor $doctor) => [
                 'id' => $doctor->id,
-                'name' => $doctor->name,
+                'name' => $doctor->user?->name ?? $doctor->name ?? 'Unknown Doctor',
                 'first_name' => $doctor->user?->first_name,
                 'last_name' => $doctor->user?->last_name,
                 'specialities' => $doctor->specialities->pluck('name')->toArray(),

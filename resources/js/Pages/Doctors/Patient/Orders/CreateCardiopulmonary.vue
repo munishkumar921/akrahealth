@@ -2,13 +2,12 @@
 import axios from "axios";
 import { useForm, router } from "@inertiajs/vue3";
 import AuthLayout from "@/Layouts/AuthLayout2.vue";
-import { ref, defineEmits} from "vue";
+import { ref } from "vue";
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import InputError from "@/Components/InputError.vue";
-import 'sweetalert2/src/sweetalert2.scss';
 import Modal from '@/Components/Common/Modal.vue';
 import Template from './template.vue';
 import AddLab from "@/Pages/Modals/AddLab.vue";

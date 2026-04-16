@@ -1,15 +1,22 @@
 <script setup>
 import { useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { h, ref, watch } from 'vue';
 
 import BaseInput from '@/Components/Common/Input/BaseInput.vue';
 import BaseSelect from '@/Components/Common/Input/BaseSelect.vue';
-import BaseFileInput from '@/Components/Common/Input/BaseFileInput.vue'; 
+import BaseFileInput from '@/Components/Common/Input/BaseFileInput.vue';
 import BaseDatePicker from '@/Components/Common/Input/BaseDatePicker.vue';
- import InputError from '@/Components/InputError.vue';
- 
+import InputError from '@/Components/InputError.vue';
+
 const emit = defineEmits(["close", "saved"]);
-  
+
+const props = defineProps({
+    defaultType: {
+        type: String,
+        default: '',
+    },
+});
+
 const form = useForm({
     id: '',
     file: null, // Will hold File object for new uploads
@@ -24,29 +31,39 @@ const form = useForm({
 const isEditing = ref(false);
 
 const types = [
-    { value : 'Laboratory', label: 'Laboratory',   },
-    { value : 'Imaging', label: 'Imaging',   },
-    { value : 'Cardiopulmonary', label: 'Cardiopulmonary', },
-    { value : 'Endoscopy', label: 'Endoscopy',  },
-    { value : 'Refferrals', label: 'Refferrals',   },
-    { value : 'Past Records', label: 'Past Records',  },
-    { value : 'Other Forms', label: 'Other Forms',   },
-    { value : 'Letters', label: 'Letters',  },
-    { value : 'Education', label: 'Education',   },
-    { value : 'CCDAs', label: 'CCDAs', },
-    { value : 'CCRs', label: 'CCRs',   },
+    { value: 'Laboratory', label: 'Laboratory', },
+    { value: 'Imaging', label: 'Imaging', },
+    { value: 'Cardiopulmonary', label: 'Cardiopulmonary', },
+    { value: 'Endoscopy', label: 'Endoscopy', },
+    { value: 'Refferrals', label: 'Refferrals', },
+    { value: 'Past Records', label: 'Past Records', },
+    { value: 'Other Forms', label: 'Other Forms', },
+    { value: 'Letters', label: 'Letters', },
+    { value: 'Education', label: 'Education', },
+    { value: 'CCDAs', label: 'CCDAs', },
+    { value: 'CCRs', label: 'CCRs', },
 ]
 
 const closeModal = () => {
     emit("close");
 };
 
+watch(
+    () => props.defaultType,
+    (newType) => {
+        if (!isEditing.value) {
+            form.type = newType || '';
+        }
+    },
+    { immediate: true }
+);
+
 const submit = () => {
     // If editing and no new file is uploaded, use existing URL
     if (isEditing.value && !form.file && form.existing_url) {
         form.url = form.existing_url;
     }
-    
+
     // Use post for both create and update (server handles based on id)
     form.post(route('doctor.documents.store'), {
         onSuccess: () => {
@@ -61,10 +78,10 @@ const submit = () => {
         },
     });
 };
- 
+
 const update = (item) => {
     isEditing.value = true;
-    form.id = item.id;  
+    form.id = item.id;
     form.existing_url = item.url; // Store the existing URL
     form.file = null; // Reset file input
     form.from = item.from || '';
@@ -73,42 +90,49 @@ const update = (item) => {
     form.date = item.date ? item.date.split(' ')[0] : '';
 };
 
-const resetForm = () => {
+const resetForm = (type = props.defaultType || '') => {
     form.reset();
+    form.type = type;
     isEditing.value = false;
 };
 
 defineExpose({
-  update,
-  resetForm,
+    update,
+    resetForm,
 });
 </script>
 <template>
     <form @submit.prevent="submit">
         <div class="iq-card-body">
+            <h5 class="card-title mb-4">Document type: {{ form.type }}</h5>
             <div class="row">
-               
-                <BaseFileInput label="Upload File (Pdf)" id="document-file" v-model="form.file" accept=".pdf" :error="form.errors.file"/>
-              </div>
-            <div class="row">
-                <BaseInput v-model="form.from" type="text" label="Form" placeholder="Enter a form for this file..." :error="form.errors.from" />
-            </div>            
-            <div class="row">
-               <BaseSelect v-model="form.type" label="Type" placeholder="Select a type..." :error="form.errors.type">
-                    <option v-for="option in types" :key="option.value" :value="option.value">{{ option.label }}</option>
-                 </BaseSelect>
-                <InputError class="mt-2" :message="form.errors.type" />
+                <template v-for="error in form.errors">
+                    <p class="text-danger font-italic">{{ error }}</p>
+                </template>
+                <BaseFileInput label="Upload File (Pdf)" id="document-file" v-model="form.file" accept=".pdf"
+                    :error="form.errors.file" />
             </div>
-
+            <div class="row">
+                <BaseInput v-model="form.from" type="text" label="Form" placeholder="Enter a form for this file..."
+                    :error="form.errors.from" />
+            </div>
+            <!-- <div class="row">
+                <BaseSelect v-model="form.type" label="Type" placeholder="Select a type..." :error="form.errors.type">
+                    <option v-for="option in types" :key="option.value" :value="option.value">{{ option.label }}
+                    </option>
+                </BaseSelect>
+                <InputError class="mt-2" :message="form.errors.type" />
+            </div> -->
             <div class="row mt-3">
                 <div class="col">
-                    <BaseInput v-model="form.description" type="text" label="Description" placeholder="Enter a description for this file..." :error="form.errors.description" />
+                    <BaseInput v-model="form.description" type="text" label="Description"
+                        placeholder="Enter a description for this file..." :error="form.errors.description" />
                 </div>
             </div>
-             <div class="row mt-3">
+            <div class="row mt-3">
                 <div class="col">
                     <label>Date</label>
-                     <BaseDatePicker  type="date" v-model="form.date" placeholder="Select date..."/>
+                    <BaseDatePicker type="date" v-model="form.date" placeholder="Select date..." />
                     <InputError class="mt-2" :message="form.errors.date" />
                 </div>
             </div>

@@ -2,7 +2,7 @@
 import axios from "axios";
 import { useForm, router, usePage } from "@inertiajs/vue3";
 import AuthLayout from "@/Layouts/AuthLayout2.vue";
-import { ref, defineEmits, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
@@ -10,7 +10,6 @@ import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
 import { routeOptions } from "@/Data/commonData";
 import Search from "@/Components/Common/Search.vue";
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import 'sweetalert2/src/sweetalert2.scss';
 import Modal from '@/Components/Common/Modal.vue';
 import AddLab from '@/Pages/Modals/AddLab.vue'
 import Template from './template.vue';

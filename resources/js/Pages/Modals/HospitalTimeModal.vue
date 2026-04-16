@@ -4,6 +4,7 @@ import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import InputError from "@/Components/InputError.vue";
 import { useForm } from "@inertiajs/vue3";
+import timezones from "@/Components/Common/timezone";
 
 const props = defineProps({
     doctors: {
@@ -25,70 +26,58 @@ const form = useForm({
     day_of_week: '',
 });
 const days_of_week = [
-    {'value':'Monday','label':'Monday'},
-    {'value':'Tuesday','label':'Tuesday'},
-    {'value':'Wednesday','label':'Wednesday'},
-    {'value':'Thursday','label':'Thursday'},
-    {'value':'Friday','label':'Friday'},
-    {'value':'Saturday','label':'Saturday'},
-    {'value':'Sunday','label':'Sunday'}
+    { 'value': 'Monday', 'label': 'Monday' },
+    { 'value': 'Tuesday', 'label': 'Tuesday' },
+    { 'value': 'Wednesday', 'label': 'Wednesday' },
+    { 'value': 'Thursday', 'label': 'Thursday' },
+    { 'value': 'Friday', 'label': 'Friday' },
+    { 'value': 'Saturday', 'label': 'Saturday' },
+    { 'value': 'Sunday', 'label': 'Sunday' }
 ];
 
-const timezones = (() => {
-    let zones = [];
-
-    try {
-        // Modern browsers (IANA canonical list)
-        zones = Intl.supportedValuesOf('timeZone');
-    } catch (e) {
-        // Fallback list
-        zones = [
-             'Asia/Kolkata',
-            'America/New_York',
-            'Europe/London',
-            'Asia/Dubai',
-            'Asia/Singapore',
-        ];
-    }
-
-    return zones
-        .map(tz => {
-            let offset = '';
-
-            try {
-                const now = new Date();
-                const formatter = new Intl.DateTimeFormat('en-US', {
-                    timeZone: tz,
-                    timeZoneName: 'shortOffset',
-                });
-
-                const parts = formatter.formatToParts(now);
-                const tzPart = parts.find(p => p.type === 'timeZoneName');
-                offset = tzPart ? tzPart.value.replace('GMT', 'UTC') : '';
-            } catch {
-                offset = '';
-            }
-
-            return {
-                value: tz,
-                label: `${tz.replace(/_/g, ' ')} ${offset}`,
-            };
-        })
-        .sort((a, b) => a.label.localeCompare(b.label));
-})();
-
- 
 const closeModal = () => {
     emit("close");
 };
 
+const normalizeTimeForBackend = (value) => {
+    if (!value || typeof value !== "string") {
+        return value;
+    }
+
+    const trimmed = value.trim();
+    const twelveHourMatch = trimmed.match(/^(\d{1,2}):([0-5]\d)\s*([AaPp][Mm])$/);
+    if (twelveHourMatch) {
+        let hours = Number(twelveHourMatch[1]) % 12;
+        const minutes = twelveHourMatch[2];
+        const meridiem = twelveHourMatch[3].toUpperCase();
+
+        if (meridiem === "PM") {
+            hours += 12;
+        }
+
+        return `${String(hours).padStart(2, "0")}:${minutes}`;
+    }
+
+    return trimmed;
+};
+
 const submit = () => {
-    
+    form.transform((data) => ({
+        ...data,
+        open_time: normalizeTimeForBackend(data.open_time),
+        close_time: normalizeTimeForBackend(data.close_time),
+        default_open_time: normalizeTimeForBackend(data.default_open_time),
+        default_close_time: normalizeTimeForBackend(data.default_close_time),
+    }));
+
     form.post(route('admin.hospital-timing.store'), {
         onSuccess: () => {
+            form.transform((data) => data);
             closeModal();
         },
-
+        onError: () => {
+            form.transform((data) => data);
+        },
     });
 };
 const update = (data) => {
@@ -103,7 +92,7 @@ const update = (data) => {
 defineExpose({
     update,
     resetForm: () => form.reset(),
- });
+});
 </script>
 
 <template>
@@ -118,32 +107,29 @@ defineExpose({
                     </BaseSelect>
                 </div>
             </div>
+
             <div class="col-12">
                 <div class="mb-3">
                     <BaseSelect v-model="form.time_zone" placeholder="Select Timezone" label="Timezone"
                         :error="form.errors.time_zone">
-                        <option v-for="tz in timezones" 
-                                :key="tz.value" 
-                                :value="tz.value">
+                        <option v-for="tz in timezones" :key="tz.value" :value="tz.value">
                             {{ tz.label }}
                         </option>
                     </BaseSelect>
                 </div>
             </div>
-            
+
             <div class="col-12">
 
                 <div class="mb-3">
-                      <BaseSelect v-model="form.day_of_week" label="Day" placeholder="Select Day" :error="form.errors.day_of_week">
-                              <option
-                                v-for="day in days_of_week"
-                                :key="day.value"
-                                :value="day.value">
-                                {{ day.label }}
-                            </option>
-                        </BaseSelect>
-                    </div>  
-             </div>
+                    <BaseSelect v-model="form.day_of_week" label="Day" placeholder="Select Day"
+                        :error="form.errors.day_of_week">
+                        <option v-for="day in days_of_week" :key="day.value" :value="day.value">
+                            {{ day.label }}
+                        </option>
+                    </BaseSelect>
+                </div>
+            </div>
             <div class="col-6 ">
                 <div class="mb-3">
                     <BaseDatePicker v-model="form.open_time" label="Open Time" type="time" placeholder="Open time" />
@@ -159,7 +145,7 @@ defineExpose({
         </div>
 
         <div class="mt-4 d-flex justify-content-end gap-2">
-            
+
             <button type="submit" class="btn btn-primary" :disabled="form.processing">
                 Save
             </button>

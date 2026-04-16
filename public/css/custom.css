@@ -1653,9 +1653,7 @@ div.card-title[aria-expanded="true"] i {
 .fs-12{
     font-size: 12px;
 }
-.fs-13{
-    font-size: 13px;
-}
+
 .fs-14{
     font-size: 14px;
 }
@@ -1664,12 +1662,6 @@ div.card-title[aria-expanded="true"] i {
 }
 .fs-16{
     font-size: 16px;  
-}
-.fs-17{
-    font-size: 17px;  
-}
-.fs-18{
-    font-size: 18px;  
 }
 .fs-20{
     font-size: 20px;  
@@ -1680,18 +1672,7 @@ div.card-title[aria-expanded="true"] i {
 .fs-24{
     font-size: 24px;  
 }
-.fs-26{
-    font-size: 26px;  
-}
-.fs-27{
-    font-size: 27px;  
-}
-.fs-30{
-    font-size: 30px;  
-}
-.fs-38{
-    font-size: 38px;  
-}
+
 .dental-slider {
     width: 700px;
     display: flex;

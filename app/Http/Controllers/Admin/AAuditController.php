@@ -83,7 +83,7 @@ class AAuditController extends Controller
      */
     public function show($id)
     {
-        $auditLog = Audit::with(['user', 'admin'])->findOrFail($id);
+        $auditLog = $this->auditService->findScopedLog($id);
 
         $data = [
             'id' => $auditLog->id,
@@ -145,7 +145,7 @@ class AAuditController extends Controller
             'date_to' => $request->get('date_to', ''),
         ];
 
-        $auditLogs = $this->auditService->getLogs($filters, 100);
+        $auditLogs = $this->auditService->getLogsForExport($filters);
 
         $data = [
             'auditLogs' => $auditLogs,

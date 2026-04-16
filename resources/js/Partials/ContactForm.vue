@@ -3,7 +3,6 @@ import { useForm } from '@inertiajs/vue3';
 import { ref } from 'vue'
 import axios from 'axios'
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import 'sweetalert2/src/sweetalert2.scss';
 const form = useForm({
   name: '',
   email: '',

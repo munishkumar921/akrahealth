@@ -6,7 +6,7 @@ import Modal from "@/Components/Common/Modal.vue";
 import PatientSummary from "@/Pages/Common/PatientSummary.vue";
 
 const patientNavOptions = [
-  { id: "fa-solid fa-calendar-plus", color: "#1be1b3", label: "Appointments", path: "patient.book.appointment" },
+  { id: "fa-solid fa-calendar-plus", color: "#1be1b3", label: "Calendar", path: "patient.book.appointment" },
   { id: "fa-solid fa-stethoscope", color: "#06C270", label: "Encounter", path: "patient.encounters" },
 ];
 

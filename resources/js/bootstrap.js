@@ -4,10 +4,25 @@
  * CSRF token as a header based on the value of the "XSRF" token cookie.
  */
 
+
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
 import axios from 'axios';
 window.axios = axios;
+window.axios.defaults.withCredentials = true;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+window.Pusher = Pusher;
+
+window.Echo = new Echo({
+    broadcaster: 'reverb',
+    key: import.meta.env.VITE_REVERB_APP_KEY,
+    wsHost: import.meta.env.VITE_REVERB_HOST,
+    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
+    wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
+    forceTLS: false, // http: false / https: true
+    enabledTransports: ['ws'], // http: ws / https: wss
+});
 
 /**
  * Echo exposes an expressive API for subscribing to channels and listening
@@ -66,19 +81,19 @@ window.axios.interceptors.response.use(
                 window.location.href = `/login?session_expired=${encodedMessage}`;
                 return Promise.reject(error);
             }
-            
+
             // Handle 419 (CSRF Token Mismatch) - Usually indicates session expiry
             if (error.response.status === 419) {
                 const message = 'Your session has expired or you are not logged in. Please log in again.';
                 sessionStorage.setItem('session_expired_message', message);
-                
+
                 // Redirect to login with message via query parameter
                 const encodedMessage = encodeURIComponent(message);
                 window.location.href = `/login?session_expired=${encodedMessage}`;
                 return Promise.reject(error);
             }
         }
-        
+
         return Promise.reject(error);
     }
 );

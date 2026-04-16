@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Setting;
 use App\Models\Patient;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -30,14 +31,17 @@ class HandleInertiaRequests extends Middleware
         /*
         * LOCALE & TRANSLATIONS
         */
-        $locale = $request->session()->get('user_language', 'en');
+        $languageSettings = $this->getLanguageSettings();
+        $defaultLocale = $languageSettings['default_language'];
+        $supportedLocales = $languageSettings['supported_languages'];
+
+        $locale = $request->session()->get('user_language', $defaultLocale);
         $user = $request->user();
         if ($user && $user->language) {
             $locale = $user->language;
         }
-        $supportedLocales = ['en', 'es', 'fr', 'ar'];
         if (! in_array($locale, $supportedLocales)) {
-            $locale = 'en';
+            $locale = $defaultLocale;
         }
         app()->setLocale($locale);
 
@@ -77,6 +81,8 @@ class HandleInertiaRequests extends Middleware
         /* SHARED DATA */
         return array_merge(parent::share($request), [
             'locale' => app()->getLocale(),
+            'supported_languages' => $supportedLocales,
+            'default_language' => $defaultLocale,
             'translations' => [
                 'common' => __('common'),
             ],
@@ -99,5 +105,32 @@ class HandleInertiaRequests extends Middleware
             'switched_role' => $switchedRole,
             'switched_doctor' => $switchedDoctor,
         ]);
+    }
+
+    private function getLanguageSettings(): array
+    {
+        $settings = Setting::query()
+            ->where('group', 'language')
+            ->where('is_active', true)
+            ->get()
+            ->pluck('value', 'key')
+            ->toArray();
+
+        $defaultLanguage = strtolower($settings['default_language'] ?? 'en');
+        $supportedLanguages = json_decode($settings['supported_languages'] ?? '["en","ar","de","es"]', true);
+
+        if (! is_array($supportedLanguages) || empty($supportedLanguages)) {
+            $supportedLanguages = ['en', 'ar', 'de', 'es'];
+        }
+
+        if (! in_array($defaultLanguage, $supportedLanguages, true)) {
+            array_unshift($supportedLanguages, $defaultLanguage);
+            $supportedLanguages = array_values(array_unique($supportedLanguages));
+        }
+
+        return [
+            'default_language' => $defaultLanguage,
+            'supported_languages' => $supportedLanguages,
+        ];
     }
 }

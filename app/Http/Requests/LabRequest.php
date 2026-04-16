@@ -56,8 +56,8 @@ class LabRequest extends FormRequest
             'zip' => ['required', 'string', 'max:20', 'min:3'],
 
             // Operational Hours
-            'opening_time' => ['nullable', 'date_format:h:i:s A'],
-            'closing_time' => ['nullable', 'date_format:h:i:s A', 'after:opening_time'],
+            'opening_time' => ['nullable', 'date_format:h:i A'],
+            'closing_time' => ['nullable', 'date_format:h:i A', 'after:opening_time'],
 
             // Website (optional)
             'website' => ['nullable', 'url', 'max:255'],

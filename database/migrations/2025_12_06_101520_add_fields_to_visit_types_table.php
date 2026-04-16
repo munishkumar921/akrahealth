@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('visit_types', function (Blueprint $table) {
             $table->uuid('hospital_id');
-            $table->uuid('doctor_id');
+            $table->uuid('doctor_id')->nullable();
             $table->String('currency')->nullable();
             $table->String('price')->nullable();
             $table->String('duration')->nullable();

@@ -21,22 +21,80 @@ class DMedicationController extends Controller
      */
     public function index(Request $request)
     {
-        $medication = Prescription::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null);
-        $keyword = '';
-        if ($request->has('search')) {
-            $keyword = $request->get('search');
-            $medication = $medication->where('medication', 'Like', '%'.$keyword.'%');
-        }
-        $encounters = Encounter::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null)->latest()->first();
+        $selectedPatientId = auth()->user()->doctor->selected_patient_id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = trim((string) $request->input('status', ''));
+        $prescriptionStatus = trim((string) $request->input('prescription_status', ''));
 
-        $medications = $medication->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $medication = Prescription::where('patient_id', $selectedPatientId);
+
+        if ($keyword !== '') {
+            $medication = $medication->where(function ($query) use ($keyword) {
+                $query->where('medication', 'like', '%'.$keyword.'%')
+                    ->orWhere('dosage', 'like', '%'.$keyword.'%')
+                    ->orWhere('dosage_unit', 'like', '%'.$keyword.'%')
+                    ->orWhere('route', 'like', '%'.$keyword.'%')
+                    ->orWhere('frequency', 'like', '%'.$keyword.'%')
+                    ->orWhere('reason', 'like', '%'.$keyword.'%')
+                    ->orWhere('prescription', 'like', '%'.$keyword.'%')
+                    ->orWhere('rcopia_sync', 'like', '%'.$keyword.'%');
+            });
+        }
+
+        if ($status === 'active') {
+            $medication->whereNull('date_inactive');
+        }
+
+        if ($status === 'inactive') {
+            $medication->whereNotNull('date_inactive');
+        }
+
+        if ($prescriptionStatus !== '') {
+            $medication->where('prescription', $prescriptionStatus);
+        }
+
+        $encounters = Encounter::where('patient_id', $selectedPatientId)->latest()->first();
+
+        $medications = $medication
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $medications->through(function (Prescription $prescription) {
+            return array_merge($prescription->toArray(), [
+                'status_label' => $prescription->date_inactive ? 'Inactive' : 'Active',
+                'active_date_label' => $prescription->date_active ?: '-',
+                'inactive_date_label' => $prescription->date_inactive ?: '-',
+                'due_date_label' => $prescription->due_date ?: '-',
+                'prescription_label' => $prescription->prescription ?: 'N/A',
+            ]);
+        });
+
+        $prescriptionStatuses = Prescription::where('patient_id', $selectedPatientId)
+            ->whereNotNull('prescription')
+            ->where('prescription', '!=', '')
+            ->distinct()
+            ->orderBy('prescription')
+            ->pluck('prescription')
+            ->values();
+
         $pharmacies = Pharmacy::where('is_active', true)
             ->where('is_verified', true)
             ->select(['id', 'name'])
             ->orderBy('name', 'ASC')
             ->get();
 
-        return Inertia::render('Doctors/Patient/Medications/Medications', compact('medications', 'keyword', 'encounters', 'pharmacies'));
+        return Inertia::render('Doctors/Patient/Medications/Medications', [
+            'medications' => $medications,
+            'encounters' => $encounters,
+            'pharmacies' => $pharmacies,
+            'prescriptionStatuses' => $prescriptionStatuses,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+                'prescription_status' => $prescriptionStatus,
+            ],
+        ]);
     }
 
     /**

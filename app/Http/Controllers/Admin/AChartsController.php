@@ -34,9 +34,15 @@ class AChartsController extends Controller
 
         $downloadName = basename($zipPath);
 
+        app()->terminating(function () use ($zipPath) {
+            if (is_string($zipPath) && file_exists($zipPath)) {
+                @unlink($zipPath);
+            }
+        });
+
         return response()->download($zipPath, $downloadName, [
             'Content-Type' => 'application/zip',
             'Content-Disposition' => 'attachment; filename="'.$downloadName.'"',
-        ])->deleteFileAfterSend(true);
+        ]);
     }
 }

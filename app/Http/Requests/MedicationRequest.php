@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class MedicationRequest extends FormRequest
 {
@@ -15,13 +16,13 @@ class MedicationRequest extends FormRequest
     {
         return [
             'slug' => ['nullable', 'string'],
-            'medication' => ['required', 'string'],
-            'dosage' => ['nullable', 'string'],
-            'dosage_unit' => ['required', 'string'],
-            'route' => ['nullable', 'string'],
+            'medication' => ['required', 'string', 'max:255'],
+            'dosage' => ['nullable', 'string', 'max:255'],
+            'dosage_unit' => ['required', 'string', 'max:100'],
+            'route' => ['nullable', Rule::in(['oral', 'topical', 'intravenous', 'intramuscular', 'sublingual', 'nasal', 'rectal', 'inhalation'])],
             'sig' => ['required', 'string'],
-            'date_active' => ['date', 'string'],
-            'date_inactive' => ['nullable', 'string'],
+            'date_active' => ['required', 'date'],
+            'date_inactive' => ['nullable', 'date'],
         ];
     }
 }

@@ -6,6 +6,7 @@ import BaseInput from '@/Components/Common/Input/BaseInput.vue';
 import BaseSelect from '@/Components/Common/Input/BaseSelect.vue';
 import BaseFileInput from '@/Components/Common/Input/BaseFileInput.vue';
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
+import timezones from "@/Components/Common/timezone";
 
 import { Country, State } from 'country-state-city';
 
@@ -56,7 +57,7 @@ const daysOfWeek = [
 const addSchedule = () => {
     form.timings.push({
         weekends: 1,
-        time_zone: 'Asia/Calcutta',
+        time_zone: form.timezone || 'Asia/Kolkata',
         day_of_week: "",
         open_time: '09:00',
         close_time: '21:00',
@@ -74,7 +75,7 @@ const submitForm = () => {
     const timings = form.timings.map(schedule => ({
         id: schedule.id,
         weekends: schedule.weekends,
-        time_zone: schedule.time_zone,
+        time_zone: form.timezone || schedule.time_zone || null,
         day_of_week: schedule.day_of_week,
         open_time: schedule.is_closed ? null : schedule.open_time,
         close_time: schedule.is_closed ? null : schedule.close_time,
@@ -204,50 +205,6 @@ const onChangePracticeLogoUpload = (event) => {
         reader.readAsDataURL(file);
     }
 };
-const timezones = (() => {
-    let zones = [];
-
-    try {
-        // Modern browsers (IANA canonical list)
-        zones = Intl.supportedValuesOf('timeZone');
-    } catch (e) {
-        // Fallback list
-        zones = [
-             'Asia/Kolkata',
-            'America/New_York',
-            'Europe/London',
-            'Asia/Dubai',
-            'Asia/Singapore',
-        ];
-    }
-
-    return zones
-        .map(tz => {
-            let offset = '';
-
-            try {
-                const now = new Date();
-                const formatter = new Intl.DateTimeFormat('en-US', {
-                    timeZone: tz,
-                    timeZoneName: 'shortOffset',
-                });
-
-                const parts = formatter.formatToParts(now);
-                const tzPart = parts.find(p => p.type === 'timeZoneName');
-                offset = tzPart ? tzPart.value.replace('GMT', 'UTC') : '';
-            } catch {
-                offset = '';
-            }
-
-            return {
-                value: tz,
-                label: `${tz.replace(/_/g, ' ')} ${offset}`,
-            };
-        })
-        .sort((a, b) => a.label.localeCompare(b.label));
-})();
-
-
 </script>
 <template>
     <div class="form-container">
@@ -277,7 +234,7 @@ const timezones = (() => {
             </div>
 
         </div>
-         <div class="row g-3" v-if="!activeTab || activeTab === 'contact'">
+        <div class="row g-3" v-if="!activeTab || activeTab === 'contact'">
             <div class="col-md-6">
                 <BaseInput v-model="form.phone" label="Phone" :error="form.errors.phone" required
                     placeholder="Enter phone number" />
@@ -288,11 +245,11 @@ const timezones = (() => {
             </div>
         </div>
 
-        <div v-if="!activeTab || activeTab === 'location'">
+        <div v-if="!activeTab || activeTab === 'contact' || activeTab === 'location'">
             <div class="row">
                 <div class="col-md-6">
-                    <BaseInput v-model="form.street_address1" label="Street Address 1" :error="form.errors.street_address1"
-                        placeholder="Enter street address 1" required />
+                    <BaseInput v-model="form.street_address1" label="Street Address 1"
+                        :error="form.errors.street_address1" placeholder="Enter street address 1" required />
                 </div>
                 <div class="col-md-6">
                     <BaseInput v-model="form.street_address2" label="Street Address 2"
@@ -305,14 +262,6 @@ const timezones = (() => {
                     <BaseInput v-model="form.city" label="City" :error="form.errors.city" placeholder="Enter city" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">State</label>
-                    <BaseSelect v-model="form.state" :error="form.errors.state">
-                        <option v-for="state in personalStates" :key="state.isoCode" :value="state.name">
-                            {{ state.name }}
-                        </option>
-                    </BaseSelect>
-                </div>
-                <div class="col-md-4">
                     <label class="form-label">Country</label>
                     <BaseSelect v-model="form.country" :error="form.errors.country" required>
                         <option v-for="country in countries" :key="country.isoCode" :value="country.name">
@@ -320,19 +269,31 @@ const timezones = (() => {
                         </option>
                     </BaseSelect>
                 </div>
-
+                <div class="col-md-4">
+                    <label class="form-label">State</label>
+                    <BaseSelect v-model="form.state" :error="form.errors.state">
+                        <option v-for="state in personalStates" :key="state.isoCode" :value="state.name">
+                            {{ state.name }}
+                        </option>
+                    </BaseSelect>
+                </div>
             </div>
         </div>
 
 
-        <div v-if="!activeTab">
+        <div v-if="!activeTab || activeTab === 'contact' || activeTab === 'location'">
             <div class="row g-3">
                 <div class="col-md-4">
-                    <BaseInput v-model="form.zip" label="ZIP Code" :error="form.errors.zip" placeholder="Enter ZIP code" />
+                    <BaseInput v-model="form.zip" label="ZIP Code" :error="form.errors.zip"
+                        placeholder="Enter ZIP code" />
                 </div>
                 <div class="col-md-4">
-                    <BaseInput v-model="form.timezone" label="Timezone" :error="form.errors.timezone"
-                        placeholder="Enter timezone" />
+                    <BaseSelect v-model="form.timezone" label="Timezone" :error="form.errors.timezone"
+                        placeholder="Select timezone">
+                        <option v-for="tz in timezones" :key="tz.value" :value="tz.value">
+                            {{ tz.label }}
+                        </option>
+                    </BaseSelect>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Status</label>
@@ -357,25 +318,14 @@ const timezones = (() => {
 
             <div v-for="(timing, index) in form.timings" :key="index" class="border p-3 mb-2 rounded">
                 <div class="row align-items-end">
-                <div class="col-md-6 mb-3">
-                     <BaseSelect v-model="timing.weekends" placeholder="Include Weekends in the Schedule"
-                        label="Include Weekends in the Schedule" :error="form.errors.weekends">
-                        <option value="1">Yes</option>
-                        <option value="0">No</option>
-                    </BaseSelect>
+                    <div class="col-md-6">
+                        <BaseSelect v-model="timing.weekends" placeholder="Include Weekends in the Schedule"
+                            label="Include Weekends in the Schedule" :error="form.errors.weekends">
+                            <option value="1">Yes</option>
+                            <option value="0">No</option>
+                        </BaseSelect>
                     </div>
-                    <div class="col-md-6 mb-3"> 
-                    <BaseSelect v-model="timing.time_zone" placeholder="Select Timezone" label="Timezone"
-                        :error="form.errors.time_zone">
-                        <option v-for="tz in timezones" 
-                                :key="tz.value" 
-                                :value="tz.value">
-                            {{ tz.label }}
-                        </option>
-                    </BaseSelect>
-                    </div>
-
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <BaseSelect v-model="timing.day_of_week" label="Day"
                             :error="form.errors[`timings.${index}.day_of_week`]" placeholder="Select Day">
                             <option v-for="day in daysOfWeek" :key="day.value" :value="day.value">
@@ -392,13 +342,13 @@ const timezones = (() => {
                             </label>
                         </div>
                     </div>
-                    <div class="col-md-3" v-if="!timing.is_closed">
-                        <BaseDatePicker v-model="timing.open_time"
-                            label="Open Time" type="time" placeholder="Open time" :error="form.errors[`timings.${index}.open_time`]" />
+                    <div class="col-md-6" v-if="!timing.is_closed">
+                        <BaseDatePicker v-model="timing.open_time" label="Open Time" type="time" placeholder="Open time"
+                            :error="form.errors[`timings.${index}.open_time`]" />
                     </div>
-                    <div class="col-md-3" v-if="!timing.is_closed">
-                        <BaseDatePicker v-model="timing.close_time" type="time"
-                            label="Close Time" placeholder="Close time" :error="form.errors[`timings.${index}.close_time`]" />
+                    <div class="col-md-5" v-if="!timing.is_closed">
+                        <BaseDatePicker v-model="timing.close_time" type="time" label="Close Time"
+                            placeholder="Close time" :error="form.errors[`timings.${index}.close_time`]" />
                     </div>
                     <div :class="timing.is_closed ? 'col-md-7 mb-2' : 'col-md-1 mb-2'">
                         <button type="button" class="btn btn-danger " @click="removeTiming(index)"
@@ -421,4 +371,3 @@ const timezones = (() => {
         </div>
     </div>
 </template>
- 

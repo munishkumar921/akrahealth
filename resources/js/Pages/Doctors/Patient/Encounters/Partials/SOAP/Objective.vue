@@ -1,6 +1,6 @@
 <script setup>
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
-import { ref, defineEmits } from "vue";
+import { ref } from "vue";
 import VitalSigns from "../VitalSigns.vue";
 import axios from "axios";
 

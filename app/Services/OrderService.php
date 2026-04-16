@@ -8,14 +8,13 @@ use App\Models\Cardiopulmonary;
 use App\Models\Doctor;
 use App\Models\Encounter;
 use App\Models\Lab;
+use App\Models\Message;
 use App\Models\Order;
 use App\Models\Patient;
 use App\Models\Radiology;
-use App\Models\User;
-use App\Notifications\OrderCreatedNotification;
 use App\Traits\AlertTrait;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 class OrderService
 {
@@ -30,6 +29,8 @@ class OrderService
      */
     public function upsertOrder($input)
     {
+        $auditService = app(AuditService::class);
+        $notificationService = app(InAppNotificationService::class);
 
         $data = $input;
         $hospitalId = auth()->user()->doctor->hospital_id;
@@ -57,6 +58,37 @@ class OrderService
             'pending_date' => $data['pending_date'] ?? null,
             'is_completed' => $data['is_completed'] ?? null,
         ]);
+
+        $orderTypes = collect([
+            ! empty($data['labs']) ? 'labs' : null,
+            ! empty($data['radiology']) ? 'radiology' : null,
+            ! empty($data['cp']) ? 'cardiopulmonary' : null,
+            ! empty($data['referrals']) ? 'referrals' : null,
+        ])->filter()->values()->all();
+
+        $auditService->logCreate(
+            'LabOrder',
+            $order->fresh(),
+            'Order created'.(! empty($orderTypes) ? ' for '.implode(', ', $orderTypes) : '')
+        );
+
+        $lab = Lab::where('id', $data['encounter_provider'])->first();
+        if($data['labs']){
+
+            try{
+                Message::create([
+                    'to' => $encounter->patient_id,
+                    'from' => $lab->user_id,
+                    'lab_id' => $lab->id,
+                    'hospital_id' => $encounter->hospital_id,
+                    'patient_id' => $encounter->patient_id,
+                    'date' => now(),
+                    'message' => $data['labs'],
+                ]);
+            }catch(Throwable $th){
+                //
+            }
+        }
 
         $orders_type_arr = [
             'labs' => ['Laboratory Orders', 'Laboratory results pending '],
@@ -183,19 +215,44 @@ class OrderService
                 );
 
             }
-            // Send Bell Notification to Lab Role for any order with labs
-            if ($order->labs || $order->radiology || $order->cp) {
-                $labUsers = User::whereHas('roles', function ($query) {
-                    $query->where('name', 'lab');
-                })->get();
-
-                if ($labUsers->isNotEmpty()) {
-                    Notification::send($labUsers, new OrderCreatedNotification($order, 'lab'));
-                } else {
-                }
-            }
         } catch (\Exception $e) {
             \Log::error('Failed to send order notification email: '.$e->getMessage());
+        }
+
+        $notificationService->notifyAdminsForHospital(
+            $hospitalId,
+            $notificationService->buildPayload(
+                'New order created',
+                'A new order has been created for '.$encounter->patient?->name.'.',
+                'order_created',
+                [
+                    'recipient_role' => 'Admin',
+                    'order_id' => $order->id,
+                    'patient_id' => $order->patient_id,
+                    'doctor_id' => $order->doctor_id,
+                    'related_model_type' => Order::class,
+                    'related_model_id' => $order->id,
+                ]
+            )
+        );
+
+        if ($lab && ($order->labs || $order->radiology || $order->cp)) {
+            $notificationService->notifyLab(
+                $lab,
+                $notificationService->buildPayload(
+                    'New lab order assigned',
+                    'A new encounter order has been assigned to your lab portal.',
+                    'lab_order_assigned',
+                    [
+                        'recipient_role' => 'Lab',
+                        'order_id' => $order->id,
+                        'patient_id' => $order->patient_id,
+                        'doctor_id' => $order->doctor_id,
+                        'related_model_type' => Order::class,
+                        'related_model_id' => $order->id,
+                    ]
+                )
+            );
         }
 
         return $this->getOrders($data['encounter_id'], $data['type'] ?? null);

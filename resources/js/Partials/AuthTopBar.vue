@@ -96,6 +96,10 @@ const toggleShareDetailsModal = () => {
     isShareDetailsModalOpen.value = !isShareDetailsModalOpen.value;
 };
 
+const closeShareModal = () => {
+    isShareDetailsModalOpen.value = false;
+};
+
 const switchRole = () => {
     router.post(
         route('switch.role'),
@@ -112,13 +116,13 @@ const switchRole = () => {
 
 const navigateToCharts = () => {
     charts.value = true;
- };
- const closeCharts = () => {
+};
+const closeCharts = () => {
     charts.value = false;
- };
+};
 
- const generateCharts = () => {
-    
+const generateCharts = () => {
+
     axios.post(route('admin.generateCharts'), {
         branch_id: selectedBranch.value,
     }, {
@@ -128,7 +132,7 @@ const navigateToCharts = () => {
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a');
         link.href = url;
-        
+
         // Get filename from Content-Disposition header or generate one
         const contentDisposition = res.headers['content-disposition'];
         let fileName = 'branch_charts_' + Date.now() + '.zip';
@@ -138,35 +142,35 @@ const navigateToCharts = () => {
                 fileName = fileNameMatch[1].replace(/['"]/g, '');
             }
         }
-        
+
         link.setAttribute('download', fileName);
         document.body.appendChild(link);
         link.click();
-        
+
         // Cleanup
         link.remove();
         window.URL.revokeObjectURL(url);
-        
+
         // Close the modal after successful download
         closeCharts();
     }).catch((error) => {
         console.error('Download failed:', error);
         // Handle error - could show an alert to the user
     });
-  };
+};
 
- const selectedBranch = ref(null);
- const branches = ref([]);
+const selectedBranch = ref(null);
+const branches = ref([]);
 
- const getBranches = () => {
+const getBranches = () => {
     axios.get(route('admin.getBranches')).then((res) => {
         branches.value = res.data;
     });
- };
+};
 
- onMounted(() => {
+onMounted(() => {
     getBranches();
- });
+});
 </script>
 
 <template>
@@ -196,7 +200,7 @@ const navigateToCharts = () => {
                     <PatientNavOptions v-if="role === 'Patient'" :windowWidth="windowWidth" />
 
                     <!-- CALENDAR ICON -->
-                    <div class="nav-card shadow-lg position-relative" data-tooltip="Appointment"
+                    <div class="nav-card shadow-lg position-relative" data-tooltip="Calendar"
                         data-tooltip-location="bottom" v-if="effectiveRole === 'Admin'"
                         @click="router.visit(route('admin.schedule.index'))">
                         <div class="nav-card-content">
@@ -205,8 +209,7 @@ const navigateToCharts = () => {
 
                     </div>
                     <div class="nav-card shadow-lg position-relative" data-tooltip="Charts"
-                        data-tooltip-location="bottom" v-if="effectiveRole === 'Admin'"
-                        @click="navigateToCharts()">    
+                        data-tooltip-location="bottom" v-if="effectiveRole === 'Admin'" @click="navigateToCharts()">
                         <div class="nav-card-content">
                             <i class="fa-solid fa fa-bar-chart" style="color:orangered;"></i>
                         </div>
@@ -223,7 +226,9 @@ const navigateToCharts = () => {
                             @click="switchRole"
                             :title="switchedRole ? 'Switch back to Admin' : 'Switch to Doctor view'">
                             <i class="fas fa-exchange-alt me-1"></i>
-                            {{ switchedRole ? 'Switch to Admin' : 'Switch to Doctor' }}
+                            <span class="d-none d-sm-inline">
+                                {{ switchedRole ? 'Switch to Admin' : 'Switch to Doctor' }}
+                            </span>
                         </button>
                         <NotificationsDropdown />
                     </div>
@@ -292,30 +297,31 @@ const navigateToCharts = () => {
 
     <Patient />
 
-    <ShareDetailsModal :isOpen="isShareDetailsModalOpen" :onClose="toggleShareDetailsModal"
-        :patient="$page.props?.selected_patient" />
-     <Modal :isOpen="showPasswordResetModal" title="Change Password" @close="() => (showPasswordResetModal = false)" size="lg">
-    <ResetPasswordModal @close="() => (showPasswordResetModal = false)" />
-  </Modal>
-  <Modal :isOpen="charts" title="Charts" @close="closeCharts" size="lg">
-    <form @submit.prevent="generateCharts">
-        <div class="row align-items-center">
-             <div class="col-md-6 mb-3">
-                 <BaseSelect v-model="selectedBranch" label="Select Branch" placeholder="Select Branch">
-                    <template v-for="branch in branches" :key="branch.id">
-                        <option :value="branch.id">
-                            {{ branch.name }}
-                            <span class="text-muted">({{ branch.main_branch_id === null ? 'Main' : 'Sub' }})</span>
-                        </option>
-                    </template>
-                </BaseSelect>
+    <ShareDetailsModal v-if="isShareDetailsModalOpen" :isOpen="isShareDetailsModalOpen" 
+        :patient="$page.props?.selected_patient"  @close="closeShareModal" />
+
+    <Modal :isOpen="showPasswordResetModal" title="Change Password" @close="() => (showPasswordResetModal = false)"
+        size="lg">
+        <ResetPasswordModal @close="() => (showPasswordResetModal = false)" />
+    </Modal>
+    <Modal :isOpen="charts" title="Charts" @close="closeCharts" size="lg">
+        <form @submit.prevent="generateCharts">
+            <div class="row align-items-center">
+                <div class="col-md-6 mb-3">
+                    <BaseSelect v-model="selectedBranch" label="Select Branch" placeholder="Select Branch">
+                        <template v-for="branch in branches" :key="branch.id">
+                            <option :value="branch.id">
+                                {{ branch.name }} ({{ branch.main_branch_id === null ? 'Main' : 'Sub' }})
+                            </option>
+                        </template>
+                    </BaseSelect>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-primary" type="submit">Generate Charts</button>
+                </div>
             </div>
-             <div class="col-md-6">
-                <button class="btn btn-primary" type="submit">Generate Charts</button>
-            </div>
-         </div>
-    </form>
-  </Modal>
+        </form>
+    </Modal>
 </template>
 
 <style scoped>

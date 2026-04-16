@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\MedicineManageRequest;
 use App\Models\Medicine;
 use App\Services\MedicineService;
-use Illuminate\Http\Request;
 
 class AMedicineController extends Controller
 {
@@ -22,10 +22,18 @@ class AMedicineController extends Controller
     public function index()
     {
         $medicines = $this->medicineService->list(request());
-        $request = request();
-        $keyword = $request->get('keyword') ?? '';
+        $data = $this->medicineService->getFormData();
 
-        return inertia('Admin/Manage/MedicinesList', compact('medicines', 'request', 'keyword'));
+        return inertia('Admin/Manage/MedicinesList', [
+            'medicines' => $medicines,
+            'filters' => [
+                'keyword' => request()->string('keyword')->toString() ?: request()->string('search')->toString(),
+                'status' => request()->input('status', ''),
+                'dosage_form' => request()->input('dosage_form', ''),
+                'route_name' => request()->input('route_name', ''),
+            ],
+            'data' => $data,
+        ]);
     }
 
     /**
@@ -42,7 +50,7 @@ class AMedicineController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(MedicineManageRequest $request)
     {
         $this->medicineService->upsert($request->all());
 

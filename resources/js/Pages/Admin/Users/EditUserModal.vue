@@ -31,6 +31,7 @@ const form = useForm({
     role: "",
     first_name: "",
     last_name: "",
+    name: "",
     sex: "",
     email: "",
     mobile: "",
@@ -133,6 +134,7 @@ const update = (user) => {
         // Basic user info
         form.first_name = user?.doctor?.first_name || "";
         form.last_name = user?.doctor?.last_name || "";
+        form.name = user?.doctor?.first_name + " " + user?.doctor?.last_name || "";
         form.sex = user.sex || "";
         form.email = user.email || "";
         form.mobile = user.mobile || "";
@@ -273,8 +275,8 @@ defineExpose({ update });
 
             <!-- Role -->
             <div class="col-md-6 mb-3">
-                <BaseSelect v-model="form.role"  label="Role" placeholder="Select Role" :class="form.id?'d-none':''" required
-                           :error="form.errors.role">
+                <BaseSelect v-model="form.role" label="Role" placeholder="Select Role" :class="form.id ? 'd-none' : ''"
+                    required :error="form.errors.role">
                     <option value="">Select Role</option>
                     <option value="Doctor">Doctor</option>
                     <option value="Virtual Assistant">Assistant</option>
@@ -374,7 +376,9 @@ defineExpose({ update });
                 <BaseSelect v-model="form.hospitalId" label="Branch" placeholder="Select Branch">
                     <option value="">Select Branch</option>
                     <template v-for="branch in branches" :key="branch.id">
-                        <option :value="branch.id">{{ branch.name }}<span class="text-muted"> ({{ branch.main_branch_id === null ? 'Main' : 'Sub' }})</span></option>
+                        <option :value="branch.id">
+                            {{ branch.name }} ({{ branch.main_branch_id === null ? 'Main' : 'Sub' }})
+                        </option>
                     </template>
                 </BaseSelect>
             </div>
@@ -384,7 +388,7 @@ defineExpose({ update });
             <button type="submit" class="btn btn-primary" :disabled="form.processing">
                 {{ form.processing ? 'Saving...' : (form.id ? 'Update User' : 'Add User') }}
             </button>
-             <button type="button" class="btn btn-danger" @click="closeModal" :disabled="form.processing">
+            <button type="button" class="btn btn-danger" @click="closeModal" :disabled="form.processing">
                 Close
             </button>
         </div>

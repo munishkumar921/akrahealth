@@ -5,7 +5,6 @@ import { useForm } from "@inertiajs/vue3";
 import Modal from '@/Components/Common/Modal.vue';
 import axios from 'axios';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import 'sweetalert2/src/sweetalert2.scss';
 
 // Define emits
 const emit = defineEmits(['template-selected', 'update-template']);
@@ -529,9 +528,6 @@ const updateTemplate = () => {
     color: #0d6efd;
 }
 
-.cursor-pointer {
-    cursor: pointer;
-}
 
 .template-actions i,
 .template-item-actions i {

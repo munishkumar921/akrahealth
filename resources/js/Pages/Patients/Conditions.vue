@@ -1,193 +1,253 @@
 <script setup>
 import AuthLayout from "@/Layouts/AuthLayout.vue";
-import { ref, computed, reactive } from 'vue';
-import { Link, useForm, router  } from "@inertiajs/vue3";
+import { computed, ref } from "vue";
+import { router } from "@inertiajs/vue3";
 import Table from "@/Components/Table/Table.vue";
-import TabSelector from "@/Components/Table/Partials/TabSelector.vue";
- 
+
 const props = defineProps({
-    issues: Object,
-    keyword: String,
-
+    issues: {
+        type: Object,
+        default: () => ({ data: [], links: [] }),
+    },
+    filters: {
+        type: Object,
+        default: () => ({}),
+    },
 });
-const currentTab = ref("all"); // default to Problem
- 
- const form = reactive({
-  record_type: 'problem',
+
+const perPageOptions = [10, 15, 25, 50, 100];
+const perPage = ref(Number(new URLSearchParams(window.location.search).get("per_page")) || 10);
+
+const filterForm = ref({
+    keyword: props.filters?.keyword || "",
+    record_type: props.filters?.record_type || "",
 });
 
-// ✅ Table columns
+const recordTypeOptions = [
+    { value: "", label: "All records" },
+    { value: "problem", label: "Problems" },
+    { value: "past", label: "Past Medical History" },
+    { value: "surgery", label: "Surgical History" },
+];
+
 const tableColumns = [
-     { label: "Issue", key: "issue" },
-    { label: "Note", key: "notes" },
-    { label: "Active Date", key: "date_active" },
-    { label: "Inactive Date", key: "date_inactive" },
+    { label: "Issue", key: "issue", type: "slot", slot: "issue", align: "left" },
+    { label: "Type", key: "type_label", type: "slot", slot: "type", align: "left" },
+    { label: "Note", key: "notes", type: "slot", slot: "notes", align: "left" },
+    { label: "Active Date", key: "date_active", align: "left" },
+    { label: "Inactive Date", key: "date_inactive", align: "left" },
 ];
-const currentData = computed(() => {
-    let list = [];
 
-    // Handle both paginated and array formats safely
-    if (Array.isArray(props.issues)) {
-        list = props.issues; // Direct array
-    } else if (props.issues && Array.isArray(props.issues.data)) {
-        list = props.issues.data; // Paginator object
+const activeFilterCount = computed(() =>
+    Object.values(filterForm.value).filter((value) => value !== null && value !== "").length
+);
+
+const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+
+const resultSummary = computed(() => {
+    const total = props.issues?.total ?? props.issues?.data?.length ?? 0;
+    const from = props.issues?.from ?? (total ? 1 : 0);
+    const to = props.issues?.to ?? total;
+
+    if (!total) {
+        return "No conditions found";
     }
 
-    // Select base data based on record_type
-    switch (currentTab.value) {
-        case "problem":
-            return list.filter(item => item.type === 'Problem');
-        case "past":
-            return list.filter(item => item.type === 'MedicalHistory');
-        case "surgery":
-            return list.filter(item => item.type === 'SurgicalHistory');
-        default:
-            return list; // Return all if no type matches or list is empty
-    }
+    return `Showing ${from}-${to} of ${total} conditions`;
 });
 
-const ConditionTabs = [
-    { label: "All", value: "all" },
-    { label: "Problems", value: "problem" },
-    { label: "Past Medical History", value: "past" },
-    { label: "Surgical History", value: "surgery" },
-];
-const updateCurrentTab = (newTab) => {
-    currentTab.value = newTab;
-    form.record_type = newTab;
+const buildQuery = (overrides = {}) => {
+    const params = new URLSearchParams(window.location.search);
+    const query = {
+        per_page: params.get("per_page") || undefined,
+        sort: params.get("sort") || undefined,
+        direction: params.get("direction") || undefined,
+        ...filterForm.value,
+        ...overrides,
+    };
+
+    return Object.fromEntries(
+        Object.entries(query).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+    );
 };
 
+const applyFilters = () => {
+    router.get(route("patient.conditions"), buildQuery({ page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
+const clearFilters = () => {
+    filterForm.value = {
+        keyword: "",
+        record_type: "",
+    };
+
+    router.get(route("patient.conditions"), {}, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
+const updatePerPage = () => {
+    router.get(route("patient.conditions"), buildQuery({ per_page: perPage.value, page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
 </script>
 
 <template>
     <AuthLayout title="Conditions" description="Conditions" heading="Conditions">
-        <div class="d-flex gap-3 align-items-center justify-content-between mb-3">
-             <h3 class="mb-0">Conditions</h3>
+        <div class="users-toolbar card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+                    <div>
+                        <h3 class="mb-1">Conditions</h3>
+                        <p class="text-muted mb-0">{{ resultSummary }}</p>
+                    </div>
 
-             <TabSelector class="mb--3"
-                :tabs="ConditionTabs"
-                :currentTab="currentTab"
-                @update:currentTab="updateCurrentTab"
-            />
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+                        <span v-if="hasActiveFilters" class="filter-count-badge">
+                            {{ activeFilterCount }} filter{{ activeFilterCount > 1 ? "s" : "" }} active
+                        </span>
+                        <button v-if="hasActiveFilters" type="button" class="btn btn-outline-secondary btn-sm"
+                            @click="clearFilters">
+                            <i class="bi bi-x-circle me-1"></i>Clear filters
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-sm-6 col-xl-4">
+                        <label class="form-label text-muted small text-uppercase mb-2">Search</label>
+                        <div class="input-group conditions-search-control">
+                            <span class="input-group-text bg-white border-end-0 border col-1 rounded-circle-left">
+                                <i class="bi bi-search text-muted"></i>
+                            </span>
+                            <input v-model="filterForm.keyword" type="search" class="form-control border-start-0"
+                                placeholder="Search conditions" @keydown.enter.prevent="applyFilters" />
+                            <button type="button" class="btn btn-primary" @click="applyFilters">Search</button>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        <label class="form-label text-muted small text-uppercase mb-2">Record Type</label>
+                        <select v-model="filterForm.record_type" class="form-select" @change="applyFilters">
+                            <option v-for="option in recordTypeOptions" :key="option.value" :value="option.value">
+                                {{ option.label }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- TABLE -->
-        <Table
-            class="conditions-table"
-            :columns="tableColumns"
-            :data="currentData.data ? currentData : { data: currentData }"
-            :search="keyword"
-        >
-            <template #actions="{ row }">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-0 p-md-3">
+                <div class="d-flex justify-content-end align-items-center px-3 px-md-0 pt-3 pt-md-0 pb-2">
+                    <div class="d-flex align-items-center gap-2 rows-select-wrap">
+                        <label for="conditions-per-page" class="text-muted small text-uppercase mb-0">Rows</label>
+                        <select id="conditions-per-page" v-model="perPage"
+                            class="form-select form-select-sm top-page-select" @change="updatePerPage">
+                            <option v-for="option in perPageOptions" :key="option" :value="option">
+                                {{ option }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
 
-                <!-- Problem -->
-                <template v-if="form.record_type === 'problem'">
-                    <button
-                        class="btn btn-info btn-sm me-2" bs-tooltip="Move to Problem"
-                        @click="router.get(route('patient.move.condition', { id: row.id, type: 'MedicalHistory' }))">
-                        <i class="fa-solid fa-share"></i>
-                    </button>
+                <Table :columns="tableColumns" :data="issues" :search-show="false" :PageOptions="false">
+                    <template #issue="{ row }">
+                        <div class="text-start">
+                            <div class="fw-semibold text-dark">{{ row.issue || "-" }}</div>
+                        </div>
+                    </template>
 
-                    <button
-                        class="btn btn-dark btn-sm" bs-tooltip="Move to Surgical History"
-                        @click="router.get(route('patient.move.condition', { id: row.id, type: 'SurgicalHistory' }))">
-                        <i class="fa-solid fa-share"></i>
-                    </button>
-                </template>
+                    <template #type="{ row }">
+                        <div class="text-start">
+                            <div class="fw-medium text-dark">{{ row.type_label || "-" }}</div>
+                        </div>
+                    </template>
 
-                <!-- Past -->
-                <template v-else-if="form.record_type === 'past'">
-                    <button
-                        class="btn btn-info btn-sm me-2" data-tooltip="Move to Problem" 
-                        @click="router.get(route('patient.move.condition', { id: row.id, type: 'Problem' }))">
-                        <i class="fa-solid fa-share"></i>
-                    </button>
+                    <template #notes="{ row }">
+                        <div class="text-start condition-note">
+                            {{ row.notes || "-" }}
+                        </div>
+                    </template>
 
-                    <button
-                        class="btn btn-dark btn-sm" data-tooltip="Move to Surgical History"
-                        @click="router.get(route('patient.move.condition', { id: row.id, type: 'SurgicalHistory' }))">
-                        <i class="fa-solid fa-share"></i>
-                    </button>
-                </template>
+                    <template #actions="{ row }">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <button v-if="row.can_move_to_problem" class="btn btn-info btn-sm action-btn"
+                                title="Move to Problem"
+                                @click="router.get(route('patient.move.condition', { id: row.id, type: 'Problem' }))">
+                                <i class="fa-solid fa-share"></i>
+                            </button>
 
-                <!-- Surgery -->
-                <template v-else>
-                    <button
-                        class="btn btn-info btn-sm me-2" data-tooltip="Move to Problem"
-                        @click="router.get(route('patient.move.condition', { id: row.id, type: 'Problem' }))">
-                        <i class="fa-solid fa-share"></i>
-                    </button>
+                            <button v-if="row.can_move_to_medical_history" class="btn btn-dark btn-sm action-btn"
+                                title="Move to Past Medical History"
+                                @click="router.get(route('patient.move.condition', { id: row.id, type: 'MedicalHistory' }))">
+                                <i class="fa-solid fa-share"></i>
+                            </button>
 
-                    <button
-                        class="btn btn-dark btn-sm" data-tooltip="Move to Surgical History"
-                        @click="router.get(route('patient.move.condition', { id: row.id, type: 'MedicalHistory' }))">
-                        <i class="fa-solid fa-share"></i>
-                    </button>
-                </template>
-
-            </template>
-        </Table>
-
+                            <button v-if="row.can_move_to_surgical_history" class="btn btn-secondary btn-sm action-btn"
+                                title="Move to Surgical History"
+                                @click="router.get(route('patient.move.condition', { id: row.id, type: 'SurgicalHistory' }))">
+                                <i class="fa-solid fa-share"></i>
+                            </button>
+                        </div>
+                    </template>
+                </Table>
+            </div>
+        </div>
     </AuthLayout>
 </template>
-<style scoped>  
-    /* =========================
-   CONDITIONS – MOBILE UI
-   ========================= */
 
-@media (max-width: 768px) {
-
-    /* Title */
-    .conditions-title {
-        text-align: left;
-    }
-
-    /* Tabs: 2 x 2 layout */
-    .conditions-tabs .tab-selector {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
-
-    .conditions-tabs button {
-        width: 100%;
-        font-size: 13px;
-        padding: 8px 6px;
-        white-space: normal;
-        line-height: 1.2;
-    }
-
-    /* Table header stack */
-    .conditions-table .table-header {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    /* Search row */
-    .conditions-table .table-search {
-        display: flex;
-        gap: 6px;
-    }
-
-    .conditions-table .table-search input {
-        flex: 1;
-    }
-
-    /* Page size + pagination */
-    .conditions-table .table-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: nowrap;
-    }
-
-    /* Table text */
-    .conditions-table table {
-        font-size: 13px;
-    }
-    
+<style scoped>
+.users-toolbar {
+    border-radius: 20px;
 }
 
+.filter-count-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.conditions-search-control {
+    max-width: 100%;
+}
+
+.rows-select-wrap {
+    min-width: 118px;
+}
+
+.top-page-select {
+    width: 84px;
+}
+
+.condition-note {
+    max-width: 320px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.action-btn {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+}
 </style>

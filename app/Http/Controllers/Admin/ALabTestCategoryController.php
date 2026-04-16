@@ -22,10 +22,14 @@ class ALabTestCategoryController extends Controller
     public function index()
     {
         $categories = $this->labTestCategory->list(request());
-        $request = request();
-        $keyword = $request->get('keyword') ?? '';
 
-        return inertia('Admin/Labs/LabTestCategoriesList', compact('categories', 'request', 'keyword'));
+        return inertia('Admin/Labs/LabTestCategoriesList', [
+            'categories' => $categories,
+            'filters' => [
+                'keyword' => request()->string('keyword')->toString() ?: request()->string('search')->toString(),
+                'status' => request()->input('status', ''),
+            ],
+        ]);
     }
 
     /**
@@ -43,6 +47,12 @@ class ALabTestCategoryController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'is_active' => ['required', 'numeric'],
+        ]);
+
         $this->labTestCategory->upsert($request->all());
 
         return redirect()->route('admin.lab-test-categories.index')->with('success', 'Lab test category saved successfully.');

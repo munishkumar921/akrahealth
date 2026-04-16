@@ -1,200 +1,26 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import AuthLayout from "@/Layouts/AuthLayout2.vue";
-import { router } from '@inertiajs/vue3';
+import Table from "@/Components/Table/Table.vue";
+import { Link, router } from "@inertiajs/vue3";
 
 const props = defineProps({
     orders: {
         type: Object,
-        default: () => []
+        default: () => ({ data: [], links: [] }),
     },
-    data: Object,
-    patient: Object,
-    keyword: {
-        type: String,
-        default: ''
-    }
-});
-
-const currentTab = ref("laboratory");
-const searchQuery = ref(props.keyword || "");
-const selectedStatus = ref("");
-const sortOrder = ref("newest");
-const isLoading = ref(false);
-
-const formatDate = (dateString) => {
-    if (!dateString) return 'No Date';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-        return dateString; // Return original string if invalid
-    }
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return date.toLocaleDateString('en-US', options);
-};
-
-// Transform orders data into the expected structure
-const transformedOrders = computed(() => {
-    const result = {
-        laboratory: [],
-        imaging: [],
-        cardiopulmonary: [],
-        referrals: []
-    };
-
-    props.orders.forEach(order => {
-        // Helper function to parse and format order text
-        const parseOrderText = (data) => {
-            if (!data) return null;
-
-            if (Array.isArray(data)) {
-                if (data.length === 0) return null;
-                return data.map(item => {
-                    if (typeof item === 'string') return item;
-                    if (item.name) return item.name;
-                    if (item.text) return item.text;
-                    return JSON.stringify(item);
-                }).join(', ');
-            }
-
-            if (typeof data === 'string') {
-                if (data.trim() === '') return null;
-                try {
-                    const parsed = JSON.parse(data);
-                    if (Array.isArray(parsed)) {
-                        if (parsed.length === 0) return null;
-                        return parsed.map(item => {
-                            if (typeof item === 'string') return item;
-                            if (item.name) return item.name;
-                            if (item.text) return item.text;
-                            return JSON.stringify(item);
-                        }).join(', ');
-                    } else if (typeof parsed === 'object' && parsed !== null) {
-                        return parsed.name || parsed.text || JSON.stringify(parsed);
-                    }
-                    return parsed.toString();
-                } catch (e) {
-                    return data;
-                }
-            }
-
-            if (typeof data === 'object' && data !== null) {
-                return data.name || data.text || JSON.stringify(data);
-            }
-
-            return data.toString();
-        };
-
-        // Handle labs
-        const labText = parseOrderText(order.labs);
-        if (labText) {
-            result.laboratory.push({
-                id: order.id,
-                date: formatDate(order.orders_date),
-                raw_date: order.orders_date,
-                text: labText,
-                status: order.is_completed ? 'completed' : 'pending',
-                description: order.notes || 'No description',
-                type: 'laboratory',
-                doctor: order.doctor?.name ||order.doctor?.user?.name || 'Unknown Doctor',
-                encounter_id: order.encounter_id
-            });
-        }
-
-        // Handle radiology
-        const radiologyText = parseOrderText(order.radiology);
-        if (radiologyText) {
-            result.imaging.push({
-                id: order.id,
-                date: formatDate(order.orders_date),
-                raw_date: order.orders_date,
-                text: radiologyText,
-                status: order.is_completed ? 'completed' : 'pending',
-                description: order.notes || 'No description',
-                type: 'imaging',
-                doctor: order.doctor?.name ||order.doctor?.user?.name || 'Unknown Doctor',
-                encounter_id: order.encounter_id
-            });
-        }
-
-        // Handle cardiopulmonary
-        const cpText = parseOrderText(order.cp);
-        if (cpText) {
-            result.cardiopulmonary.push({
-                id: order.id,
-                date: formatDate(order.orders_date),
-                raw_date: order.orders_date,
-                text: cpText,
-                status: order.is_completed ? 'completed' : 'pending',
-                description: order.notes || 'No description',
-                type: 'cardiopulmonary',
-                doctor: order.doctor?.name ||order.doctor?.user?.name || 'Unknown Doctor',
-                encounter_id: order.encounter_id
-            });
-        }
-
-        // Handle referrals
-        const referralsText = parseOrderText(order.referrals);
-        if (referralsText) {
-            result.referrals.push({
-                id: order.id,
-                date: formatDate(order.orders_date),
-                raw_date: order.orders_date,
-                text: referralsText,
-                status: order.is_completed ? 'completed' : 'pending',
-                description: order.notes || 'No description',
-                type: 'referrals',
-                doctor: order.doctor?.name ||order.doctor?.user?.name || 'Unknown Doctor',
-                encounter_id: order.encounter_id
-            });
-        }
-    });
-
-    return result;
-});
-
-// Get data for current tab
-const computedData = computed(() => {
-    return transformedOrders.value[currentTab.value] || [];
-});
-
-// Get count for each tab
-const getTabCount = (tabValue) => {
-    return transformedOrders.value[tabValue]?.length || 0;
-};
-
-// Get status count
-const getStatusCount = (status) => {
-    return computedData.value.filter(order => order.status === status).length;
-};
-
-// Filter and sort data based on search query, status, and sort order
-const filteredData = computed(() => {
-    let data = computedData.value;
-
-    // Apply status filter
-    if (selectedStatus.value) {
-        data = data.filter(order => order.status === selectedStatus.value);
-    }
-
-    // Apply search filter
-    if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase();
-        data = data.filter(order =>
-            order.text?.toLowerCase().includes(query) ||
-            order.description?.toLowerCase().includes(query) ||
-            order.date?.includes(query) ||
-            order.doctor?.toLowerCase().includes(query)
-        );
-    }
-
-    // Apply sorting
-    data = [...data].sort((a, b) => {
-        const dateA = new Date(a.raw_date);
-        const dateB = new Date(b.raw_date);
-        return sortOrder.value === "newest" ? dateB - dateA : dateA - dateB;
-    });
-
-    return data;
+    patient: {
+        type: Object,
+        default: null,
+    },
+    filters: {
+        type: Object,
+        default: () => ({}),
+    },
+    tabCounts: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
 const tabs = [
@@ -204,268 +30,244 @@ const tabs = [
     { value: "referrals", label: "Referrals", iconClass: "icon-secondary", icon: "fa fa-user-md", color: "text-secondary" },
 ];
 
-const updateCurrentTab = (newTab) => {
-    currentTab.value = newTab;
-    searchQuery.value = "";
-    selectedStatus.value = "";
-};
+const perPageOptions = [10, 15, 25, 50, 100];
+const perPage = ref(Number(new URLSearchParams(window.location.search).get("per_page")) || 10);
+const currentTab = ref(props.filters?.tab || "laboratory");
 
-// Get status color class
-const getStatusClass = (status) => {
-    switch (status?.toLowerCase()) {
-        case 'completed':
-            return 'bg-success';
-        case 'pending':
-            return 'bg-warning';
-        case 'cancelled':
-            return 'bg-danger';
-        default:
-            return 'bg-secondary';
+const filterForm = ref({
+    keyword: props.filters?.keyword || "",
+    status: props.filters?.status || "",
+});
+
+const statusOptions = [
+    { value: "", label: "All status" },
+    { value: "completed", label: "Completed" },
+    { value: "pending", label: "Pending" },
+];
+
+const columns = [
+    { label: "Order", key: "text", type: "slot", slot: "order_text", align: "left" },
+    { label: "Description", key: "description", type: "slot", slot: "description", align: "left" },
+    { label: "Doctor", key: "doctor", type: "slot", slot: "doctor", align: "left" },
+    { label: "Date", key: "date", type: "slot", slot: "date", align: "left" },
+    { label: "Status", key: "status", type: "slot", slot: "status", align: "center" },
+];
+
+const activeFilterCount = computed(() =>
+    Object.values(filterForm.value).filter((value) => value !== null && value !== "").length
+);
+
+const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+
+const currentTabInfo = computed(() => tabs.find((tab) => tab.value === currentTab.value) || tabs[0]);
+
+const resultSummary = computed(() => {
+    const total = props.orders?.total ?? props.orders?.data?.length ?? 0;
+    const from = props.orders?.from ?? (total ? 1 : 0);
+    const to = props.orders?.to ?? total;
+
+    if (!total) {
+        return `No ${currentTabInfo.value.label.toLowerCase()} orders found`;
     }
+
+    return `Showing ${from}-${to} of ${total} ${currentTabInfo.value.label.toLowerCase()} orders`;
+});
+
+const buildQuery = (overrides = {}) => {
+    const params = new URLSearchParams(window.location.search);
+    const query = {
+        per_page: params.get("per_page") || undefined,
+        tab: currentTab.value,
+        ...filterForm.value,
+        ...overrides,
+    };
+
+    return Object.fromEntries(
+        Object.entries(query).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+    );
 };
 
-// Get status badge style
-const getStatusStyle = (status) => {
-    switch (status?.toLowerCase()) {
-        case 'completed':
-            return { backgroundColor: '#28a745', color: '#fff' };
-        case 'pending':
-            return { backgroundColor: '#ffc107', color: '#212529' };
-        case 'cancelled':
-            return { backgroundColor: '#dc3545', color: '#fff' };
-        default:
-            return { backgroundColor: '#6c757d', color: '#fff' };
-    }
+const applyFilters = () => {
+    router.get(route("patient.orders"), buildQuery({ page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
 };
 
-// Clear all filters
 const clearFilters = () => {
-    searchQuery.value = "";
-    selectedStatus.value = "";
+    filterForm.value = {
+        keyword: "",
+        status: "",
+    };
+
+    router.get(route("patient.orders"), buildQuery({ keyword: undefined, status: undefined, page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
 };
 
-// Check if any filters are active
-const hasActiveFilters = computed(() => {
-    return searchQuery.value || selectedStatus.value;
-});
+const changeTab = (tab) => {
+    currentTab.value = tab;
+    router.get(route("patient.orders"), buildQuery({ tab, page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
 
-// Get current tab info
-const currentTabInfo = computed(() => {
-    return tabs.find(t => t.value === currentTab.value) || tabs[0];
-});
+const updatePerPage = () => {
+    router.get(route("patient.orders"), buildQuery({ per_page: perPage.value, page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
 
-// Watch for filter changes and apply
-watch([searchQuery, selectedStatus, sortOrder], () => {
-    // Could implement live filtering here if needed
-});
-
+const getStatusClass = (status) => {
+    switch ((status || "").toLowerCase()) {
+        case "completed":
+            return "status-pill status-pill--completed";
+        case "pending":
+            return "status-pill status-pill--pending";
+        default:
+            return "status-pill";
+    }
+};
 </script>
 
 <template>
-    <AuthLayout 
-        :title="`${currentTabInfo.label} Orders`" 
-        :description="`Manage your ${currentTabInfo.label.toLowerCase()} orders`" 
-        :heading="`${currentTabInfo.label} Orders`"
-    >
-        <div class="row">
-            <!-- Sidebar Navigation -->
-            <div class="col-lg-3">
-                <div class="iq-card border-0 shadow-sm mb-4">
-                    <div class="iq-card-header bg-white py-3">
-                        <h5 class="card-title mb-0">
-                            <i class="fa fa-list-ul me-2"></i>Order Categories
-                        </h5>
-                    </div>
-                    <div class="iq-card-body">
+    <AuthLayout :title="`${currentTabInfo.label} Orders`"
+        :description="`Manage your ${currentTabInfo.label.toLowerCase()} orders`"
+        :heading="`${currentTabInfo.label} Orders`">
+        <div class="row g-4">
+            <div class="col-12 col-xl-3">
+                <div class="card border-0 shadow-sm orders-side-card">
+                    <div class="card-body">
                         <div class="finance-menu">
-                            <button 
-                                v-for="tab in tabs" 
-                                :key="tab.value" 
-                                type="button" 
-                                class="menu-item"
-                                :class="{ 
-                                    active: currentTab === tab.value,
-                                    'border-start border-4': currentTab === tab.value
-                                }" 
-                                @click="updateCurrentTab(tab.value)"
-                            >
+                            <button v-for="tab in tabs" :key="tab.value" type="button" class="menu-item"
+                                :class="{ active: currentTab === tab.value }" @click="changeTab(tab.value)">
                                 <div class="d-flex align-items-center w-100">
                                     <i :class="[tab.icon, tab.iconClass, tab.color]" class="me-3 fs-5"></i>
                                     <div class="flex-grow-1 text-start">
                                         <span class="label d-block">{{ tab.label }}</span>
-                                        <small class="text-muted">{{ getTabCount(tab.value) }} order(s)</small>
+                                        <small class="text-muted">{{ tabCounts?.[tab.value] || 0 }} order(s)</small>
                                     </div>
-                                    <span 
-                                        class="badge ms-2" 
-                                        :class="currentTab === tab.value ? 'bg-primary' : 'bg-light text-dark'"
-                                    >
-                                        {{ getTabCount(tab.value) }}
+                                    <span class="badge"
+                                        :class="currentTab === tab.value ? 'bg-primary' : 'bg-light text-dark'">
+                                        {{ tabCounts?.[tab.value] || 0 }}
                                     </span>
                                 </div>
                             </button>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Quick Stats Card -->
-                <div class="iq-card border-0 shadow-sm">
-                    <div class="iq-card-header bg-white py-3">
-                        <h6 class="card-title mb-0">
-                            <i class="fa fa-chart-pie me-2"></i>Quick Stats
-                        </h6>
-                    </div>
-                    <div class="iq-card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <span class="text-muted">Total Orders</span>
-                            <span class="badge bg-primary">{{ computedData.length }}</span>
+            <div class="col-12 col-xl-9">
+                <div class="users-toolbar card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                        <div
+                            class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h3 class="mb-1">{{ currentTabInfo.label }} Orders</h3>
+                                <p class="text-muted mb-0">{{ resultSummary }}</p>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+                                <span v-if="hasActiveFilters" class="filter-count-badge">
+                                    {{ activeFilterCount }} filter{{ activeFilterCount > 1 ? "s" : "" }} active
+                                </span>
+                                <button v-if="hasActiveFilters" type="button" class="btn btn-outline-secondary btn-sm"
+                                    @click="clearFilters">
+                                    <i class="bi bi-x-circle me-1"></i>Clear filters
+                                </button>
+                            </div>
                         </div>
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <span class="text-success">Completed</span>
-                            <span class="badge bg-success">{{ getStatusCount('completed') }}</span>
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="text-warning">Pending</span>
-                            <span class="badge bg-warning text-dark">{{ getStatusCount('pending') }}</span>
+
+                        <div class="row g-3 align-items-end">
+                            <div class="col-12 col-sm-6 col-xl-4">
+                                <label class="form-label text-muted small text-uppercase mb-2">Search</label>
+                                <div class="input-group orders-search-control">
+                                    <span
+                                        class="input-group-text bg-white border-end-0 border col-1 rounded-circle-left">
+                                        <i class="bi bi-search text-muted"></i>
+                                    </span>
+                                    <input v-model="filterForm.keyword" type="search"
+                                        class="form-control border-start-0"
+                                        :placeholder="`Search ${currentTabInfo.label.toLowerCase()} orders`"
+                                        @keydown.enter.prevent="applyFilters" />
+                                    <button type="button" class="btn btn-primary" @click="applyFilters">Search</button>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-sm-6 col-xl-3">
+                                <label class="form-label text-muted small text-uppercase mb-2">Status</label>
+                                <select v-model="filterForm.status" class="form-select" @change="applyFilters">
+                                    <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                                        {{ option.label }}
+                                    </option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Main Content -->
-            <div class="col-lg-9">
-                <div class="iq-card border-0 shadow-sm">
-                    <div class="iq-card-header bg-white d-flex flex-wrap justify-content-between align-items-center py-3">
-                        <div>
-                            <h6 class="card-title mb-0">
-                                <i :class="[currentTabInfo.icon, currentTabInfo.color, 'me-2']"></i>
-                                {{ currentTabInfo.label }} Orders
-                            </h6>
-                            <small class="text-muted">{{ filteredData.length }} order(s) found</small>
-                        </div>
-                        <div class="d-flex align-items-center gap-2 flex-wrap mt-3 mt-lg-0">
-                            <!-- Sort Dropdown -->
-                            <select 
-                                v-model="sortOrder" 
-                                class="form-select form-select-sm"
-                                style="width: auto;"
-                            >
-                                <option value="newest">Newest First</option>
-                                <option value="oldest">Oldest First</option>
-                            </select>
-
-                            <!-- Status Filter -->
-                            <select 
-                                v-model="selectedStatus" 
-                                class="form-select form-select-sm"
-                                style="width: auto;"
-                            >
-                                <option value="">All Status</option>
-                                <option value="completed">Completed</option>
-                                <option value="pending">Pending</option>
-                            </select>
-
-                            <!-- Clear Filters Button -->
-                            <button 
-                                v-if="hasActiveFilters"
-                                class="btn btn-outline-danger btn-sm"
-                                @click="clearFilters"
-                                title="Clear filters"
-                            >
-                                <i class="fa fa-times me-1"></i>Clear
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Search Bar -->
-                    <div class="px-3 pt-2 pb-0">
-                        <div class="iq-search-bar">
-                            <form class="searchbox">
-                                <input 
-                                    v-model="searchQuery" 
-                                    type="search" 
-                                    class="text search-input form-control"
-                                    :placeholder="`Search ${currentTabInfo.label.toLowerCase()} orders...`" 
-                                />
-                                <div class="search-link">
-                                    <i class="ri-search-line"></i>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-
-                    <div class="iq-card-body">
-                        <!-- Empty State -->
-                        <div v-if="filteredData.length === 0" class="text-center py-5 px-3">
-                            <div class="empty-state-icon mb-3">
-                                <i :class="[currentTabInfo.icon, 'fa-4x', currentTabInfo.color]"></i>
-                            </div>
-                            <h5 class="text-muted mb-2">
-                                {{ hasActiveFilters ? 'No matching orders found' : `No ${currentTabInfo.label.toLowerCase()} orders yet` }}
-                            </h5>
-                            <p class="text-muted mb-0">
-                                {{ hasActiveFilters ? 'Try adjusting your search or filter criteria.' : 'Your orders will appear here once created by your healthcare provider.' }}
-                            </p>
-                            <button 
-                                v-if="hasActiveFilters"
-                                class="btn btn-primary mt-3"
-                                @click="clearFilters"
-                            >
-                                <i class="fa fa-redo me-1"></i>View All Orders
-                            </button>
-                        </div>
-
-                        <!-- Orders List -->
-                        <div v-else class="orders-list px-3">
-                            <div 
-                                v-for="order in filteredData" 
-                                :key="order.id" 
-                                class="order-item border rounded-3 p-3 mb-3 shadow-sm"
-                            >
-                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                                    <div class="d-flex align-items-start flex-grow-1">
-                                        <div class="order-icon-wrapper me-3">
-                                            <i :class="[currentTabInfo.icon, 'fa-2x', currentTabInfo.color]"></i>
-                                        </div>
-                                        <div class="order-content flex-grow-1">
-                                            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                                                <h6 class="mb-0 text-dark">{{ order.text || 'Untitled Order' }}</h6>
-                                                <span 
-                                                    class="badge" 
-                                                    :style="getStatusStyle(order.status)"
-                                                >
-                                                    {{ order.status || 'Pending' }}
-                                                </span>
-                                            </div>
-                                            <p class="mb-1 text-muted small">
-                                                {{ order.description || 'No description available' }}
-                                            </p>
-                                            <div class="d-flex flex-wrap gap-3 text-muted small">
-                                                <span>
-                                                    <i class="fa fa-calendar-alt me-1"></i>
-                                                    {{ order.date }}
-                                                </span>
-                                                <span v-if="order.doctor">
-                                                    <i class="fa fa-user-md me-1"></i>
-                                                    {{ order.doctor }}
-                                                </span>
-                                                <span v-if="order.encounter_id">
-                                                    <i class="fa fa-file-medical me-1"></i>
-                                                    Encounter #{{ order.encounter_id }}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="order-actions">
-                                        <button 
-                                            class="btn btn-outline-primary btn-sm"
-                                            title="View Details"
-                                        >
-                                            <i class="fa fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-0 p-md-3">
+                        <div class="d-flex justify-content-end align-items-center px-3 px-md-0 pt-3 pt-md-0 pb-2">
+                            <div class="d-flex align-items-center gap-2 rows-select-wrap">
+                                <label for="orders-per-page" class="text-muted small text-uppercase mb-0">Rows</label>
+                                <select id="orders-per-page" v-model="perPage"
+                                    class="form-select form-select-sm top-page-select" @change="updatePerPage">
+                                    <option v-for="option in perPageOptions" :key="option" :value="option">
+                                        {{ option }}
+                                    </option>
+                                </select>
                             </div>
                         </div>
+
+                        <Table :columns="columns" :data="orders" :search-show="false" :PageOptions="false">
+                            <template #order_text="{ row }">
+                                <div class="text-start">
+                                    <div class="fw-semibold text-dark">{{ row.text || "-" }}</div>
+                                    <div class="text-muted small">Encounter #{{ row.encounter_id || "-" }}</div>
+                                </div>
+                            </template>
+
+                            <template #description="{ row }">
+                                <div class="text-start">
+                                    <div class="fw-medium text-dark">{{ row.description || "-" }}</div>
+                                </div>
+                            </template>
+
+                            <template #doctor="{ row }">
+                                <div class="text-start">
+                                    <div class="fw-medium text-dark">{{ row.doctor || "-" }}</div>
+                                </div>
+                            </template>
+
+                            <template #date="{ row }">
+                                <div class="text-start">
+                                    <div class="fw-medium text-dark">{{ row.date || "-" }}</div>
+                                </div>
+                            </template>
+
+                            <template #status="{ row }">
+                                <div class="d-flex justify-content-center">
+                                    <span :class="getStatusClass(row.status)">{{ row.status || "-" }}</span>
+                                </div>
+                            </template>
+
+                            <template #actions="{ row }">
+                                <div class="d-flex gap-2 justify-content-end">
+                                    <Link :href="row.view_route" class="btn btn-success action-btn" title="View">
+                                        <i class="bi bi-eye"></i>
+                                    </Link>
+                                </div>
+                            </template>
+                        </Table>
                     </div>
                 </div>
             </div>
@@ -474,171 +276,95 @@ watch([searchQuery, selectedStatus, sortOrder], () => {
 </template>
 
 <style scoped>
+.users-toolbar,
+.orders-side-card {
+    border-radius: 20px;
+}
+
 .finance-menu {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0.625rem;
 }
 
 .menu-item {
     display: flex;
     align-items: center;
+    gap: 0.75rem;
     width: 100%;
+    padding: 0.85rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
     background: #fff;
-    border: 1px solid #eef0f4;
-    border-radius: 8px;
-    padding: 12px 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    color: #334155;
     text-align: left;
-}
-
-.menu-item:hover {
-    background: #f8f9fa;
-    border-color: #d1d5db;
+    transition: all 0.2s ease;
 }
 
 .menu-item.active {
-    background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf4 100%);
-    border-color: #6f42c1;
-    box-shadow: 0 2px 8px rgba(111, 66, 193, 0.15);
-}
-
-.menu-item.active .label {
-    color: #6f42c1;
-    font-weight: 600;
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
 }
 
 .label {
-    font-size: 14px;
-    color: #2b2b2b;
-    transition: color 0.2s ease;
+    font-weight: 600;
+    font-size: 0.95rem;
 }
 
-.badge {
-    font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
-    font-weight: 500;
+.filter-count-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
-/* Order Item Styles */
-.order-item {
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-    animation: fadeIn 0.3s ease;
+.orders-search-control {
+    max-width: 100%;
 }
 
-.order-item:hover {
-    background-color: #f8f9fa;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+.rows-select-wrap {
+    min-width: 118px;
 }
 
-.order-icon-wrapper {
-    width: 50px;
-    height: 50px;
-    display: flex;
+.top-page-select {
+    width: 84px;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #f8f9fa;
-    border-radius: 12px;
-    flex-shrink: 0;
+    border-radius: 10px;
 }
 
-.order-actions {
-    flex-shrink: 0;
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 90px;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #e2e8f0;
+    color: #475569;
+    text-transform: capitalize;
 }
 
-/* Icon Colors */
-.icon-success {
-    color: #28a745;
+.status-pill--completed {
+    background: #dcfce7;
+    color: #166534;
 }
 
-.icon-warning {
-    color: #ffc107;
-}
-
-.icon-primary {
-    color: #0d6efd;
-}
-
-.icon-secondary {
-    color: #6c757d;
-}
-
-/* Empty State */
-.empty-state-icon {
-    opacity: 0.5;
-}
-
-/* Search Box */
-.searchbox {
-    position: relative;
-}
-
-.search-input {
-    padding-left: 40px;
-    border-radius: 8px;
-    border: 1px solid #eef0f4;
-}
-
-.search-input:focus {
-    border-color: #6f42c1;
-    box-shadow: 0 0 0 2px rgba(111, 66, 193, 0.1);
-}
-
-.search-link {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #6c757d;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .orders-header {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 12px;
-    }
-
-    .order-item {
-        padding: 16px !important;
-    }
-
-    .order-content {
-        min-width: 100%;
-    }
-
-    .iq-search-bar,
-    .searchbox,
-    .search-input {
-        width: 100%;
-    }
-
-    .menu-item {
-        padding: 14px;
-    }
-}
-
-/* Card Styles */
-.iq-card {
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-.iq-card-header {
-    border-bottom: 1px solid #eef0f4;
-}
-
-/* Animation */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.status-pill--pending {
+    background: #fef3c7;
+    color: #92400e;
 }
 </style>

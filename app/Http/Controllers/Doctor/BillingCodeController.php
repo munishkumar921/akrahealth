@@ -8,6 +8,7 @@ use App\Models\Billing;
 use App\Models\BillingCore;
 use App\Models\Encounter;
 use App\Models\Invoice;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 
 class BillingCodeController extends Controller
@@ -57,51 +58,61 @@ class BillingCodeController extends Controller
             ]);
         }
 
-        /* creating invoice with pending status */
-        $lastInvoice = Invoice::latest()->first();
-        if ($lastInvoice) {
-            $invoice_number = $lastInvoice->invoice_number + 1;
-        } else {
-            $invoice_number = 1000001;
-        }
+        $invoicePayload = [
+            'patient_id' => $appointment->patient_id,
+            'user_id' => $appointment->created_by,
+            'doctor_id' => $appointment->doctor_id,
+            'hospital_id' => $appointment?->doctor?->hospital?->id,
+            'appointment_id' => $appointment->id,
+            'lab_order_id' => null,
+            'pharmacy_order_id' => null,
+            'subscription_id' => null,
+            'amount' => $appointment->fee_amount ?? 0,
+            'tax_amount' => 0,
+            'discount_amount' => $appointment->discount ?? 0,
+            'total_amount' => $appointment->total_amount ?? 0,
+            'currency' => $appointment->currency ?? 'INR',
+            'status' => 'pending',
+            'razorpay_invoice_id' => null,
+            'razorpay_payment_id' => null,
+            'razorpay_order_id' => null,
+            'razorpay_customer_id' => null,
+            'payment_method' => 'razorpay',
+            'due_date' => now(),
+            'paid_at' => now(),
+            'sent_at' => now(),
+            'viewed_at' => now(),
+            'items' => [],
+            'customer_details' => [],
+            'notes' => '',
+            'terms_conditions' => '',
+            'created_by' => $appointment->created_by,
+            'updated_by' => $appointment->created_by,
+        ];
 
-        Invoice::updateOrCreate(
-            [
-                'appointment_id' => $encounter->appointment_id,
-            ],
-            [
-                'invoice_number' => $invoice_number,
-                'patient_id' => $appointment->patient_id,
-                'user_id' => $appointment->created_by,
-                'doctor_id' => $appointment->doctor_id,
-                'hospital_id' => $appointment?->doctor?->hospital?->id,
-                'appointment_id' => $appointment->id,
-                'lab_order_id' => null,
-                'pharmacy_order_id' => null,
-                'subscription_id' => null,
-                'amount' => $appointment->fee_amount ?? 0,
-                'tax_amount' => 0,
-                'discount_amount' => $appointment->discount ?? 0,
-                'total_amount' => $appointment->total_amount ?? 0,
-                'currency' => $appointment->currency ?? 'INR',
-                'status' => 'pending',
-                'razorpay_invoice_id' => null,
-                'razorpay_payment_id' => null,
-                'razorpay_order_id' => null,
-                'razorpay_customer_id' => null,
-                'payment_method' => 'razorpay',
-                'due_date' => now(),
-                'paid_at' => now(),
-                'sent_at' => now(),
-                'viewed_at' => now(),
-                'items' => [],
-                'customer_details' => [],
-                'notes' => '',
-                'terms_conditions' => '',
-                'created_by' => $appointment->created_by,
-                'updated_by' => $appointment->created_by,
-            ]
-        );
+        $existingInvoice = Invoice::where('appointment_id', $encounter->appointment_id)->first();
+
+        if ($existingInvoice) {
+            $existingInvoice->fill($invoicePayload);
+            $existingInvoice->save();
+        } else {
+            for ($attempt = 0; $attempt < 3; $attempt++) {
+                try {
+                    Invoice::create([
+                        'invoice_number' => Invoice::generateInvoiceNumber(),
+                        ...$invoicePayload,
+                    ]);
+                    break;
+                } catch (QueryException $exception) {
+                    $isDuplicateInvoiceNumber = $exception->getCode() === '23000'
+                        && str_contains($exception->getMessage(), 'invoices_invoice_number_unique');
+
+                    if (! $isDuplicateInvoiceNumber || $attempt === 2) {
+                        throw $exception;
+                    }
+                }
+            }
+        }
 
         return response()->json(['success' => true, 'billingCode' => $billingCode, 'billing' => $billing]);
     }

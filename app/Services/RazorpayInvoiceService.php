@@ -5,10 +5,13 @@ namespace App\Services;
 use App\Mail\RazorpayInvoiceMail;
 use App\Models\Appointment;
 use App\Models\BillingCore;
+use App\Models\Hospital;
 use App\Models\Invoice;
 use App\Models\RazorpayInvoice;
 use App\Models\Transaction;
+use App\Models\UserSubscription;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -171,7 +174,24 @@ class RazorpayInvoiceService
 
         $invoice = $this->findInvoice($razorpayInvoiceId);
         if (! $invoice) {
+            $invoice = $this->findOrCreateSubscriptionInvoiceFromWebhook($entity);
+        }
+
+        if (! $invoice) {
             Log::warning('Razorpay: Invoice not found', ['razorpay_invoice_id' => $razorpayInvoiceId]);
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'Invoice sync failed',
+                    'A Razorpay webhook referenced an invoice that could not be mapped locally.',
+                    'invoice_sync_failed',
+                    [
+                        'meta' => [
+                            'razorpay_invoice_id' => $razorpayInvoiceId,
+                            'event' => $event,
+                        ],
+                    ]
+                )
+            );
 
             return null;
         }
@@ -207,6 +227,71 @@ class RazorpayInvoiceService
         }
 
         return $invoice;
+    }
+
+    protected function findOrCreateSubscriptionInvoiceFromWebhook(array $entity): ?Invoice
+    {
+        $razorpaySubscriptionId = $entity['subscription_id'] ?? null;
+        if (! $razorpaySubscriptionId) {
+            return null;
+        }
+
+        $subscription = UserSubscription::with(['subscriptionPlan', 'user'])
+            ->where('razorpay_subscription_id', $razorpaySubscriptionId)
+            ->first();
+
+        if (! $subscription) {
+            return null;
+        }
+
+        $invoice = Invoice::where('subscription_id', $subscription->id)
+            ->where('razorpay_invoice_id', $entity['id'] ?? null)
+            ->first();
+
+        if ($invoice) {
+            return $invoice;
+        }
+
+        $hospitalId = Hospital::where('user_id', $subscription->user_id)->value('id');
+        $customerDetails = $entity['customer_details'] ?? [
+            'name' => $subscription->user?->name,
+            'email' => $subscription->user?->email,
+            'contact' => $subscription->user?->mobile,
+        ];
+
+        return Invoice::create([
+            'invoice_number' => Invoice::generateInvoiceNumber(),
+            'user_id' => $subscription->user_id,
+            'hospital_id' => $hospitalId,
+            'subscription_id' => $subscription->id,
+            'amount' => ($entity['amount'] ?? 0) / 100,
+            'tax_amount' => 0,
+            'discount_amount' => 0,
+            'total_amount' => ($entity['amount'] ?? 0) / 100,
+            'currency' => $entity['currency'] ?? ($subscription->currency ?? 'INR'),
+            'status' => $this->mapInvoiceStatusToLocal($entity['status'] ?? Invoice::STATUS_DRAFT),
+            'razorpay_invoice_id' => $entity['id'] ?? null,
+            'razorpay_payment_id' => $entity['payment_id'] ?? null,
+            'razorpay_order_id' => $entity['order_id'] ?? null,
+            'razorpay_customer_id' => $entity['customer_id'] ?? null,
+            'payment_method' => $entity['payments'][0]['method'] ?? 'razorpay',
+            'due_date' => isset($entity['expire_by']) ? Carbon::createFromTimestamp($entity['expire_by'])->toDateString() : now()->toDateString(),
+            'paid_at' => ! empty($entity['paid_at']) ? Carbon::createFromTimestamp($entity['paid_at']) : null,
+            'sent_at' => ! empty($entity['issued_at']) ? Carbon::createFromTimestamp($entity['issued_at']) : now(),
+            'items' => $entity['line_items'] ?? [[
+                'name' => $subscription->subscriptionPlan?->title ?? 'Subscription Renewal',
+                'description' => 'Auto-renewed subscription invoice',
+                'quantity' => 1,
+                'unit_price' => ($entity['amount'] ?? 0) / 100,
+                'tax_amount' => 0,
+                'discount_amount' => 0,
+            ]],
+            'customer_details' => $customerDetails,
+            'notes' => 'Subscription webhook invoice for '.$subscription->id,
+            'terms_conditions' => '',
+            'created_by' => $subscription->user_id,
+            'updated_by' => $subscription->user_id,
+        ]);
     }
 
     /**
@@ -248,6 +333,7 @@ class RazorpayInvoiceService
         $invoice->markAsPaid($paymentId, $paymentMethod);
         $this->createTransaction($invoice, $paymentId, $paymentMethod);
         $this->updateRelatedRecords($invoice);
+        $this->syncSubscriptionRenewalFromInvoiceEntity($entity, $invoice);
         $this->sendPaymentEmail($invoice);
 
         Log::info('Razorpay: Invoice paid', [
@@ -311,18 +397,46 @@ class RazorpayInvoiceService
      */
     protected function createTransaction(Invoice $invoice, ?string $paymentId, ?string $method, ?float $amount = null): void
     {
-        Transaction::create([
-            'invoice_id' => $invoice->id,
-            'patient_id' => $invoice->patient_id,
-            'user_id' => $invoice->user_id,
-            'payment_type' => 'razorpay',
-            'amount' => $amount ?? $invoice->total_amount,
-            'currency' => $invoice->currency,
-            'status' => 'completed',
-            'transaction_id' => $paymentId,
-            'payment_method' => $method ?? 'razorpay',
-            'notes' => 'Payment via Razorpay: '.$invoice->invoice_number,
-        ]);
+        if ($paymentId) {
+            Transaction::updateOrCreate(
+                ['transaction_id' => $paymentId],
+                [
+                    'invoice_id' => $invoice->id,
+                    'patient_id' => $invoice->patient_id,
+                    'user_id' => $invoice->user_id,
+                    'payment_type' => 'razorpay',
+                    'amount' => $amount ?? $invoice->total_amount,
+                    'currency' => $invoice->currency,
+                    'status' => 'completed',
+                    'razorpay_invoice_id' => $invoice->razorpay_invoice_id,
+                    'razorpay_order_id' => $invoice->razorpay_order_id,
+                    'razorpay_payment_id' => $paymentId,
+                    'payment_method' => $method ?? 'razorpay',
+                    'notes' => 'Payment via Razorpay: '.$invoice->invoice_number,
+                ]
+            );
+
+            return;
+        }
+
+        $existingTransaction = Transaction::where('invoice_id', $invoice->id)
+            ->where('status', 'completed')
+            ->where('payment_type', 'razorpay')
+            ->first();
+
+        if (! $existingTransaction) {
+            Transaction::create([
+                'invoice_id' => $invoice->id,
+                'patient_id' => $invoice->patient_id,
+                'user_id' => $invoice->user_id,
+                'payment_type' => 'razorpay',
+                'amount' => $amount ?? $invoice->total_amount,
+                'currency' => $invoice->currency,
+                'status' => 'completed',
+                'payment_method' => $method ?? 'razorpay',
+                'notes' => 'Payment via Razorpay: '.$invoice->invoice_number,
+            ]);
+        }
     }
 
     /**
@@ -339,7 +453,6 @@ class RazorpayInvoiceService
         if ($invoice->subscription_id) {
             \App\Models\UserSubscription::where('id', $invoice->subscription_id)->update([
                 'payment_status' => 'paid',
-                'razorpay_payment_id' => $invoice->razorpay_payment_id,
             ]);
         }
     }
@@ -478,36 +591,54 @@ class RazorpayInvoiceService
      */
     public function handlePaymentCaptured(array $payment): void
     {
-        $appointment = Appointment::with(['doctor.hospital', 'encounter'])->where('razorpay_order_id', $payment['order_id'])->firstOrFail();
+        $appointment = Appointment::with(['doctor.hospital', 'encounter'])
+            ->where('razorpay_order_id', $payment['order_id'] ?? null)
+            ->first();
+
+        if (! $appointment) {
+            Log::warning('Razorpay: Appointment not found for captured payment', [
+                'payment_id' => $payment['id'] ?? null,
+                'order_id' => $payment['order_id'] ?? null,
+            ]);
+
+            return;
+        }
 
         $appointment->update([
             'payment_status' => 'paid',
             'payment_method' => 'razorpay',
-            'payment_id' => $payment['id'] ?? null,
+            'payment_id' => $appointment->payment_id ?: ($payment['id'] ?? null),
         ]);
 
         if (isset($appointment->encounter->id)) {
-
             try {
-                BillingCore::create([
-                    'encounter_id' => $appointment->encounter->id,
-                    'patient_id' => $appointment->patient_id,
-                    'hospital_id' => $appointment->doctor->hospital->id,
-                    'other_billing_id' => null,
-                    'cpt' => null,
-                    'cpt_charge' => $appointment->fee_amount ?? 0,
-                    'icd_pointer' => null,
-                    'unit' => 1,
-                    'modifier' => null,
-                    'dos_f' => Carbon::now()->format('Y-m-d'),
-                    'dos_t' => Carbon::now()->format('Y-m-d'),
-                    'billing_group' => null,
-                    'payment' => $appointment->fee_amount ?? 0,
-                    'reason' => 'Appointment Payment',
-                    'payment_type' => 'razorpay',
-                    'service_start' => now(),
-                    'service_end' => now(),
-                ]);
+                $existingBilling = BillingCore::where('encounter_id', $appointment->encounter->id)
+                    ->where('patient_id', $appointment->patient_id)
+                    ->where('payment_type', 'razorpay')
+                    ->where('reason', 'Appointment Payment')
+                    ->first();
+
+                if (! $existingBilling) {
+                    BillingCore::create([
+                        'encounter_id' => $appointment->encounter->id,
+                        'patient_id' => $appointment->patient_id,
+                        'hospital_id' => $appointment->doctor->hospital->id,
+                        'other_billing_id' => null,
+                        'cpt' => null,
+                        'cpt_charge' => $appointment->fee_amount ?? 0,
+                        'icd_pointer' => null,
+                        'unit' => 1,
+                        'modifier' => null,
+                        'dos_f' => Carbon::now()->format('Y-m-d'),
+                        'dos_t' => Carbon::now()->format('Y-m-d'),
+                        'billing_group' => null,
+                        'payment' => $appointment->fee_amount ?? 0,
+                        'reason' => 'Appointment Payment',
+                        'payment_type' => 'razorpay',
+                        'service_start' => now(),
+                        'service_end' => now(),
+                    ]);
+                }
             } catch (Throwable $th) {
                 Log::error('Failed to create billing record from payment captured event', [
                     'payment_id' => $payment['id'] ?? null,
@@ -516,51 +647,64 @@ class RazorpayInvoiceService
             }
         }
 
-        $lastInvoice = Invoice::latest()->first();
-        if ($lastInvoice) {
-            $invoice_number = $lastInvoice->invoice_number + 1;
-        } else {
-            $invoice_number = 1000001;
-        }
-
         try {
-            Invoice::updateOrCreate(
-                [
-                    'razorpay_order_id' => $payment['order_id'],
-                ],
-                [
-                    'invoice_number' => $invoice_number,
-                    'patient_id' => $appointment->patient_id,
-                    'user_id' => $appointment->created_by,
-                    'doctor_id' => $appointment->doctor_id,
-                    'hospital_id' => $appointment?->doctor?->hospital?->id,
-                    'appointment_id' => $appointment->id,
-                    'lab_order_id' => null,
-                    'pharmacy_order_id' => null,
-                    'subscription_id' => null,
-                    'amount' => $appointment->fee_amount ?? 0,
-                    'tax_amount' => 0,
-                    'discount_amount' => $appointment->discount ?? 0,
-                    'total_amount' => $appointment->total_amount ?? 0,
-                    'currency' => $appointment->currency ?? 'INR',
-                    'status' => 'paid',
-                    'razorpay_invoice_id' => null,
-                    'razorpay_payment_id' => $payment['id'] ?? null,
-                    'razorpay_order_id' => $payment['order_id'] ?? null,
-                    'razorpay_customer_id' => null,
-                    'payment_method' => 'razorpay',
-                    'due_date' => now(),
-                    'paid_at' => now(),
-                    'sent_at' => now(),
-                    'viewed_at' => now(),
-                    'items' => [],
-                    'customer_details' => [],
-                    'notes' => '',
-                    'terms_conditions' => '',
-                    'created_by' => $appointment->created_by,
-                    'updated_by' => $appointment->created_by,
-                ]
-            );
+            $invoicePayload = [
+                'patient_id' => $appointment->patient_id,
+                'user_id' => $appointment->created_by,
+                'doctor_id' => $appointment->doctor_id,
+                'hospital_id' => $appointment?->doctor?->hospital?->id,
+                'appointment_id' => $appointment->id,
+                'lab_order_id' => null,
+                'pharmacy_order_id' => null,
+                'subscription_id' => null,
+                'amount' => $appointment->fee_amount ?? 0,
+                'tax_amount' => 0,
+                'discount_amount' => $appointment->discount ?? 0,
+                'total_amount' => $appointment->total_amount ?? 0,
+                'currency' => $appointment->currency ?? 'INR',
+                'status' => 'paid',
+                'razorpay_invoice_id' => null,
+                'razorpay_payment_id' => $payment['id'] ?? null,
+                'razorpay_order_id' => $payment['order_id'] ?? null,
+                'razorpay_customer_id' => null,
+                'payment_method' => 'razorpay',
+                'due_date' => now(),
+                'paid_at' => now(),
+                'sent_at' => now(),
+                'viewed_at' => now(),
+                'items' => [],
+                'customer_details' => [],
+                'notes' => '',
+                'terms_conditions' => '',
+                'created_by' => $appointment->created_by,
+                'updated_by' => $appointment->created_by,
+            ];
+
+            $existingInvoice = Invoice::where('razorpay_order_id', $payment['order_id'] ?? null)
+                ->orWhere('appointment_id', $appointment->id)
+                ->first();
+
+            if ($existingInvoice) {
+                $existingInvoice->fill($invoicePayload);
+                $existingInvoice->save();
+            } else {
+                for ($attempt = 0; $attempt < 3; $attempt++) {
+                    try {
+                        Invoice::create([
+                            'invoice_number' => Invoice::generateInvoiceNumber(),
+                            ...$invoicePayload,
+                        ]);
+                        break;
+                    } catch (QueryException $exception) {
+                        $isDuplicateInvoiceNumber = $exception->getCode() === '23000'
+                            && str_contains($exception->getMessage(), 'invoices_invoice_number_unique');
+
+                        if (! $isDuplicateInvoiceNumber || $attempt === 2) {
+                            throw $exception;
+                        }
+                    }
+                }
+            }
         } catch (\Exception $e) {
             Log::error('Failed to create invoice from payment captured event', [
                 'payment_id' => $payment['id'] ?? null,
@@ -575,25 +719,60 @@ class RazorpayInvoiceService
     public function handleSubscriptionActivated(array $subscription): void
     {
         $razorpaySubscriptionId = $subscription['id'] ?? null;
-        $customerId = $subscription['customer_id'] ?? null;
-        $planId = $subscription['plan_id'] ?? null;
 
         Log::info('Razorpay: Subscription activated', [
             'subscription_id' => $razorpaySubscriptionId,
-            'customer_id' => $customerId,
-            'plan_id' => $planId,
+            'status' => $subscription['status'] ?? null,
         ]);
 
-        // Find and update local subscription
-        $localSubscription = \App\Models\UserSubscription::where('razorpay_subscription_id', $razorpaySubscriptionId)->first();
+        $this->syncSubscriptionStateFromWebhook($subscription, 'active');
+    }
 
-        if ($localSubscription) {
-            $localSubscription->update([
-                'status' => 'active',
-                'razorpay_customer_id' => $customerId,
-                'started_at' => now(),
-            ]);
+    public function handleSubscriptionCharged(array $subscription, ?array $invoice = null): void
+    {
+        Log::info('Razorpay: Subscription charged', [
+            'subscription_id' => $subscription['id'] ?? null,
+            'paid_count' => $subscription['paid_count'] ?? null,
+            'current_start' => $subscription['current_start'] ?? null,
+            'current_end' => $subscription['current_end'] ?? null,
+        ]);
+
+        $localSubscription = $this->syncSubscriptionStateFromWebhook($subscription, 'active', true);
+
+        if ($localSubscription && $invoice) {
+            $this->findOrCreateSubscriptionInvoiceFromWebhook($invoice);
         }
+    }
+
+    public function handleSubscriptionCompleted(array $subscription): void
+    {
+        Log::info('Razorpay: Subscription completed', [
+            'subscription_id' => $subscription['id'] ?? null,
+        ]);
+
+        $status = ! empty($subscription['current_end']) && Carbon::createFromTimestamp($subscription['current_end'])->isFuture()
+            ? 'active'
+            : 'expired';
+
+        $this->syncSubscriptionStateFromWebhook($subscription, $status, true);
+    }
+
+    public function handleSubscriptionPaused(array $subscription): void
+    {
+        Log::info('Razorpay: Subscription paused', [
+            'subscription_id' => $subscription['id'] ?? null,
+        ]);
+
+        $this->syncSubscriptionStateFromWebhook($subscription, 'suspend');
+    }
+
+    public function handleSubscriptionResumed(array $subscription): void
+    {
+        Log::info('Razorpay: Subscription resumed', [
+            'subscription_id' => $subscription['id'] ?? null,
+        ]);
+
+        $this->syncSubscriptionStateFromWebhook($subscription, 'active');
     }
 
     /**
@@ -607,14 +786,147 @@ class RazorpayInvoiceService
             'subscription_id' => $razorpaySubscriptionId,
         ]);
 
-        // Find and update local subscription
-        $localSubscription = \App\Models\UserSubscription::where('razorpay_subscription_id', $razorpaySubscriptionId)->first();
+        $this->syncSubscriptionStateFromWebhook($subscription, 'cancelled');
+    }
 
-        if ($localSubscription) {
-            $localSubscription->update([
-                'status' => 'cancelled',
-                'cancelled_at' => now(),
-            ]);
+    protected function syncSubscriptionStateFromWebhook(array $subscription, string $status, bool $markPaid = false): ?UserSubscription
+    {
+        $razorpaySubscriptionId = $subscription['id'] ?? null;
+        if (! $razorpaySubscriptionId) {
+            return null;
         }
+
+        $localSubscription = UserSubscription::with('subscriptionPlan')
+            ->where('razorpay_subscription_id', $razorpaySubscriptionId)
+            ->first();
+
+        if (! $localSubscription && ! empty(data_get($subscription, 'notes.subscription_id'))) {
+            $localSubscription = UserSubscription::with('subscriptionPlan')
+                ->where('id', data_get($subscription, 'notes.subscription_id'))
+                ->first();
+
+            if ($localSubscription && empty($localSubscription->razorpay_subscription_id)) {
+                $localSubscription->update([
+                    'razorpay_subscription_id' => $razorpaySubscriptionId,
+                ]);
+            }
+        }
+
+        if (! $localSubscription) {
+            Log::warning('Razorpay: Local subscription not found for webhook', [
+                'subscription_id' => $razorpaySubscriptionId,
+            ]);
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'Subscription renewal sync failed',
+                    'A Razorpay subscription webhook could not be matched to a local subscription.',
+                    'subscription_renewal_sync_failed',
+                    [
+                        'meta' => [
+                            'razorpay_subscription_id' => $razorpaySubscriptionId,
+                            'status' => $status,
+                        ],
+                    ]
+                )
+            );
+
+            return null;
+        }
+
+        $updateData = [
+            'status' => $status,
+        ];
+
+        $preserveExistingTrialWindow = (
+            ! $markPaid
+            && $localSubscription->status === 'active'
+            && ($localSubscription->payment_status ?? null) !== 'paid'
+            && ! empty($localSubscription->end_date)
+            && ! empty($subscription['current_start'])
+            && Carbon::createFromTimestamp($subscription['current_start'])->isFuture()
+        );
+
+        if (! empty($subscription['current_start']) && ! $preserveExistingTrialWindow) {
+            $updateData['start_date'] = Carbon::createFromTimestamp($subscription['current_start'])->toDateString();
+        }
+
+        if (! empty($subscription['current_end']) && ! $preserveExistingTrialWindow) {
+            $updateData['end_date'] = Carbon::createFromTimestamp($subscription['current_end'])->toDateString();
+        }
+
+        if ($markPaid || ! empty($subscription['paid_count'])) {
+            $updateData['payment_status'] = 'paid';
+        }
+
+        $localSubscription->update($updateData);
+
+        return $localSubscription->fresh();
+    }
+
+    protected function syncSubscriptionRenewalFromInvoiceEntity(array $entity, Invoice $invoice): void
+    {
+        $razorpaySubscriptionId = $entity['subscription_id'] ?? null;
+        if (! $razorpaySubscriptionId) {
+            return;
+        }
+
+        $subscription = UserSubscription::with('subscriptionPlan')
+            ->where('razorpay_subscription_id', $razorpaySubscriptionId)
+            ->first();
+
+        if (! $subscription) {
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'Subscription renewal sync failed',
+                    'A Razorpay renewal invoice could not be matched to a local subscription.',
+                    'subscription_renewal_sync_failed',
+                    [
+                        'meta' => [
+                            'razorpay_subscription_id' => $razorpaySubscriptionId,
+                            'invoice_id' => $invoice->id,
+                        ],
+                    ]
+                )
+            );
+
+            return;
+        }
+
+        $updateData = [
+            'status' => 'active',
+            'payment_status' => 'paid',
+        ];
+
+        if (! empty($entity['billing_start'])) {
+            $updateData['start_date'] = Carbon::createFromTimestamp($entity['billing_start'])->toDateString();
+        }
+
+        if (! empty($entity['billing_end'])) {
+            $updateData['end_date'] = Carbon::createFromTimestamp($entity['billing_end'])->toDateString();
+        } elseif ($subscription->subscriptionPlan && $subscription->end_date) {
+            $startDate = Carbon::parse($subscription->end_date);
+            $updateData['end_date'] = match (strtolower($subscription->subscriptionPlan->frequency ?? 'monthly')) {
+                'yearly' => $startDate->copy()->addYear()->toDateString(),
+                default => $startDate->copy()->addMonth()->toDateString(),
+            };
+        }
+
+        $subscription->update($updateData);
+
+        if ($invoice->subscription_id !== $subscription->id) {
+            $invoice->update(['subscription_id' => $subscription->id]);
+        }
+    }
+
+    protected function mapInvoiceStatusToLocal(string $status): string
+    {
+        return match ($status) {
+            'paid' => Invoice::STATUS_PAID,
+            'partially_paid' => Invoice::STATUS_PARTIAL,
+            'issued' => Invoice::STATUS_SENT,
+            'cancelled' => Invoice::STATUS_CANCELLED,
+            'expired' => Invoice::STATUS_OVERDUE,
+            default => Invoice::STATUS_DRAFT,
+        };
     }
 }

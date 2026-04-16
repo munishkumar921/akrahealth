@@ -4,7 +4,7 @@ import { ref, computed, watch } from "vue";
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import InputError from "@/Components/InputError.vue";
-import { Country , State } from "country-state-city";
+import { Country, State } from "country-state-city";
 
 const props = defineProps({
     specialities: Array,
@@ -39,11 +39,12 @@ const randomPassword = (length = 10) => {
 
 const password = randomPassword();
 const form = useForm({
-    id:'',
+    id: '',
     hospitalId: props.hospitalId || null,
     role: "",
     first_name: "",
     last_name: "",
+    name: "",
     sex: "",
     email: "",
     mobile: "",
@@ -58,7 +59,7 @@ const form = useForm({
     zip_code: "",
     skills: "", // Assistant only
     profile_photo_path: null,
-    is_active:true,
+    is_active: true,
 });
 
 const profilePhotoUrl = ref(null);
@@ -93,10 +94,11 @@ const billers = [
     "Accounts Receivable",
     "Claims Processing",
     "Payment Posting",
-];  
- 
+];
+
 const submitForm = () => {
     isValidated.value = true;
+    form.name = form.first_name + " " + form.last_name;
     form.post(route("admin.users.store"), {
         onSuccess: () => {
             isValidated.value = false;
@@ -129,15 +131,16 @@ watch(() => form.country, (newCountry) => {
 </script>
 
 <template>
-    <form @submit.prevent="submitForm" novalidate  >
+    <form @submit.prevent="submitForm" novalidate>
         <div class="row">
             <!-- avatar -->
             <div class="form-group mb-4 text-center">
                 <label for="Upload profile picture" class="d-block mb-2">Profile Picture</label>
                 <div class="position-relative d-inline-block">
-                    <div class="profile-photo-preview mb-2" style="width: 120px; height: 120px; border-radius: 50%; border: 3px solid #e0e0e0; overflow: hidden; margin: 0 auto;">
-                        <img v-if="profilePhotoPreview" :src="profilePhotoPreview" 
-                            alt="Profile" style="width: 100%; height: 100%; object-fit: cover;" />
+                    <div class="profile-photo-preview mb-2"
+                        style="width: 120px; height: 120px; border-radius: 50%; border: 3px solid #e0e0e0; overflow: hidden; margin: 0 auto;">
+                        <img v-if="profilePhotoPreview" :src="profilePhotoPreview" alt="Profile"
+                            style="width: 100%; height: 100%; object-fit: cover;" />
                         <div v-else class="d-flex align-items-center justify-content-center h-100 bg-light">
                             <i class="fas fa-user fa-3x text-muted"></i>
                         </div>
@@ -145,25 +148,27 @@ watch(() => form.country, (newCountry) => {
                     <label for="inputFileUpload" class="btn btn-outline-primary btn-sm" style="cursor: pointer;">
                         <i class="fas fa-camera me-1"></i>{{ form.profile_photo_path ? 'Change' : 'Upload' }} Photo
                     </label>
-                    <input type="file" class="d-none" id="inputFileUpload"
-                        @change="onChangeFileUpload($event)" accept="image/*" />
+                    <input type="file" class="d-none" id="inputFileUpload" @change="onChangeFileUpload($event)"
+                        accept="image/*" />
                 </div>
                 <InputError class="mt-2" :message="form.errors.profile_photo_path" />
             </div>
             <!-- First Name -->
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.first_name" label="First Name" placeholder="First Name" required :error="form.errors.first_name" />
+                <BaseInput v-model="form.first_name" label="First Name" placeholder="First Name" required
+                    :error="form.errors.first_name" />
             </div>
 
             <!-- Last Name -->
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.last_name" label="Last Name" placeholder="Last Name" required :error="form.errors.last_name" />
+                <BaseInput v-model="form.last_name" label="Last Name" placeholder="Last Name" required
+                    :error="form.errors.last_name" />
             </div>
 
             <!-- Sex -->
             <div class="col-md-6 mb-3">
                 <BaseSelect v-model="form.sex" label="Sex" placeholder="Sex" :error="form.errors.sex">
-                     <option value="Male">Male</option>
+                    <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
                 </BaseSelect>
@@ -176,12 +181,14 @@ watch(() => form.country, (newCountry) => {
 
             <!-- Mobile -->
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.mobile" label="Mobile" placeholder="Mobile" required :error="form.errors.mobile" />
+                <BaseInput v-model="form.mobile" label="Mobile" placeholder="Mobile" required
+                    :error="form.errors.mobile" />
             </div>
 
             <!-- Role -->
             <div class="col-md-6 mb-3">
-                <BaseSelect v-model="form.role" label="Role" placeholder="Select Role" :error="form.errors.role" required>
+                <BaseSelect v-model="form.role" label="Role" placeholder="Select Role" :error="form.errors.role"
+                    required>
                     <option value="">Select Role</option>
                     <option value="Doctor">Doctor</option>
                     <option value="Virtual Assistant">Assistant</option>
@@ -191,7 +198,8 @@ watch(() => form.country, (newCountry) => {
 
             <!-- speciality -->
             <div class="col-md-6 mb-3" v-if="form.role === 'Doctor'">
-                <BaseSelect v-model="form.speciality" label="Speciality" placeholder="Speciality" :error="form.errors.speciality">
+                <BaseSelect v-model="form.speciality" label="Speciality" placeholder="Speciality"
+                    :error="form.errors.speciality">
                     <option value="">Select Speciality</option>
                     <template v-for="speciality in specialities" :key="speciality">
                         <option :value="speciality">{{ speciality }}</option>
@@ -221,21 +229,25 @@ watch(() => form.country, (newCountry) => {
 
             <!-- Street Address 1 -->
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.street_address1" label="Street Address 1" type="text" placeholder="Street Address 1" required :error="form.errors.street_address1" />
+                <BaseInput v-model="form.street_address1" label="Street Address 1" type="text"
+                    placeholder="Street Address 1" required :error="form.errors.street_address1" />
             </div>
 
             <!-- Street Address 2 -->
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.street_address2" label="Street Address 2" type="text" placeholder="Street Address 2" :error="form.errors.street_address2" />
+                <BaseInput v-model="form.street_address2" label="Street Address 2" type="text"
+                    placeholder="Street Address 2" :error="form.errors.street_address2" />
             </div>
 
             <!-- City -->
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.city" label="City" type="text" placeholder="City" required :error="form.errors.city" />
+                <BaseInput v-model="form.city" label="City" type="text" placeholder="City" required
+                    :error="form.errors.city" />
             </div>
 
             <div class="col-md-6 mb-3">
-                <BaseSelect v-model="form.country" label="Country" type="select" required placeholder="Select Country" :error="form.errors.country">
+                <BaseSelect v-model="form.country" label="Country" type="select" required placeholder="Select Country"
+                    :error="form.errors.country">
                     <template v-for="country in countries" :key="country.isoCode">
                         <option :value="country.name">{{ country.name }}</option>
                     </template>
@@ -244,7 +256,8 @@ watch(() => form.country, (newCountry) => {
 
             <!-- states -->
             <div class="col-md-6 mb-3">
-                <BaseSelect v-model="form.state" label="State" type="select" placeholder="Select State" :error="form.errors.state">
+                <BaseSelect v-model="form.state" label="State" type="select" placeholder="Select State"
+                    :error="form.errors.state">
                     <template v-for="state in states" :key="state.isoCode">
                         <option :value="state.name">{{ state.name }}</option>
                     </template>
@@ -253,12 +266,13 @@ watch(() => form.country, (newCountry) => {
 
             <!-- Zip Code -->
             <div class="col-md-6 mb-3">
-                <BaseInput v-model="form.zip" label="Zip Code" type="number" placeholder="Zip Code" required :error="form.errors.zip" />
+                <BaseInput v-model="form.zip" label="Zip Code" type="number" placeholder="Zip Code" required
+                    :error="form.errors.zip" />
             </div>
 
             <!-- Status -->
             <div class="col-md-6 mb-3">
-                <BaseSelect v-model="form.is_active" label="Status" placeholder="Status" :error="form.errors.is_active">    
+                <BaseSelect v-model="form.is_active" label="Status" placeholder="Status" :error="form.errors.is_active">
                     <option :value="true">Active</option>
                     <option :value="false">Inactive</option>
                 </BaseSelect>
@@ -268,7 +282,9 @@ watch(() => form.country, (newCountry) => {
                 <BaseSelect v-model="form.hospitalId" label="Branch" placeholder="Select Branch">
                     <option value="">Select Branch</option>
                     <template v-for="branch in branches" :key="branch.id">
-                        <option :value="branch.id">{{ branch.name }} ({{ branch.main_branch_id === null ? 'Main' : 'Sub' }})</option>
+                        <option :value="branch.id">
+                            {{ branch.name }} ({{ branch.main_branch_id === null ? 'Main' : 'Sub' }})
+                        </option>
                     </template>
                 </BaseSelect>
             </div>
@@ -278,7 +294,9 @@ watch(() => form.country, (newCountry) => {
             <button type="button" class="btn btn-danger" @click="closeModal" :disabled="form.processing">
                 Cancel
             </button>
-            <button type="submit" class="btn btn-primary" :disabled="form.processing">{{ form.processing ? 'Saving...' : 'Save' }}</button>
+            <button type="submit" class="btn btn-primary" :disabled="form.processing">{{ form.processing ? 'Saving...' :
+                'Save'
+                }}</button>
         </div>
     </form>
 </template>

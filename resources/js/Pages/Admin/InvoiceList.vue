@@ -2,345 +2,413 @@
 import AuthLayout from "@/Layouts/AuthLayout.vue";
 import { router } from "@inertiajs/vue3";
 import Table from "@/Components/Table/Table.vue";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import axios from "axios";
-import Swal from 'sweetalert2/dist/sweetalert2.js';
-import 'sweetalert2/src/sweetalert2.scss';
+import Swal from "sweetalert2/dist/sweetalert2.js";
 import { route } from "ziggy-js";
 
 const props = defineProps({
-	search: String,
-	invoices: {
-		type: [Array, Object],
-		default: () => []
-	},
-	route: Array,
+    invoices: {
+        type: [Array, Object],
+        default: () => [],
+    },
+    filters: {
+        type: Object,
+        default: () => ({
+            keyword: "",
+            status: "",
+        }),
+    },
 });
 
-const columns = [
-	{ label: "Appointment ID", key: "appointment_id" },
-	{ label: "Invoice #", key: "invoice_number" },
-	{ label: "Razorpay Payment ID", key: "razorpay_payment_id" },
-	{ label: "Name", key: "patient.user.name" },
-	{ label: "Amount (₹)", key: "total_amount" },
-	{ label: "Currency", key: "currency" },
-	{ label: "Status", key: "status" },
-	{ label: "Created", key: "created_at" },
+const filterForm = ref({
+    keyword: props.filters?.keyword || "",
+    status: props.filters?.status || "",
+});
+
+const statusOptions = [
+    { value: "", label: "All status" },
+    { value: "draft", label: "Draft" },
+    { value: "sent", label: "Sent" },
+    { value: "viewed", label: "Viewed" },
+    { value: "partial", label: "Partial" },
+    { value: "paid", label: "Paid" },
+    { value: "overdue", label: "Overdue" },
+    { value: "cancelled", label: "Cancelled" },
+    { value: "failed", label: "Failed" },
 ];
 
-const downloadInvoice = async (row) => {
-	// Validate row data exists
-	if (!row || !row.id) {
-		Swal.fire({
-			title: 'Error!',
-			text: 'Invalid invoice data. Please refresh the page and try again.',
-			icon: 'error'
-		});
-		return;
-	}
+const columns = [
+    { label: "Invoice", key: "invoice_number", type: "slot", slot: "invoice", align: "left" },
+    { label: "Payment ID", key: "razorpay_payment_id", type: "slot", slot: "payment", align: "left" },
+    { label: "Patient", key: "patient_name", type: "slot", slot: "patient", align: "left" },
+    { label: "Amount", key: "total_amount", type: "slot", slot: "amount", align: "left" },
+    { label: "Currency", key: "currency", type: "slot", slot: "currency", align: "center" },
+    { label: "Status", key: "status", type: "slot", slot: "status", align: "center" },
+    { label: "Created", key: "created_at", type: "slot", slot: "created", align: "left" },
+];
 
-	// Show loading
-	Swal.fire({
-		title: 'Generating Invoice...',
-		text: 'Please wait while we prepare your invoice.',
-		icon: 'info',
-		allowOutsideClick: false,
-		showConfirmButton: false,
-		willOpen: () => {
-			Swal.showLoading();
-		}
-	});
+const perPageOptions = [10, 15, 25, 50, 100];
+const perPage = ref(Number(new URLSearchParams(window.location.search).get("per_page")) || 10);
+const rows = computed(() => props.invoices?.data ?? []);
+const activeFilterCount = computed(() =>
+    Object.values(filterForm.value).filter((value) => value !== null && value !== "").length
+);
+const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+const resultSummary = computed(() => {
+    const total = props.invoices?.total ?? rows.value.length;
+    const from = props.invoices?.from ?? (rows.value.length ? 1 : 0);
+    const to = props.invoices?.to ?? rows.value.length;
 
-	try {
-		// Build URL and fetch invoice data
-		const url = route('admin.invoice.download', { id: row.id });
-		console.log('Downloading invoice from:', url);
+    if (!total) {
+        return "No invoices found";
+    }
 
-		const response = await axios.get(url, {
-			timeout: 30000, // 30 seconds timeout
-			responseType: 'blob'
-		});
+    return `Showing ${from}-${to} of ${total} invoices`;
+});
 
-		// Create and download file - use invoice_number for filename
-		const blob = new Blob([response.data], { type: 'application/pdf' });
-		const downloadUrl = window.URL.createObjectURL(blob);
-		const link = document.createElement('a');
-		link.href = downloadUrl;
-		link.download = `Invoice-${row.invoice_number || row.id}.pdf`;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		window.URL.revokeObjectURL(downloadUrl);
+const buildQuery = (overrides = {}) => {
+    const params = new URLSearchParams(window.location.search);
+    const query = {
+        per_page: params.get("per_page") || undefined,
+        sort: params.get("sort") || undefined,
+        direction: params.get("direction") || undefined,
+        ...filterForm.value,
+        ...overrides,
+    };
 
-		Swal.close();
-		Swal.fire({
-			title: 'Success!',
-			text: 'Invoice downloaded successfully.',
-			icon: 'success',
-			timer: 2000,
-			showConfirmButton: false
-		});
-	} catch (error) {
-		console.error('Error downloading invoice:', error);
-
-		// Handle specific error types
-		let errorMessage = 'Failed to download invoice. Please try again.';
-
-		if (error.code === 'ECONNABORTED') {
-			errorMessage = 'Request timed out. The server is taking too long to respond. Please try again.';
-		} else if (error.response) {
-			// Server responded with error
-			if (error.response.status === 404) {
-				errorMessage = 'Invoice not found. It may have been deleted or moved.';
-			} else if (error.response.status === 500) {
-				errorMessage = 'Server error. Please contact support if the problem persists.';
-			} else if (error.response.data?.message) {
-				errorMessage = error.response.data.message;
-			} else if (error.response.statusText) {
-				errorMessage = `Server error: ${error.response.statusText}`;
-			}
-		} else if (error.request) {
-			// Request made but no response
-			errorMessage = 'No response from server. Please check your internet connection and try again.';
-		} else if (error.message) {
-			// Error in setting up request
-			errorMessage = error.message;
-		}
-
-		Swal.fire({
-			title: 'Download Failed',
-			text: errorMessage,
-			icon: 'error',
-			showConfirmButton: true,
-			confirmButtonText: 'Retry'
-		}).then((result) => {
-			if (result.isConfirmed) {
-				// Retry download
-				downloadInvoice(row);
-			}
-		});
-	}
+    return Object.fromEntries(
+        Object.entries(query).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+    );
 };
 
-const removeRow = (row) => {
-	const ok = window.confirm(`Delete invoice ${row.invoice_number || row.id}? This cannot be undone.`);
-	if (!ok) return;
-	// In a real implementation, this would make an API call
-	alert('Invoice deleted successfully');
+const applyFilters = () => {
+    router.get(route("admin.invoice.list"), buildQuery(), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
+const clearFilters = () => {
+    filterForm.value = {
+        keyword: "",
+        status: "",
+    };
+
+    router.get(route("admin.invoice.list"), buildQuery(), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
+const updatePerPage = () => {
+    router.get(route("admin.invoice.list"), buildQuery({ per_page: perPage.value, page: 1 }), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
+const downloadInvoice = async (row) => {
+    if (!row || !row.id) {
+        Swal.fire({
+            title: "Error!",
+            text: "Invalid invoice data. Please refresh the page and try again.",
+            icon: "error",
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: "Generating Invoice...",
+        text: "Please wait while we prepare your invoice.",
+        icon: "info",
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        willOpen: () => {
+            Swal.showLoading();
+        },
+    });
+
+    try {
+        const url = route("admin.invoice.download", { id: row.id });
+        const response = await axios.get(url, {
+            timeout: 30000,
+            responseType: "blob",
+        });
+
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `Invoice-${row.invoice_number || row.id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        Swal.close();
+        Swal.fire({
+            title: "Success!",
+            text: "Invoice downloaded successfully.",
+            icon: "success",
+            timer: 2000,
+            showConfirmButton: false,
+        });
+    } catch (error) {
+        let errorMessage = "Failed to download invoice. Please try again.";
+
+        if (error.code === "ECONNABORTED") {
+            errorMessage = "Request timed out. Please try again.";
+        } else if (error.response?.status === 404) {
+            errorMessage = "Invoice not found.";
+        } else if (error.response?.status === 500) {
+            errorMessage = "Server error. Please try again later.";
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        Swal.fire({
+            title: "Download Failed",
+            text: errorMessage,
+            icon: "error",
+            showConfirmButton: true,
+            confirmButtonText: "Retry",
+        }).then((result) => {
+            if (result.isConfirmed) {
+                downloadInvoice(row);
+            }
+        });
+    }
 };
 
 const getStatusClass = (status) => {
-	const statusMap = {
-		'draft': 'badge bg-secondary',
-		'sent': 'badge bg-info',
-		'viewed': 'badge bg-primary',
-		'partial': 'badge bg-warning',
-		'paid': 'badge bg-success',
-		'overdue': 'badge bg-danger',
-		'cancelled': 'badge bg-dark',
-		'failed': 'badge bg-danger',
-		'active': 'badge bg-success',
-		'inactive': 'badge bg-secondary',
-		'pending': 'badge bg-warning',
-		'completed': 'badge bg-success',
-		'trial': 'badge bg-info',
-	};
+    const value = String(status || "").toLowerCase();
 
-	const lowerStatus = status?.toLowerCase();
-	return statusMap[lowerStatus] || 'badge bg-secondary';
+    if (value === "paid") return "status-pill--active";
+    if (["draft", "sent", "viewed", "partial"].includes(value)) return "status-pill--pending";
+
+    return "status-pill--inactive";
 };
 
-const getAmountClass = (amount) => {
-	return amount > 0 ? 'text-success' : 'text-muted';
+const formatAmount = (row) => {
+    const amount = Number(row.total_amount || 0).toFixed(2);
+    const symbol = row.currency === "USD" ? "$" : row.currency === "EUR" ? "EUR " : "₹";
+
+    return `${symbol}${amount}`;
 };
 </script>
 
 <template>
-	<AuthLayout title="Invoices" description="Invoices" heading="Invoices">
-		<div class="d-flex align-items-center justify-content-between">
-			<h3 class="d-flex align-items-center text-xl mb-2">Invoices</h3>
+    <AuthLayout title="Invoices" description="Invoices" heading="Invoices">
+        <div class="invoice-page">
+            <div class="users-toolbar card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div
+                        class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+                        <div>
+                            <h3 class="mb-1">Invoices</h3>
+                            <p class="text-muted mb-0">{{ resultSummary }}</p>
+                        </div>
 
-			<div class="d-flex align-items-center gap-3">
-			</div>
-		</div>
-		<Table :columns="columns" :data="invoices.data" :search="search">
+                        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+                            <span v-if="hasActiveFilters" class="filter-count-badge">
+                                {{ activeFilterCount }} filter{{ activeFilterCount > 1 ? "s" : "" }} active
+                            </span>
+                            <button
+                                v-if="hasActiveFilters"
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                @click="clearFilters"
+                            >
+                                <i class="bi bi-x-circle me-1"></i>Clear filters
+                            </button>
+                        </div>
+                    </div>
 
-			<template #invoice_number="{ row }">
-				<span class="fw-bold">{{ row.invoice_number || row.id }}</span>
-			</template>
-			<template #razorpay_invoice_id="{ row }">
-				<span class="text-muted small">{{ row.razorpay_invoice_id || '-' }}</span>
-			</template>
-			<template #razorpay_payment_id="{ row }">
-				<span class="text-muted small">{{ row.razorpay_payment_id || '-' }}</span>
-			</template>
-			<template #patient_name="{ row }">
-				<span>{{ row.patient_name || row.user_name || 'N/A' }}</span>
-			</template>
-			<template #plan_name="{ row }">
-				<span>{{ row.plan_name || '-' }}</span>
-			</template>
-			<template #total_amount="{ row }">
-				<span :class="getAmountClass(row.total_amount)">
-					{{ row.currency === 'USD' ? '$' : row.currency === 'EUR' ? '€' : '₹' }}{{ Number(row.total_amount ||
-						0).toFixed(2) }}
-				</span>
-			</template>
-			<template #currency="{ row }">
-				<span class="badge bg-light text-dark">{{ row.currency || 'INR' }}</span>
-			</template>
-			<template #status="{ row }">
-				<span :class="getStatusClass(row.status)">
-					{{ row.status_label || row.status || 'N/A' }}
-				</span>
-			</template>
-			<template #due_date="{ row }">
-				<span>{{ row.due_date || '-' }}</span>
-			</template>
-			<template #created_at="{ row }">
-				<span>{{ row.created_at || '-' }}</span>
-			</template>
-			<template #actions="{ row }">
-				<a class="btn btn-outline-primary ml-2"
-					:href="route('admin.invoice.print', { id: row.appointment_id })" title="Print" target="_blank">
-					<i class="fa fa-print"></i>
-				</a>
-			</template>
-		</Table>
-	</AuthLayout>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-xl-4">
+                            <label class="form-label text-muted small text-uppercase mb-2">Search</label>
+                            <div class="input-group invoice-search-control">
+                                <span class="input-group-text bg-white border-end-0 border col-1 rounded-circle-left">
+                                    <i class="bi bi-search text-muted"></i>
+                                </span>
+                                <input
+                                    v-model="filterForm.keyword"
+                                    type="search"
+                                    class="form-control border-start-0"
+                                    placeholder="Search by invoice, payment ID, appointment, patient, amount, or status"
+                                    @keydown.enter.prevent="applyFilters"
+                                />
+                                <button type="button" class="btn btn-primary" @click="applyFilters">Search</button>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <label class="form-label text-muted small text-uppercase mb-2">Status</label>
+                            <select v-model="filterForm.status" class="form-select" @change="applyFilters">
+                                <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                                    {{ option.label }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0 p-md-3">
+                    <div class="d-flex justify-content-end align-items-center px-3 px-md-0 pt-3 pt-md-0 pb-2">
+                        <div class="d-flex align-items-center gap-2 rows-select-wrap">
+                            <select
+                                id="invoices-per-page"
+                                v-model="perPage"
+                                class="form-select form-select-sm top-page-select"
+                                @change="updatePerPage"
+                            >
+                                <option v-for="option in perPageOptions" :key="option" :value="option">
+                                    {{ option }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <Table :columns="columns" :data="invoices" :search-show="false" :PageOptions="false">
+                        <template #invoice="{ row }">
+                            <div class="text-start">
+                                <div class="fw-semibold text-dark">{{ row.invoice_number || row.id }}</div>
+                                <div class="text-muted small">Appointment: {{ row.appointment_id || "N/A" }}</div>
+                            </div>
+                        </template>
+
+                        <template #payment="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.razorpay_payment_id || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #patient="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.patient_name || "N/A" }}</div>
+                            </div>
+                        </template>
+
+                        <template #amount="{ row }">
+                            <div class="text-start">
+                                <div class="fw-semibold text-success">{{ formatAmount(row) }}</div>
+                            </div>
+                        </template>
+
+                        <template #currency="{ row }">
+                            <span class="soft-badge badge-soft-secondary">{{ row.currency || "INR" }}</span>
+                        </template>
+
+                        <template #status="{ row }">
+                            <span class="status-pill" :class="getStatusClass(row.status)">
+                                {{ row.status_label || row.status || "N/A" }}
+                            </span>
+                        </template>
+
+                        <template #created="{ row }">
+                            <div class="text-start">
+                                <div class="fw-medium text-dark">{{ row.created_label || row.created_at || "-" }}</div>
+                            </div>
+                        </template>
+
+                        <template #actions="{ row }">
+                            <button
+                                class="btn btn-light border"
+                                type="button"
+                                title="Download invoice"
+                                @click="downloadInvoice(row)"
+                            >
+                                <i class="bi bi-download"></i>
+                            </button>
+                            <a
+                                class="btn btn-light border"
+                                :href="route('admin.invoice.print', { id: row.appointment_id })"
+                                title="Print"
+                                target="_blank"
+                            >
+                                <i class="fa fa-print"></i>
+                            </a>
+                        </template>
+                    </Table>
+                </div>
+            </div>
+        </div>
+    </AuthLayout>
 </template>
 
 <style scoped>
-.icon-btn {
-	padding: 9px 8px 6px 8px;
-	border: none;
-	border-radius: 12px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	color: #fff;
-	cursor: pointer;
-	transition: transform .07s ease-in-out, opacity .15s ease-in-out;
-	margin: 0 2px;
+.users-toolbar {
+    border-radius: 20px;
 }
 
-.icon-btn:active {
-	transform: scale(0.97);
+.filter-count-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
-.icon-btn--red {
-	background: #ef4444;
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 84px;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
 }
 
-.icon-btn i {
-	font-size: 14px;
-	line-height: 1;
+.status-pill--active {
+    background: #dcfce7;
+    color: #166534;
 }
 
-.icon-btn.btn-primary {
-	background: #0d6efd;
+.status-pill--inactive {
+    background: #f1f5f9;
+    color: #475569;
 }
 
-.icon-btn.btn-danger {
-	background: #dc3545;
+.status-pill--pending {
+    background: #fef3c7;
+    color: #92400e;
 }
 
-.icon-btn:hover {
-	opacity: 0.85;
+.soft-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
 }
 
-.modal-content {
-	border-radius: 12px;
+.badge-soft-secondary {
+    background: #f1f5f9;
+    color: #475569;
 }
 
-.modal-title {
-	font-size: 20px;
+.top-page-select {
+    min-width: 74px;
+    width: 74px;
 }
 
-.form-label {
-	font-weight: 600;
-	color: #374151;
+.rows-select-wrap {
+    flex: 0 0 auto;
 }
 
-.modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background-color: rgba(0, 0, 0, 0.5);
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	z-index: 9999;
-	padding: 20px;
-}
-
-.modal-container {
-	background: white;
-	border-radius: 8px;
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-	width: 100%;
-	max-width: 600px;
-	max-height: 90vh;
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-}
-
-.modal-content {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-}
-
-.modal-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 1rem 1.5rem;
-	border-bottom: 1px solid #dee2e6;
-	background-color: #f8f9fa;
-}
-
-.modal-title {
-	font-size: 1.25rem;
-	font-weight: 600;
-	color: #333;
-}
-
-.close {
-	background: none;
-	border: none;
-	font-size: 1.5rem;
-	line-height: 1;
-	color: #000;
-	opacity: .5;
-	cursor: pointer;
-	padding: 0;
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-}
-
-.close:hover {
-	opacity: 1;
-	background-color: rgba(0, 0, 0, .1);
-}
-
-.modal-body {
-	flex: 1;
-	overflow-y: auto;
-	padding: 1.5rem;
-	max-height: calc(90vh - 140px);
-}
-
-.modal-footer {
-	display: flex;
-	justify-content: flex-end;
-	gap: 10px;
-	padding: 1rem 1.5rem;
-	border-top: 1px solid #dee2e6;
-	background-color: #f8f9fa;
+.invoice-search-control {
+    max-width: 620px;
 }
 </style>

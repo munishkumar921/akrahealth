@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import Avatar from "../Common/Avatar.vue";
 import "./header.css";
 import { Link, usePage } from "@inertiajs/vue3";
@@ -9,6 +9,7 @@ import ResetPasswordModal from "./ResetPasswordModal.vue";
 import Modal from "../Common/Modal.vue";
 import axios from "axios";
 import { route } from "ziggy-js";
+import { Inertia } from "@inertiajs/inertia";
 
 
 const props = defineProps({
@@ -95,7 +96,9 @@ const handleNotificationClick = async (notification) => {
   }
 
   // Handle different notification types
-  if (notification.data?.type === 'video_call_invite' && notification.data?.link) {
+  if (notification.action_url) {
+    window.location.href = notification.action_url;
+  } else if (notification.data?.type === 'video_call_invite' && notification.data?.link) {
     // Navigate to live consultation for video call invites
     window.location.href = notification.data.link;
   } else if (notification.data?.type === 'patient_invitation' && notification.data?.action_url) {
@@ -139,13 +142,17 @@ const handleAppointmentAction = async (notification, status) => {
         status,
         notification_id: notification.id,
       }
-    );
+    ).then(res => {
+      toggleDropdown();
+      setTimeout(() => {
+        Inertia.reload({ only: ['flash'] });
+      }, 500);
+    })
 
     // Remove notification from list
     notifications.value = notifications.value.filter(
       n => n.id !== notification.id
     );
-    notifOpen.value = false;
 
   } catch (error) {
     console.error("Failed to update appointment status:", error);
@@ -155,9 +162,9 @@ const handleAppointmentAction = async (notification, status) => {
 
 // Toggle notification dropdown
 const toggleDropdown = () => {
-  console.log("Toggle dropdown");
   notifOpen.value = !notifOpen.value;
   if (notifOpen.value) profileOpen.value = false;
+  if (notifOpen.value) fetchNotifications();
 };
 
 const toggleProfile = () => {
@@ -202,6 +209,14 @@ const doProfileAction = (icon) => {
   }
 };
 
+let pollInterval = null;
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    fetchNotifications();
+  }
+};
+
 // Close dropdown when clicking outside
 const closeDropdowns = (event) => {
   if (!event.target.closest('.notification-container') && !event.target.closest('.profile-container')) {
@@ -213,15 +228,20 @@ const closeDropdowns = (event) => {
 onMounted(() => {
   fetchNotifications();
   document.addEventListener('click', closeDropdowns);
+  window.addEventListener('focus', fetchNotifications);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
   // Poll for new notifications every 30 seconds
-  const pollInterval = setInterval(fetchNotifications, 30000);
+  pollInterval = setInterval(fetchNotifications, 30000);
+});
 
-  // Cleanup
-  return () => {
-    document.removeEventListener('click', closeDropdowns);
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeDropdowns);
+  window.removeEventListener('focus', fetchNotifications);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  if (pollInterval) {
     clearInterval(pollInterval);
-  };
+  }
 });
 
 // Watch for new notifications (if using Laravel Echo or similar)
@@ -301,7 +321,14 @@ const showDoctorAvatar = computed(() => {
                 <div class="media align-items-center">
                   <div class="media-body">
                     <div class="d-flex justify-content-between align-items-end fs-14 p-1">
-                      <h6 class="mb-0 text-wrap fs-14" :class="{'font-weight-bold': !notification.is_read, 'font-weight-normal': notification.is_read}">{{ typeof notification?.data?.message === 'string' ? notification?.data?.message : 'New Notification' }}</h6>
+                      <div class="pr-2">
+                        <h6 class="mb-0 text-wrap fs-14" :class="{'font-weight-bold': !notification.is_read, 'font-weight-normal': notification.is_read}">
+                          {{ notification?.title || 'New Notification' }}
+                        </h6>
+                        <small class="text-muted d-block text-wrap">
+                          {{ typeof notification?.message === 'string' ? notification?.message : (typeof notification?.data?.message === 'string' ? notification?.data?.message : '') }}
+                        </small>
+                      </div>
                       <small class="ml-2 font-size-12 text-nowrap text-muted">{{ notification?.created_at_human }}</small>
                     </div>
                     <!-- <p v-if="notification.data?.patient_name" class="mb-0 text-muted">

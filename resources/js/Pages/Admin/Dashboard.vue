@@ -1,17 +1,17 @@
 <script setup>
 import AuthLayout from '@/Layouts/AuthLayout.vue';
-import { usePage } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 
 const page = usePage();
 const dashboardData = page.props.dashboardData || {};
 </script>
 <template>
-<AuthLayout title="Dashboard" description="Admin dashboard overview and management" heading="">
+    <AuthLayout title="Dashboard" description="Admin dashboard overview and management" heading="">
         <div class="row">
 
-           
-            <div class="col-md-6 col-lg-3">
-                <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
+            <div class="col-md-6 col-lg-4">
+                <div class="iq-card iq-card-block iq-card-stretch iq-card-height position-relative">
+                    <Link :href="route('admin.messages')" class="stretched-link" aria-label="Open messages" />
                     <div class="iq-card-body">
                         <div class="text-center"><span>Messages</span></div>
                         <div class="d-flex justify-content-between align-items-center">
@@ -25,14 +25,15 @@ const dashboardData = page.props.dashboardData || {};
                     </div>
                 </div>
             </div>
-            
-            <div class="col-md-6 col-lg-3">
+
+            <div class="col-md-6 col-lg-4">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Encounters</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter">{{ dashboardData.encounters?.total || 0 }}</span></h2>
+                                <h2 class="mb-0"><span class="counter">{{ dashboardData.encounters?.total || 0 }}</span>
+                                </h2>
                             </div>
                             <div class="iq-iconbox iq-bg-warning">
                                 <i class="fa fa-file-text"></i>
@@ -41,13 +42,18 @@ const dashboardData = page.props.dashboardData || {};
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
+
+
+            <div class="col-md-6 col-lg-4">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <Link :href="route('admin.patients.index')" class="stretched-link" aria-label="Open patients" />
                     <div class="iq-card-body">
                         <div class="text-center"><span>Patients</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter">{{ dashboardData.patients?.total || 0 }}</span></h2>
+                                <h2 class="mb-0"><span class="counter">{{ dashboardData.patients?.total || 0
+                                }}</span>
+                                </h2>
                             </div>
                             <div class="iq-iconbox iq-bg-success">
                                 <i class="fa fa-users"></i>
@@ -56,13 +62,16 @@ const dashboardData = page.props.dashboardData || {};
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
+            <div class="col-md-6 col-lg-4">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <Link :href="route('admin.allAppointments')" class="stretched-link" aria-label="Open appointments" />
                     <div class="iq-card-body">
                         <div class="text-center"><span>Appointments</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter">{{ dashboardData.calendars?.total || 0 }}</span></h2>
+                                <h2 class="mb-0"><span class="counter">{{ dashboardData.calendars?.total || 0
+                                }}</span>
+                                </h2>
                             </div>
                             <div class="iq-iconbox iq-spring-green ">
                                 <i class="fa fa-calendar"></i>
@@ -71,13 +80,15 @@ const dashboardData = page.props.dashboardData || {};
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
+            <div class="col-md-6 col-lg-4">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <Link :href="route('notifications.index')" class="stretched-link" aria-label="Open notifications" />
                     <div class="iq-card-body">
                         <div class="text-center"><span>Reminders</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter">{{ dashboardData.reminders || 0 }}</span></h2>
+                                <h2 class="mb-0"><span class="counter">{{ dashboardData.reminders || 0 }}</span>
+                                </h2>
                             </div>
                             <div class="iq-iconbox iq-pink">
                                 <i class="fa fa-bell"></i>
@@ -86,13 +97,15 @@ const dashboardData = page.props.dashboardData || {};
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
+            <!-- <div class="col-md-6 col-lg-4">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Documents</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter">{{ dashboardData.documents?.total || 0 }}</span></h2>
+                                <h2 class="mb-0"><span class="counter">{{ dashboardData.documents?.total || 0
+                                }}</span>
+                                </h2>
                             </div>
                             <div class="iq-iconbox iq-warning">
                                 <i class="fa fa-file-o"></i>
@@ -100,14 +113,17 @@ const dashboardData = page.props.dashboardData || {};
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-6 col-lg-3">
+            </div> -->
+            <div class="col-md-6 col-lg-4">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <Link :href="route('admin.transaction.list')" class="stretched-link" aria-label="Open transactions" />
                     <div class="iq-card-body">
                         <div class="text-center"><span>Bills to Process</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter">{{ dashboardData.bills_to_process || 0 }}</span></h2>
+                                <h2 class="mb-0"><span class="counter">{{ dashboardData.bills_to_process || 0
+                                }}</span>
+                                </h2>
                             </div>
                             <div class="iq-iconbox iq-purple">
                                 <i class="fa fa-money"></i>
@@ -116,13 +132,14 @@ const dashboardData = page.props.dashboardData || {};
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-3">
+            <!-- <div class="col-md-6 col-lg-4">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
                     <div class="iq-card-body">
                         <div class="text-center"><span>Test Results to Review</span></div>
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter">{{ dashboardData.test_results_to_review || 0 }}</span></h2>
+                                <h2 class="mb-0"><span class="counter">{{ dashboardData.test_results_to_review || 0
+                                }}</span></h2>
                             </div>
                             <div class="iq-iconbox iq-bg-primary">
                                 <i class="fa fa-flask"></i>
@@ -130,7 +147,7 @@ const dashboardData = page.props.dashboardData || {};
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> -->
         </div>
 
 

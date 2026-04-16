@@ -8,7 +8,6 @@ use App\Models\Doctor;
 use App\Models\Encounter;
 use App\Models\Patient;
 use App\Models\User;
-use App\Services\AllPatients;
 use App\Services\PatientHistoryService;
 use App\Services\PatientService;
 use Illuminate\Http\RedirectResponse;
@@ -40,13 +39,17 @@ class DPatientController extends Controller
     /**
      * patient
      */
-    public function index(AllPatients $patients): Response
+    public function index(Request $request): Response
     {
-        $patients = $patients->List(request());
+        $patients = $this->patient->listDoctorPatients($request);
 
         return Inertia::render('Doctors/Patient/AllPatients/Index', [
             'patients' => $patients,
-            'search' => request()->get('search', ''),
+            'filters' => [
+                'keyword' => $request->input('keyword', $request->input('search', '')),
+                'status' => $request->input('status', ''),
+                'portal_status' => $request->input('portal_status', ''),
+            ],
         ]);
     }
 

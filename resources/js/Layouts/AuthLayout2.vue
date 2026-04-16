@@ -91,9 +91,20 @@ const role = computed(() => page.props?.auth?.user?.roles?.[0]?.name);
                         <main>
                             <slot />
                         </main>
+
+                        <div class="app-footer text-center mt-3 mb-2">
+                            &copy; 2018 - {{ new Date().getFullYear() }} Akra Health. All rights reserved
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </template>
+
+<style scoped>
+.app-footer {
+    color: #64748b;
+    font-size: 0.875rem;
+}
+</style>

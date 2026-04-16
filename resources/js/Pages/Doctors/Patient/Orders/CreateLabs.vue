@@ -2,14 +2,13 @@
 import axios from "axios";
 import { useForm, router, usePage } from "@inertiajs/vue3";
 import AuthLayout from "@/Layouts/AuthLayout2.vue";
-import { ref, defineEmits, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
 import Search from "@/Components/Common/Search.vue";
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import 'sweetalert2/src/sweetalert2.scss';
 import InputError from '@/Components/InputError.vue'; // Added missing import
 import Template from './template.vue';
 import Modal from '@/Components/Common/Modal.vue';
@@ -30,10 +29,10 @@ const form = useForm({
     patient_id: props.data?.doctorId || "",
     doctor_id: props.data?.doctorId || "",
     encounter_id: props.data?.encounterId || "",
-    lab_id:props.data?.order?.lab_id || "",
+    encounter_provider: props.data?.order?.lab_id || "",
     insurance_id: props.data?.order?.insurance_id || "",
     labs: props.data?.order?.labs || "",
-    labs_icd: parseIcd(props.data?.order?.labs_icd)||"",
+    labs_icd: parseIcd(props.data?.order?.labs_icd) || "",
     notes: props.data?.order?.notes || "",
     pending_date: props.data?.order?.pending_date || "",
     is_completed: props.data?.order?.is_completed || "",
@@ -100,7 +99,7 @@ const handleTemplateUpdate = () => {
 // Handle template selection from the template component
 const handleTemplateSelected = (templateItem) => {
     console.log('Template selected:', templateItem);
-    
+
     // Determine which form field to update based on the category
     let fieldToUpdate = '';
     switch (templateCategory.value) {
@@ -117,7 +116,7 @@ const handleTemplateSelected = (templateItem) => {
         default:
             fieldToUpdate = templateField.value;
     }
-    
+
     // Update the form field with the selected template
     if (fieldToUpdate && form[fieldToUpdate] !== undefined) {
         let currentValue = form[fieldToUpdate] || '';
@@ -141,7 +140,7 @@ const getDateMeta = (keyword) => {
 }
 const isOpenLaboratoryProviderModal = ref(false);
 const openLaboratoryProviderModal = () => {
-      isOpenLaboratoryProviderModal.value = true
+    isOpenLaboratoryProviderModal.value = true
 }
 const closeLaboratoryProviderModal = () => {
     isOpenLaboratoryProviderModal.value = false
@@ -156,7 +155,7 @@ const closeLaboratoryProviderModal = () => {
                 <div class="iq-card-header d-flex justify-content-between align-items-center bg-primary">
                     <h5 class="mb-0 text-white">Lab Test Order</h5>
                 </div>
-<form @submit.prevent="submitForm">
+                <form @submit.prevent="submitForm">
 
                     <div class="iq-card-body p-4">
                         <div class="row">
@@ -195,59 +194,62 @@ const closeLaboratoryProviderModal = () => {
                                     </div>
                                 </div>
                             </template>
- 
+
                             <div class="col-md-12">
-                                <BaseInput v-model="form.labs" label="Test" type="textarea" placeholder="lab test" required
-                                    @click="getDateMeta('orders_labs')" />
+                                <BaseInput v-model="form.labs" label="Test" type="textarea" placeholder="lab test"
+                                    required @click="getDateMeta('orders_labs')" />
                                 <InputError :message="form.errors.labs" class="mt-2" />
                             </div>
                             <div class="col-md-12 mt-3">
-                                <BaseTagsInput v-model="form.labs_icd" label="Diagnosis Codes" placeholder="Type diagnosis codes" />
+                                <BaseTagsInput v-model="form.labs_icd" label="Diagnosis Codes"
+                                    placeholder="Type diagnosis codes" />
                                 <InputError :message="form.errors.labs_icd" class="mt-2" />
                             </div>
                             <div class="col-md-6 mt-3">
-                                <BaseSelect v-model="form.lab_id" label="Laboratory Provider"
-                                    placeholder="Search for provider" :error="form.errors.lab_id" required >
-                                     <option v-for="lab in data.labs" :key="lab.id"
-                                        :value="lab.id">
+                                <BaseSelect v-model="form.encounter_provider" label="Laboratory Provider"
+                                    placeholder="Search for provider" :error="form.errors.encounter_provider" required>
+                                    <option v-for="lab in data.labs" :key="lab.id" :value="lab.id">
                                         {{ lab.name }}
                                     </option>
-                            </BaseSelect>
-                             <p class="text-primary cursor-pointer" @click="openLaboratoryProviderModal"><i class="bi bi-plus-circle mr-1"></i>Add Laboratory Provider</p>
+                                </BaseSelect>
+                                <p class="text-primary cursor-pointer" @click="openLaboratoryProviderModal"><i
+                                        class="bi bi-plus-circle mr-1"></i>Add Laboratory Provider</p>
                             </div>
                             <div class="col-md-6 mt-3">
-                                <BaseDatePicker v-model="form.pending_date" label="Order Pending Date"  placeholder="Select date" />
+                                <BaseDatePicker v-model="form.pending_date" label="Order Pending Date"
+                                    placeholder="Select date" />
                                 <InputError :message="form.errors.pending_date" class="mt-2" />
                             </div>
                             <div class="col-md-12 mt-3">
-                                <BaseSelect v-model="form.insurance_id" label="Insurance"
-                                    placeholder="Select Insurance" :error="form.errors.insurance_id" required>
+                                <BaseSelect v-model="form.insurance_id" label="Insurance" placeholder="Select Insurance"
+                                    :error="form.errors.insurance_id" required>
                                     <option v-for="insurance in data.insurances" :key="insurance.id"
-                                            :value="insurance.id">
+                                        :value="insurance.id">
                                         {{ insurance.insurance_company }} - {{ insurance.plan_name }}
                                     </option>
                                 </BaseSelect>
-                             </div>
+                            </div>
                             <div class="col-md-12 mt-3">
                                 <BaseInput v-model="form.notes" label="Notes" type="textarea" placeholder="Enter notes"
-                                    @click="getDateMeta('orders_notes')"  :error="form.errors.notes"/>
-                             </div>
+                                    @click="getDateMeta('orders_notes')" :error="form.errors.notes" />
+                            </div>
                             <div class="col-md-12 mt-3">
-                                <BaseSelect v-model="form.action_after_saving" label="Action After Saving" 
-                                    placeholder="Select an action"  required>
+                                <BaseSelect v-model="form.action_after_saving" label="Action After Saving"
+                                    placeholder="Select an action" required>
                                     <option v-for="action in labActionAfterSaving" :key="action.value"
                                         :value="action.value">
                                         {{ action.label }}
                                     </option>
                                 </BaseSelect>
-                             </div>
+                            </div>
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-3">
                             <button type="submit" class="btn  btn-primary" :disabled="form.processing">
                                 <span v-if="form.processing" class="spinner-border spinner-border-sm mr-1"></span>
                                 Save
                             </button>
-                            <button type="button" class="btn  btn-danger" @click="router.get(route('doctor.orders.index'))">
+                            <button type="button" class="btn  btn-danger"
+                                @click="router.get(route('doctor.orders.index'))">
                                 Cancel
                             </button>
                         </div>
@@ -255,16 +257,13 @@ const closeLaboratoryProviderModal = () => {
                 </form>
             </div>
             <div class="col-md-4">
-                <Template 
-                    :data="templateData"
-                    :category="templateCategory"
-                    @template-selected="handleTemplateSelected"
-                    @update-template="handleTemplateUpdate"
-                />
+                <Template :data="templateData" :category="templateCategory" @template-selected="handleTemplateSelected"
+                    @update-template="handleTemplateUpdate" />
             </div>
         </div>
-           <Modal  :isOpen="isOpenLaboratoryProviderModal" :title="'Add Cardiopulmonary Entry'" size="xl" @close="closeLaboratoryProviderModal" >
-            <LabProviderModal :labCategory="data.labCategory"  @close="closeLaboratoryProviderModal"/>
+        <Modal :isOpen="isOpenLaboratoryProviderModal" :title="'Add Cardiopulmonary Entry'" size="xl"
+            @close="closeLaboratoryProviderModal">
+            <LabProviderModal :labCategory="data.labCategory" @close="closeLaboratoryProviderModal" />
         </Modal>
     </AuthLayout>
 </template>

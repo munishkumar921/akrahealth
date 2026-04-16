@@ -6,7 +6,7 @@ import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
 
 import axios from "axios";
-import { ref, defineEmits, onMounted, watch } from "vue";
+import { ref, onMounted, watch } from "vue";
 import { useForm } from "@inertiajs/vue3";
 
 const props = defineProps({

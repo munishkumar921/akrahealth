@@ -149,18 +149,21 @@ if (! function_exists('saveNotification')) {
      */
     function saveNotification($title, $message, $type, $channel)
     {
-        Notification::create([
-            'uuid' => Str::uuid(),
-            'user_id' => auth()->user()->id,
-            'created_by' => auth()->user()->id,
-            'title' => $title,
-            'message' => $message,
-            'type' => $type,
-            'channel' => $channel,
-            'status' => 'pending',
-            'sent_at' => now(),
-            'is_viewed' => false,
-        ]);
+        $user = auth()->user();
+
+        if (! $user) {
+            return;
+        }
+
+        app(\App\Services\InAppNotificationService::class)->notifyUser(
+            $user,
+            [
+                'title' => $title,
+                'message' => $message,
+                'type' => $type,
+                'channel' => $channel,
+            ]
+        );
 
         /*
         * test call

@@ -10,43 +10,71 @@ use App\Models\PatientNote;
 use App\Services\BillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 
 class DBillingController extends Controller
 {
     public function index(Request $request)
     {
-        $type = $request['type'];
+        $type = $request->input('type', 'encounters');
+        $keyword = trim((string) $request->input('keyword', ''));
+        $perPage = (int) $request->input('per_page', paginateLimit());
         $patientId = $request->patient_id ?? auth()->user()->doctor->selected_patient_id ?? null;
 
         if (! $patientId) {
             return Inertia::render('Doctors/Patient/Billing/Index', [
                 'billingData' => [
-                    'encounters' => [],
-                    'misc_bills' => [],
-                    'bluebutton_data' => [],
+                    'records' => $this->paginateCollection(collect(), $perPage),
                     'error' => 'No patient selected',
+                    'type' => $type,
+                ],
+                'filters' => [
+                    'keyword' => $keyword,
+                    'type' => $type,
                 ],
             ]);
         }
-        if ($type == 'misc') {
-            $result = $this->getMiscBills($patientId);
-        } else {
-            $result = $this->getEncounterBills($patientId);
+
+        $rows = $type === 'misc'
+            ? collect($this->getMiscBills($patientId))
+            : collect($this->getEncounterBills($patientId));
+
+        if ($keyword !== '') {
+            $rows = $rows->filter(function ($row) use ($keyword) {
+                return collect([
+                    $row['date'] ?? '',
+                    $row['reason'] ?? '',
+                    $row['balance'] ?? '',
+                    $row['charges'] ?? '',
+                    $row['payments'] ?? '',
+                    $row['provider'] ?? '',
+                    $row['encounter_type'] ?? '',
+                ])->some(fn ($value) => str_contains(strtolower((string) $value), strtolower($keyword)));
+            })->values();
         }
+
+        $totals = [
+            'records' => $rows->count(),
+            'balance' => $rows->sum(fn ($row) => (float) ($row['balance'] ?? 0)),
+            'charges' => $rows->sum(fn ($row) => (float) ($row['charges'] ?? 0)),
+        ];
+
         $notes = PatientNote::where('patient_id', '=', $patientId)->where('hospital_id', '=', auth()->user()->doctor->hospital_id)->first();
 
         return Inertia::render('Doctors/Patient/Billing/Index', [
             'billingData' => [
-                'encounters' => $type != 'misc' ? $result : [],
-                'misc_bills' => $type == 'misc' ? $result : [],
-                'bluebutton_data' => $type != 'misc' ? $result : [],
+                'records' => $this->paginateCollection($rows, $perPage),
                 'type' => $type,
                 'patient_id' => $patientId,
-
+                'totals' => $totals,
             ],
             'notes' => $notes,
-            'keyword' => $request->get('keyword'),
+            'filters' => [
+                'keyword' => $keyword,
+                'type' => $type,
+            ],
         ]);
     }
 
@@ -84,6 +112,7 @@ class DBillingController extends Controller
                 'charges' => $other->cpt_charge,
                 'total_charge' => $charge,
                 'total_payment' => $payment,
+                'created_at' => $other->created_at,
                 'type' => 'misc',
             ];
         }
@@ -114,7 +143,7 @@ class DBillingController extends Controller
                 $result[] = [
                     'id' => $row->id,
                     'encounter_id' => $encounter->id,
-                    'date' => \Carbon\Carbon::parse($encounter->encounter_DOS)->format('Y-m-d'),
+                    'date' => \Carbon\Carbon::parse($encounter->encounter_date_of_service)->format('Y-m-d'),
                     'reason' => $encounter->chief_complaint ?? 'Unknown',
                     'balance' => $charge - $payment,
                     'charges' => $charge,
@@ -208,5 +237,23 @@ class DBillingController extends Controller
         } else {
             return back()->with('error', 'Billing record not found.');
         }
+    }
+
+    private function paginateCollection(Collection $items, int $perPage): LengthAwarePaginator
+    {
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $total = $items->count();
+        $results = $items->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return new LengthAwarePaginator(
+            $results,
+            $total,
+            $perPage,
+            $page,
+            [
+                'path' => request()->url(),
+                'query' => request()->query(),
+            ]
+        );
     }
 }

@@ -10,7 +10,7 @@ import { Country, State } from 'country-state-city';
 const props = defineProps({
     states: Array,
     countries: Array,
- });
+});
 const form = useForm({
     facility: "",
     phone: "",
@@ -23,8 +23,8 @@ const form = useForm({
     comments: "",
 });
 
- const fieldsOne = [
-    { key: "facility", type: "text", placeholder: "Facility",  lable: "Facility" },
+const fieldsOne = [
+    { key: "facility", type: "text", placeholder: "Facility", lable: "Facility" },
     { key: "phone", type: "text", placeholder: "Phone", lable: "Phone" },
     { key: "email", type: "email", placeholder: "E-mail Address", lable: "E-mail Address" },
     { key: "address", type: "text", placeholder: "Address", lable: "Address" },
@@ -47,7 +47,7 @@ const submitForm = () => {
         },
     });
 };
- 
+
 const closeModal = () => {
     emit("close");
 };
@@ -65,64 +65,45 @@ watch(() => form.country, (newCountry) => {
     } else {
         personalStates.value = [];
     }
-    
+
 });
 
- </script>
+</script>
 
 <template>
-    <form
-        @submit.prevent="submitForm"
-        novalidate
-        class="needs-validation"
-        :class="{ 'was-validated': isValidated }"
-    >
+    <form @submit.prevent="submitForm" novalidate class="needs-validation" :class="{ 'was-validated': isValidated }">
         <div v-for="field in fieldsOne" :key="field.key">
             <label :for="field.key" class="form-label">{{ field.lable }}</label>
-            <BaseInput
-                v-model="form[field.key]"
-                :name="field.key"
-                :placeholder="field.placeholder"
-                :type="field.type"
-                required
-            />
+            <BaseInput v-model="form[field.key]" :name="field.key" :placeholder="field.placeholder" :type="field.type"
+                required />
             <InputError :message="form.errors[field.key]" />
         </div>
-                 <label :for="'state'" class="form-label">Country</label>
-                 <BaseSelect v-model="form.country" placeholder="Select Country" required>
+        <label :for="'state'" class="form-label">Country</label>
+        <BaseSelect v-model="form.country" placeholder="Select Country" required>
             <option v-for="country in countries" :key="country.isoCode" :value="country.name">
                 {{ country.name }}
             </option>
         </BaseSelect>
-           <InputError :message="form.errors.country" />
+        <InputError :message="form.errors.country" />
 
-         <label :for="'state'" class="form-label">State</label>
+        <label :for="'state'" class="form-label">State</label>
         <BaseSelect v-model="form.state" placeholder="Select State" required>
             <option v-for="state in personalStates" :key="state.isoCode" :value="state.name">
                 {{ state.name }}
             </option>
         </BaseSelect>
-           <InputError :message="form.errors.state" />
+        <InputError :message="form.errors.state" />
 
         <div v-for="field in fieldsTwo" :key="field.key">
             <label :for="field.key" class="form-label">{{ field.lable }}</label>
-            <BaseInput
-                v-model="form[field.key]"
-                :name="field.key"
-                :placeholder="field.placeholder"
-                :type="field.type"
-                required
-            />
+            <BaseInput v-model="form[field.key]" :name="field.key" :placeholder="field.placeholder" :type="field.type"
+                required />
             <InputError :message="form.errors[field.key]" />
         </div>
 
         <div class="form-button mt-4 px-3 d-flex justify-content-end gap-3">
             <button type="submit" class="btn btn-primary">Save</button>
-            <button
-                type="button"
-                class="btn btn-danger"
-                @click="closeModal"
-            >
+            <button type="button" class="btn btn-danger" @click="closeModal">
                 Close
             </button>
         </div>

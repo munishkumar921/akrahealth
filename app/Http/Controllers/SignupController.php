@@ -15,8 +15,13 @@ use App\Models\State;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Models\UserVerify;
+use App\Services\EmailNotificationService;
+use App\Services\InAppNotificationService;
 use App\Services\PatientService;
+use App\Services\RazorpayPaymentService;
 use App\Services\UserService;
+use App\Services\UserSubscriptionService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -54,7 +59,7 @@ class SignupController extends Controller
     public function index(Request $request): Response
     {
         $currency = $this->getUserLocation();
-        /* ---------------- PLANS FILTER ---------------- */
+
         $subscriptionPlans = SubscriptionPlan::where('status', true)
 
             ->where('currency', $currency['currency'] ?? 'USD')
@@ -100,7 +105,7 @@ class SignupController extends Controller
 
         return Inertia::render('Signup/Patient', [
             'token' => $request->input('token'),
-            'patient' => $patient,
+            'patient' => '',
             'states' => State::select('id', 'name')->get(),
             'countries' => Country::select('id', 'name')->get(),
             'questions' => Question::orderBy('question', 'ASC')->get(),
@@ -221,10 +226,20 @@ class SignupController extends Controller
             ]);
         }
 
-        // Create pending subscription for paid plans
-        $subscriptionService = new \App\Services\UserSubscriptionService;
-        $subscription = $subscriptionService->createPendingSubscription($user, $subscriptionPlan);
-        // Create invoice for the trial subscription
+        // Create pending subscription for paid plans. The local trial starts immediately
+        // after mandate authorization succeeds, while the actual recurring charge starts in 14 days.
+        $subscriptionService = new UserSubscriptionService;
+        $trialStartDate = Carbon::now();
+        $trialEndDate = $trialStartDate->copy()->addDays(14);
+
+        $subscription = $subscriptionService->createPendingSubscription($user, $subscriptionPlan, [
+            'start_date' => $trialStartDate->toDateString(),
+            'end_date' => $trialEndDate->toDateString(),
+            'currency' => $subscriptionPlan->currency ?? 'INR',
+            'payment_status' => 'pending',
+        ]);
+
+        // Create invoice for the first post-trial cycle.
         try {
             $invoiceService = new \App\Services\InvoiceService(new \App\Services\RazorpayInvoiceService);
             $invoice = $invoiceService->createSubscriptionInvoice($subscription);
@@ -240,39 +255,42 @@ class SignupController extends Controller
             ]);
         }
 
-        // STEP 2: Create Razorpay Order
-        $razorpayService = new \App\Services\RazorpayPaymentService;
+        // STEP 2: Create Razorpay recurring subscription for mandate authorization.
+        $razorpayService = new RazorpayPaymentService;
+        $razorpayPlanResponse = $razorpayService->createOrGetSubscriptionPlan($subscriptionPlan);
 
-        $orderData = [
-            'amount' => $subscriptionPlan->price,
-            'currency' => $subscriptionPlan->currency ?? 'INR',
-            'receipt' => 'sub_'.$subscription->id,
-            'notes' => [
-                'subscription_id' => $subscription->id,
-                'user_id' => $user->id,
-                'subscription_plan_id' => $subscriptionPlan->id,
-            ],
-        ];
-
-        $orderResponse = $razorpayService->createOrder($orderData);
-        if (! $orderResponse['success']) {
-            // Order creation failed - delete user and subscription
+        if (! $razorpayPlanResponse['success']) {
             $subscription->delete();
             $user->delete();
 
-            return Redirect::route('signup')->withErrors(['error' => 'Failed to create payment order. Please try again.']);
+            return Redirect::route('signup')->withErrors(['error' => 'Failed to create payment subscription. Please try again.']);
         }
-        // Store order_id in subscription
-        $subscription->update(['razorpay_order_id' => $orderResponse['data']['id']]);
 
-        // STEP 3: Return to frontend with order details for Razorpay checkout
-        return Inertia::render('Signup/Payment', [
-            'user' => $user,
-            'subscription' => $subscription,
-            'subscriptionPlan' => $subscriptionPlan,
-            'razorpayOrder' => $orderResponse['data'],
-            'razorpayKey' => config('services.razorpay.key'),
+        $razorpaySubscriptionResponse = $razorpayService->createSubscription([
+            'plan_id' => $razorpayPlanResponse['data']['id'],
+            'total_count' => $this->getRazorpayTotalCount($subscriptionPlan->frequency),
+            'start_at' => $trialEndDate->timestamp,
+            'expire_by' => now()->addDay()->timestamp,
+            'notes' => [
+                'subscription_id' => (string) $subscription->id,
+                'user_id' => (string) $user->id,
+                'subscription_plan_id' => (string) $subscriptionPlan->id,
+                'trial_ends_at' => $trialEndDate->toIso8601String(),
+            ],
         ]);
+
+        if (! $razorpaySubscriptionResponse['success']) {
+            $subscription->delete();
+            $user->delete();
+
+            return Redirect::route('signup')->withErrors(['error' => 'Failed to create payment subscription. Please try again.']);
+        }
+
+        $subscription->update([
+            'razorpay_subscription_id' => $razorpaySubscriptionResponse['data']['id'],
+        ]);
+
+        return Redirect::route('signup.payment.show', $subscription->id);
     }
 
     /**
@@ -298,9 +316,39 @@ class SignupController extends Controller
             ['token' => $token]
         );
 
-        Mail::to($user->email)->queue(new \App\Mail\UserVerificationMail(['token' => $token]));
+        app(EmailNotificationService::class)->queueVerificationEmail($user, $token);
 
         return back()->with('success', 'Activation link sent successfully. Please check your email.');
+    }
+
+    public function showPayment(string $subscriptionId): Response|\Illuminate\Http\RedirectResponse
+    {
+        $subscription = \App\Models\UserSubscription::with(['user', 'subscriptionPlan'])
+            ->findOrFail($subscriptionId);
+        $razorpaySubscriptionUrl = null;
+
+        if ($subscription->status === 'active' && $subscription->user?->is_active) {
+            return Redirect::route('login', [
+                'status' => 'We have sent you a verification email. Please verify your email. Your 14-day free trial has started.',
+            ]);
+        }
+
+        if ($subscription->razorpay_subscription_id) {
+            $subscriptionResponse = (new RazorpayPaymentService)->fetchSubscription($subscription->razorpay_subscription_id);
+            if ($subscriptionResponse['success']) {
+                $razorpaySubscriptionUrl = $subscriptionResponse['data']['short_url'] ?? null;
+            }
+        }
+
+        return Inertia::render('Signup/Payment', [
+            'user' => $subscription->user,
+            'subscription' => $subscription,
+            'subscriptionPlan' => $subscription->subscriptionPlan,
+            'razorpaySubscriptionId' => $subscription->razorpay_subscription_id,
+            'razorpaySubscriptionUrl' => $razorpaySubscriptionUrl,
+            'razorpayKey' => config('services.razorpay.key'),
+            'trialEndsAt' => optional($subscription->end_date)->format('M d, Y'),
+        ]);
     }
 
     /**
@@ -374,6 +422,8 @@ class SignupController extends Controller
             }
         }
 
+        app(EmailNotificationService::class)->queueWelcomeEmail($user);
+
         return redirect()
             ->route('login')
             ->with('success', 'Your e-mail is verified. Check your email for login credentials.');
@@ -403,7 +453,7 @@ class SignupController extends Controller
     {
         $request->validate([
             'razorpay_payment_id' => 'required|string',
-            'razorpay_order_id' => 'required|string',
+            'razorpay_subscription_id' => 'required|string',
             'razorpay_signature' => 'required|string',
             'subscription_id' => 'required|uuid',
         ]);
@@ -412,72 +462,93 @@ class SignupController extends Controller
             $subscription = \App\Models\UserSubscription::with(['user', 'subscriptionPlan'])
                 ->findOrFail($request->subscription_id);
 
-            // Verify payment signature using Razorpay SDK
-            try {
-                $api = new \Razorpay\Api\Api(
-                    config('services.razorpay.key'),
-                    config('services.razorpay.secret')
-                );
+            if (
+                $subscription->status === 'active'
+                && $subscription->user?->is_active
+                && $subscription->razorpay_subscription_id === $request->razorpay_subscription_id
+            ) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'We have sent you a verification email. Please verify your email. Your 14-day free trial has started.',
+                ]);
+            }
 
-                $attributes = [
-                    'razorpay_order_id' => $request->razorpay_order_id,
-                    'razorpay_payment_id' => $request->razorpay_payment_id,
-                    'razorpay_signature' => $request->razorpay_signature,
-                ];
+            $razorpayService = new RazorpayPaymentService;
+            $isValid = $razorpayService->verifySubscriptionSignature([
+                'razorpay_payment_id' => $request->razorpay_payment_id,
+                'razorpay_subscription_id' => $request->razorpay_subscription_id,
+                'razorpay_signature' => $request->razorpay_signature,
+            ]);
 
-                $api->utility->verifyPaymentSignature($attributes);
-            } catch (\Razorpay\Api\Errors\SignatureVerificationError $e) {
-                \Illuminate\Support\Facades\Log::error('Payment signature verification failed', [
+            if (! $isValid) {
+                \Illuminate\Support\Facades\Log::error('Subscription signature verification failed', [
                     'subscription_id' => $subscription->id,
-                    'razorpay_order_id' => $request->razorpay_order_id,
+                    'razorpay_subscription_id' => $request->razorpay_subscription_id,
                     'razorpay_payment_id' => $request->razorpay_payment_id,
-                    'error' => $e->getMessage(),
                 ]);
 
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid payment signature. Please contact support.',
                 ], 400);
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Payment signature verification error', [
+            }
+
+            if ($subscription->razorpay_subscription_id !== $request->razorpay_subscription_id) {
+                \Illuminate\Support\Facades\Log::error('Payment verification - Subscription ID mismatch', [
                     'subscription_id' => $subscription->id,
-                    'error' => $e->getMessage(),
+                    'stored_subscription_id' => $subscription->razorpay_subscription_id,
+                    'received_subscription_id' => $request->razorpay_subscription_id,
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Payment verification error. Please try again or contact support.',
+                    'message' => 'Subscription ID mismatch. Please contact support.',
                 ], 400);
             }
 
-            // Verify order_id matches
-            if ($subscription->razorpay_order_id !== $request->razorpay_order_id) {
-                \Illuminate\Support\Facades\Log::error('Payment verification - Order ID mismatch', [
-                    'subscription_id' => $subscription->id,
-                    'stored_order_id' => $subscription->razorpay_order_id,
-                    'received_order_id' => $request->razorpay_order_id,
-                ]);
+            $trialEndDate = Carbon::now()->addDays(14);
 
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Order ID mismatch. Please contact support.',
-                ], 400);
-            }
-
-            // Activate subscription
+            // Activate the local trial immediately after successful mandate authorization.
+            $oldSubscription = clone $subscription;
             $subscription->update([
                 'status' => 'active',
-                'payment_status' => 'paid',
-                'razorpay_payment_id' => $request->razorpay_payment_id,
+                'start_date' => Carbon::now()->toDateString(),
+                'end_date' => $trialEndDate->toDateString(),
+                'payment_status' => 'pending',
+                'razorpay_subscription_id' => $request->razorpay_subscription_id,
             ]);
+            app(\App\Services\AuditService::class)->logUpdate(
+                'Subscription',
+                $oldSubscription,
+                $subscription->fresh(),
+                'Subscription mandate authorized after signup'
+            );
 
             // Activate user
             $user = $subscription->user;
             $user->update(['is_active' => true]);
 
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'New subscription purchased',
+                    ($user->name ?? 'A user').' completed mandate authorization for '.($subscription->subscriptionPlan?->title ?? 'a subscription').'.',
+                    'subscription_purchased',
+                    [
+                        'related_model_type' => \App\Models\UserSubscription::class,
+                        'related_model_id' => $subscription->id,
+                        'meta' => [
+                            'plan' => $subscription->subscriptionPlan?->title,
+                            'amount' => $subscription->amount,
+                            'currency' => $subscription->currency,
+                            'trial_ends_at' => $trialEndDate->toDateString(),
+                        ],
+                    ]
+                )
+            );
+
             return response()->json([
                 'success' => true,
-                'message' => 'Payment successful! please activate your account. Check your email for activation link.',
+                'message' => 'We have sent you a verification email. Please verify your email. Your 14-day free trial has started.',
             ]);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             \Illuminate\Support\Facades\Log::error('Payment verification - Subscription not found', [
@@ -502,13 +573,28 @@ class SignupController extends Controller
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Payment verification failed', [
                 'subscription_id' => $request->subscription_id ?? null,
-                'razorpay_order_id' => $request->razorpay_order_id ?? null,
+                'razorpay_subscription_id' => $request->razorpay_subscription_id ?? null,
                 'razorpay_payment_id' => $request->razorpay_payment_id ?? null,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
             ]);
+
+            app(InAppNotificationService::class)->notifySuperAdmins(
+                app(InAppNotificationService::class)->buildPayload(
+                    'Payment gateway failure',
+                    'Signup payment authorization failed for subscription '.$request->subscription_id.'.',
+                    'payment_gateway_failure',
+                    [
+                        'meta' => [
+                            'subscription_id' => $request->subscription_id,
+                            'razorpay_subscription_id' => $request->razorpay_subscription_id,
+                            'error' => $e->getMessage(),
+                        ],
+                    ]
+                )
+            );
 
             // Return user-friendly error message without exposing technical details
             return response()->json([
@@ -630,5 +716,13 @@ class SignupController extends Controller
                 'message' => 'Failed to process payment cancellation',
             ], 500);
         }
+    }
+
+    private function getRazorpayTotalCount(?string $frequency): int
+    {
+        return match (strtolower($frequency ?? 'monthly')) {
+            'yearly', 'annual', 'annually' => 10,
+            default => 120,
+        };
     }
 }

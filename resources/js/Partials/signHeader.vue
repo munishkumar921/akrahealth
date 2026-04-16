@@ -3,7 +3,14 @@ import { Link, useForm } from "@inertiajs/vue3";
 import { ref, onMounted, onUnmounted, nextTick } from "vue";
 import DemoRequest from '../Pages/Modals/DemoRequest.vue';
 const form = useForm({});
- 
+
+const props = defineProps({
+    hideLogo: {
+        type: Boolean,
+        default: true
+    }
+})
+
 /* ---------------- LANGUAGE STATE ---------------- */
 const availableLanguages = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
@@ -27,7 +34,7 @@ const initGoogleTranslate = () => {
   window.googleTranslateElementInit = () => {
     new window.google.translate.TranslateElement(
       {
-         includedLanguages: availableLanguages.map(l => l.code).join(','),
+        includedLanguages: availableLanguages.map(l => l.code).join(','),
         autoDisplay: false,
       },
       'google_translate_element'
@@ -83,11 +90,11 @@ const getCurrentFlag = () =>
 
 const getCurrentLanguageName = () =>
   availableLanguages.find(l => l.code === selectedLanguage.value)?.name || 'English'
- 
+
 /* ---------------- LIFECYCLE ---------------- */
 onMounted(() => {
   initGoogleTranslate()
-   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
@@ -97,10 +104,8 @@ onUnmounted(() => {
 /* ---------------- OTHER ---------------- */
 const logout = () => form.post(route('logout'))
 
- 
 
-
-const announcementText='A Lightweight EMR Built for Modern Clinics — Designed for solo providers and clinics';
+const announcementText = 'A Lightweight EMR Built for Modern Clinics — Designed for solo providers and clinics';
 </script>
 
 
@@ -119,91 +124,57 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
                 <img class="w-30px mr-1" src="/images/techStack/WhatsApp.svg" alt="WhatsApp" /><span class="mt-1">+91
                   6381250184</span>
               </a>
-              
             </div>
           </div>
         </div>
         <!-- Desktop: marquee -->
         <div class="col-lg-8">
           <div class="announcement-wrap">
-              <!-- Google Translate Widget -->
-           
+            <!-- Google Translate Widget -->
+
             <div class="marquee-container" title="Click to pause/resume" @click="toggleMarquee">
-              <span
-                class="marquee-text pointer"
-                :style="{ animationPlayState: isPaused ? 'paused' : 'running' }"
-              >
-                <img
-                  src="/images/speaker_13668445.webp"
-                  alt="announcement"
-                  class="me-2 announcement-icon"
-                />
+              <span class="marquee-text pointer" :style="{ animationPlayState: isPaused ? 'paused' : 'running' }">
+                <img src="/images/speaker_13668445.webp" alt="announcement" class="me-2 announcement-icon" />
                 <span class="announcement-text">{{ announcementText }}</span>
-                <img
-                  src="/images/speaker_13668445.webp"
-                  alt="announcement"
-                  class="me-2 announcement-icon"
-                />
+                <img src="/images/speaker_13668445.webp" alt="announcement" class="me-2 announcement-icon" />
               </span>
             </div>
-             <li class="nav-item ms-2 d-flex align-items-center" ref="languageDropdownRef">
+            <li class="nav-item ms-2 d-flex align-items-center" ref="languageDropdownRef">
               <div class="language-selector" @click.stop>
-                <button 
-                  class="language-dropdown d-flex align-items-center gap-2"
-                  @click="toggleLanguageDropdown($event)"
-                >
+                <button class="language-dropdown d-flex align-items-center gap-2"
+                  @click="toggleLanguageDropdown($event)">
                   <span class="current-flag">{{ getCurrentFlag() }}</span>
                   <span class="current-lang">{{ getCurrentLanguageName() }}</span>
                   <i class="ri-arrow-down-s-line" :class="{ 'rotate-180': isLanguageDropdownOpen }"></i>
                 </button>
-                
-                <div 
-                  v-show="isLanguageDropdownOpen"
-                  class="language-options"
-                >
-                  <div 
-                    v-for="lang in availableLanguages" 
-                    :key="lang.code"
+
+                <div v-show="isLanguageDropdownOpen" class="language-options">
+                  <div v-for="lang in availableLanguages" :key="lang.code"
                     class="language-option d-flex align-items-center gap-2"
-                    :class="{ 'active': selectedLanguage === lang.code }"
-                    @click="selectLanguage(lang.code)"
-                  >
+                    :class="{ 'active': selectedLanguage === lang.code }" @click="selectLanguage(lang.code)">
                     <span class="option-flag">{{ lang.flag }}</span>
                     <span class="option-name">{{ lang.name }}</span>
                   </div>
                 </div>
               </div>
-              
+
               <!-- Hidden Google Translate element container -->
-              <div 
-                id="google_translate_element" 
-                style="position: absolute; left: -9999px; top: -9999px; visibility: hidden;"
-              ></div>
+              <div id="google_translate_element"
+                style="position: absolute; left: -9999px; top: -9999px; visibility: hidden;"></div>
             </li>
 
           </div>
         </div>
       </div>
-    </div> 
-  </div> 
+    </div>
+  </div>
 
-  <header id="header" class="fixed-top">
+  <header v-if="hideLogo" id="header" class="fixed-top">
     <div class="container ">
       <nav class="navbar navbar-expand-lg" id="navbar">
         <Link :href="route('home')" class="logo mr-auto">
-        <img src="/images/akrahealth.webp" alt="" />
+          <img src="/images/akrahealth.webp" alt="" />
         </Link>
-        
-        <!-- <div class="collapse navbar-collapse flex-row-reverse" id="navbarSupportedContent">
-          <ul>
-            <li>
-              <Link class="nav-link me-2" :class="`${route().current('home') ? 'active' : ''}`" :href="route('home')"
-                :active="route().current('home')">
-              Home</Link>
-            </li>
-             
-          </ul>
-        </div> -->
       </nav>
     </div>
   </header>
@@ -266,8 +237,13 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
 }
 
 @keyframes marquee {
-  0% { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 /* Dropdown Styling */
@@ -277,6 +253,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   display: flex;
   align-items: center;
 }
+
 .language-dropdown:disabled {
   opacity: 0.7;
   cursor: not-allowed;
@@ -287,7 +264,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   background: #fff;
   padding: 8px;
 }
- 
+
 
 .language-dropdown:focus:not(:disabled) {
   outline: none;
@@ -307,8 +284,8 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   background: #fff;
   color: #000;
   border: 2px solid rgba(255, 255, 255, 0.3);
-   border-radius: 8px;
-   cursor: pointer;
+  border-radius: 8px;
+  cursor: pointer;
   text-align: left;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -342,7 +319,7 @@ const announcementText='A Lightweight EMR Built for Modern Clinics — Designed 
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   overflow: hidden;
-   z-index: 10000;
+  z-index: 10000;
 }
 
 .language-option {
@@ -443,13 +420,13 @@ a.skiptranslate {
   visibility: hidden !important;
   width: 0 !important;
   height: 0 !important;
-    pointer-events: none !important;
+  pointer-events: none !important;
 
 }
 
 /* Hide the translate box Google branding */
-.goog-te-gadget > a > img,
-.goog-te-gadget > a {
+.goog-te-gadget>a>img,
+.goog-te-gadget>a {
   display: none !important;
 }
 
@@ -472,17 +449,18 @@ a.skiptranslate {
   top: -9999px !important;
   visibility: hidden !important;
 }
- .VIpgJd-ZVi9od-ORHb-OEVmcd,
+
+.VIpgJd-ZVi9od-ORHb-OEVmcd,
 .VIpgJd-ZVi9od-ORHb-OEVmcd * {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
 .goog-te-balloon-frame,
 .goog-te-balloon-frame * {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
 }
-
 </style>

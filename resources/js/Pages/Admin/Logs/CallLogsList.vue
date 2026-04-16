@@ -1,331 +1,253 @@
 <script setup>
 import AuthLayout from "@/Layouts/AuthLayout.vue";
 import Table from "@/Components/Table/Table.vue";
-import { reactive, ref, watch } from "vue";
-import { router } from '@inertiajs/vue3';
+import { ref, computed } from "vue";
+import { router } from "@inertiajs/vue3";
+import { route } from "ziggy-js";
 
 const props = defineProps({
-	keyword: String,
-	route: Array,
-	appointments: Object,
+	appointments: {
+		type: Object,
+		default: () => ({}),
+	},
+	filters: {
+		type: Object,
+		default: () => ({
+			keyword: "",
+			status: "",
+		}),
+	},
 });
 
-const columns = [
-	{ label: "Patient", key: "patient.user.name" },
-	{ label: "Doctor", key: "doctor.user.name" },
-	{ label: "Type", key: "appointment_mode" },
-	{ label: "Appointment", key: "appointment_date" },
-	{ label: "Call Start time", key: "appointment_time" },
-	{ label: "Call duration", key: "duration_minutes" },
-	{ label: "Reason", key: "reason" },
-	{ label: "Call Status", key: "status" },
+const filterForm = ref({
+	keyword: props.filters?.keyword || "",
+	status: props.filters?.status || "",
+});
+
+const statusOptions = [
+	{ value: "", label: "All status" },
+	{ value: "completed", label: "Completed" },
+	{ value: "pending", label: "Missed" },
+	{ value: "cancelled", label: "Cancelled" },
 ];
 
-const filter = reactive({
-	completed: false,
-	pending: false,
-	cancelled: false,
-})
+const columns = [
+	{ label: "Patient", key: "patient.user.name", align: "left" },
+	{ label: "Doctor", key: "doctor.user.name", align: "left" },
+	{ label: "Type", key: "appointment_mode", align: "left" },
+	{ label: "Appointment", key: "appointment_date", align: "left" },
+	{ label: "Call Start Time", key: "appointment_time", align: "left" },
+	{ label: "Call Duration", key: "duration_minutes", type: "slot", slot: "duration", align: "left" },
+	{ label: "Reason", key: "reason", align: "left" },
+	{ label: "Call Status", key: "status", type: "slot", slot: "status", align: "center" },
+];
 
-watch(filter, (newFilter) => {
+const perPageOptions = [10, 15, 25, 50, 100];
+const perPage = ref(Number(new URLSearchParams(window.location.search).get("per_page")) || 20);
+const rows = computed(() => props.appointments?.data ?? []);
+const activeFilterCount = computed(() =>
+	Object.values(filterForm.value).filter((value) => value !== null && value !== "").length
+);
+const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+const resultSummary = computed(() => {
+	const total = props.appointments?.total ?? rows.value.length;
+	const from = props.appointments?.from ?? (rows.value.length ? 1 : 0);
+	const to = props.appointments?.to ?? rows.value.length;
 
-    const params = new URLSearchParams(window.location.search)
-    Object.keys(newFilter).forEach(key => {
-        if (newFilter[key]) {
-            params.set(key, 1)
-        } else {
-            params.delete(key)
-        }
-    })
+	if (!total) {
+		return "No call logs found";
+	}
 
-    router.get(route(route().current()), Object.fromEntries(params), {
-        preserveState: true,
-        replace: true
-    })
+	return `Showing ${from}-${to} of ${total} call logs`;
+});
 
-}, { deep: true })
+const buildQuery = (overrides = {}) => {
+	const params = new URLSearchParams(window.location.search);
+	const query = {
+		per_page: params.get("per_page") || undefined,
+		sort: params.get("sort") || undefined,
+		direction: params.get("direction") || undefined,
+		...filterForm.value,
+		...overrides,
+	};
+
+	return Object.fromEntries(
+		Object.entries(query).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+	);
+};
+
+const applyFilters = () => {
+	router.get(route("admin.callLogs.list"), buildQuery(), {
+		preserveState: true,
+		preserveScroll: true,
+		replace: true,
+	});
+};
+
+const clearFilters = () => {
+	filterForm.value = {
+		keyword: "",
+		status: "",
+	};
+
+	router.get(route("admin.callLogs.list"), buildQuery(), {
+		preserveState: true,
+		preserveScroll: true,
+		replace: true,
+	});
+};
+
+const updatePerPage = () => {
+	router.get(route("admin.callLogs.list"), buildQuery({ per_page: perPage.value, page: 1 }), {
+		preserveState: true,
+		preserveScroll: true,
+		replace: true,
+	});
+};
+
+const getStatusClass = (status) => {
+	const value = String(status || "").toLowerCase();
+	if (value === "completed") return "status-pill--active";
+	if (value === "pending") return "status-pill--pending";
+	return "status-pill--inactive";
+};
 </script>
 
 <template>
 	<AuthLayout title="Call Logs" description="View call logs" heading="Call Logs">
-		<div class="">
-			<div class="d-none d-md-flex align-items-center justify-content-between mb-3">
-				<h3 class="text-xl mb-0">Call Logs</h3>
-				<div class="d-flex align-items-center gap-3">
-					<div class="form-check d-flex align-items-center gap-2 m-0">
-						<input id="flt-completed" type="checkbox" class="status-check status-check--green"
-							v-model="filter.completed" />
-						<label class="mt-2" for="flt-completed">Completed</label>
+		<div class="call-logs-page">
+			<div class="users-toolbar card border-0 shadow-sm mb-4">
+				<div class="card-body">
+					<div
+						class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+						<div>
+							<h3 class="mb-1">Call Logs</h3>
+							<p class="text-muted mb-0">{{ resultSummary }}</p>
+						</div>
+
+						<div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+							<span v-if="hasActiveFilters" class="filter-count-badge">
+								{{ activeFilterCount }} filter{{ activeFilterCount > 1 ? "s" : "" }} active
+							</span>
+							<button v-if="hasActiveFilters" type="button" class="btn btn-outline-secondary btn-sm"
+								@click="clearFilters">
+								<i class="bi bi-x-circle me-1"></i>Clear filters
+							</button>
+						</div>
 					</div>
-					<div class="form-check d-flex align-items-center gap-2 m-0">
-						<input id="flt-pending" type="checkbox" class="status-check status-check--grey"
-							v-model="filter.pending" />
-						<label class="mt-2" for="flt-pending">Missed</label>
-					</div>
-					<div class="form-check d-flex align-items-center gap-2 m-0">
-						<input id="flt-cancelled" type="checkbox" class="status-check status-check--red"
-							v-model="filter.cancelled" />
-						<label class="mt-2" for="flt-cancelled">Cancelled</label>
+
+					<div class="row g-3 align-items-end">
+						<div class="col-12 col-xl-4">
+							<label class="form-label text-muted small text-uppercase mb-2">Search</label>
+							<div class="input-group call-logs-search-control">
+								<span class="input-group-text bg-white border-end-0 border col-1 rounded-circle-left">
+									<i class="bi bi-search text-muted"></i>
+								</span>
+								<input v-model="filterForm.keyword" type="search" class="form-control border-start-0"
+									placeholder="Search by patient, doctor, reason, type, or date"
+									@keydown.enter.prevent="applyFilters" />
+								<button type="button" class="btn btn-primary" @click="applyFilters">Search</button>
+							</div>
+						</div>
+
+						<div class="col-12 col-sm-6 col-xl-3">
+							<label class="form-label text-muted small text-uppercase mb-2">Status</label>
+							<select v-model="filterForm.status" class="form-select" @change="applyFilters">
+								<option v-for="option in statusOptions" :key="option.value" :value="option.value">
+									{{ option.label }}
+								</option>
+							</select>
+						</div>
 					</div>
 				</div>
 			</div>
 
-			<div class="d-md-none">
-				<!--  MOBILE VIEW - Title  -->
-				<h3 class="text-xl mb-3">Call Logs</h3>
-			</div>
+			<div class="card border-0 shadow-sm">
+				<div class="card-body p-0 p-md-3">
+					<div class="d-flex justify-content-end align-items-center px-3 px-md-0 pt-3 pt-md-0 pb-2">
+						<div class="d-flex align-items-center gap-2 rows-select-wrap">
+							<select id="call-logs-per-page" v-model="perPage"
+								class="form-select form-select-sm top-page-select" @change="updatePerPage">
+								<option v-for="option in perPageOptions" :key="option" :value="option">
+									{{ option }}
+								</option>
+							</select>
+						</div>
+					</div>
 
-			<div class="d-md-none">
-				<!-- Status Filters -->
-				<div class="d-flex gap-3 mb-3">
-					<label class="d-flex align-items-center gap-1">
-						<input type="checkbox" class="status-check status-check--green" v-model="filterCompleted" />
-						Completed
-					</label>
+					<Table :columns="columns" :data="appointments" :search-show="false" :PageOptions="false">
+						<template #duration="{ row }">
+							<div class="text-start">
+								<div class="fw-medium text-dark">{{ row.duration_minutes ? `${row.duration_minutes} min`
+									: "-" }}</div>
+							</div>
+						</template>
 
-					<label class="d-flex align-items-center gap-1">
-						<input type="checkbox" class="status-check status-check--grey" v-model="filterPending" />
-						Missed
-					</label>
-
-					<label class="d-flex align-items-center gap-1">
-						<input type="checkbox" class="status-check status-check--red" v-model="filterCancelled" />
-						Cancelled
-					</label>
+						<template #status="{ row }">
+							<span class="status-pill" :class="getStatusClass(row.status)">
+								{{ row.status || "-" }}
+							</span>
+						</template>
+					</Table>
 				</div>
 			</div>
-		</div>
-
-		<div class="table-responsive">
-			<Table :columns="columns" :data="appointments" table="appointments" :search="keyword"
-				:pagination="appointments">
-			</Table>
 		</div>
 	</AuthLayout>
 </template>
 
 <style scoped>
-.icon-btn {
-	/* width: 40px;
-	height: 40px; */
-	padding: 9px 8px 6px 8px;
-	border: none;
-	border-radius: 12px;
+.users-toolbar {
+	border-radius: 20px;
+}
+
+.filter-count-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.45rem 0.75rem;
+	border-radius: 999px;
+	background: #eef2ff;
+	color: #3730a3;
+	font-size: 0.8rem;
+	font-weight: 600;
+}
+
+.top-page-select {
+	min-width: 74px;
+	width: 74px;
+}
+
+.rows-select-wrap {
+	flex: 0 0 auto;
+}
+
+.call-logs-search-control {
+	max-width: 720px;
+}
+
+.status-pill {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	color: #fff;
-	cursor: pointer;
-	transition: transform .07s ease-in-out, opacity .15s ease-in-out;
+	min-width: 84px;
+	padding: 0.35rem 0.7rem;
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: capitalize;
 }
 
-.icon-btn:active {
-	transform: scale(0.97);
+.status-pill--active {
+	background: #dcfce7;
+	color: #166534;
 }
 
-.icon-btn--red {
-	background: #ef4444;
+.status-pill--inactive {
+	background: #f1f5f9;
+	color: #475569;
 }
 
-/* red-500 */
-.icon-btn i {
-	font-size: 14px;
-	line-height: 1;
-}
-
-.modal-content {
-	border-radius: 12px;
-}
-
-.modal-title {
-	font-size: 20px;
-}
-
-.form-label {
-	font-weight: 600;
-	color: #374151;
-}
-
-.modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background-color: rgba(0, 0, 0, 0.5);
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	z-index: 9999;
-	padding: 20px;
-}
-
-.modal-container {
-	background: white;
-	border-radius: 8px;
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-	width: 100%;
-	max-width: 600px;
-	max-height: 90vh;
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-}
-
-.modal-content {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-}
-
-.modal-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 1rem 1.5rem;
-	border-bottom: 1px solid #dee2e6;
-	background-color: #f8f9fa;
-}
-
-.modal-title {
-	font-size: 1.25rem;
-	font-weight: 600;
-	color: #333;
-}
-
-.close {
-	background: none;
-	border: none;
-	font-size: 1.5rem;
-	line-height: 1;
-	color: #000;
-	opacity: .5;
-	cursor: pointer;
-	padding: 0;
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-}
-
-.close:hover {
-	opacity: 1;
-	background-color: rgba(0, 0, 0, .1);
-}
-
-.modal-body {
-	flex: 1;
-	overflow-y: auto;
-	padding: 1.5rem;
-	max-height: calc(90vh - 140px);
-}
-
-.modal-footer {
-	display: flex;
-	justify-content: flex-end;
-	gap: 10px;
-	padding: 1rem 1.5rem;
-	border-top: 1px solid #dee2e6;
-	background-color: #f8f9fa;
-}
-
-.ah-toast {
-	position: fixed;
-	top: 20px;
-	right: 20px;
-	z-index: 1050;
-	display: inline-flex;
-	align-items: center;
-	gap: 10px;
-	padding: 10px 14px;
-	border-radius: 10px;
-	color: #fff;
-	box-shadow: 0 6px 20px rgba(0, 0, 0, .15);
-	animation: ah-fade-in .15s ease-out;
-}
-
-.ah-toast--success {
-	background: #16a34a;
-}
-
-/* green */
-.ah-toast--warning {
-	background: #f59e0b;
-}
-
-/* amber */
-.ah-toast .bi {
-	font-size: 18px;
-}
-
-@keyframes ah-fade-in {
-	from {
-		opacity: 0;
-		transform: translateY(-6px);
-	}
-
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-/* colored checks */
-.form-check-input--green:checked {
-	background-color: #10b981;
-	border-color: #10b981;
-}
-
-.form-check-input--blue:checked {
-	background-color: #0ea5e9;
-	border-color: #0ea5e9;
-}
-
-.status-check {
-	appearance: none;
-	width: 16px;
-	height: 16px;
-	border: 2px solid #d1d5db;
-	/* gray-300 */
-	border-radius: 4px;
-	display: inline-block;
-	position: relative;
-	cursor: pointer;
-	background: #fff;
-}
-
-.status-check:focus {
-	outline: none;
-	box-shadow: 0 0 0 2px rgba(59, 130, 246, .2);
-}
-
-.status-check--green:checked {
-	border-color: #06c270;
-	/* gray-400 */
-	background-color: #06c270;
-}
-
-.status-check--grey:checked {
-	border-color: #9ca3af;
-	/* gray-400 */
-	background-color: #9ca3af;
-}
-
-.status-check--red:checked {
-	border-color: #f35353;
-	/* gray-400 */
-	background-color: #f35353;
-}
-
-/* tick icon */
-.status-check:checked::after {
-	content: "";
-	position: absolute;
-	left: 4px;
-	top: 1px;
-	width: 4px;
-	height: 8px;
-	border: solid #fff;
-	border-width: 0 2px 2px 0;
-	transform: rotate(45deg);
+.status-pill--pending {
+	background: #fef3c7;
+	color: #92400e;
 }
 </style>

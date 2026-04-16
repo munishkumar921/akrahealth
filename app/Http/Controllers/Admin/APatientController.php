@@ -35,17 +35,25 @@ class APatientController extends Controller
      */
     public function index(PatientService $patientService)
     {
-        $patients = $patientService->list(request());
-        $doctors = Doctor::with('user:id,name')->where('hospital_id', auth()->user()->doctor->hospital_id)
+        $patients = $patientService->listAdminPatients(request());
+        $hospitalId = auth()->user()->hospital?->id ?? auth()->user()->doctor?->hospital_id;
+        $doctors = Doctor::with('user:id,name')->where('hospital_id', $hospitalId)
             ->get()
             ->map(fn ($doctor) => [
                 'id' => $doctor->id,
                 'name' => $doctor->name ?? '',
             ]);
         $request = request();
-        $keyword = $request->get('keyword') ?? '';
 
-        return Inertia::render('Admin/Patient/Index', ['patients' => $patients, 'request' => $request, 'doctors' => $doctors, 'keyword' => $keyword]);
+        return Inertia::render('Admin/Patient/Index', [
+            'patients' => $patients,
+            'doctors' => $doctors,
+            'filters' => [
+                'keyword' => trim((string) $request->input('keyword', $request->input('search', ''))),
+                'status' => $request->input('status', ''),
+                'doctor_id' => (string) $request->input('doctor_id', ''),
+            ],
+        ]);
     }
 
     /**
@@ -72,7 +80,7 @@ class APatientController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(PatientRequest $request, string $id)
     {
         // try {
         // Get the patient to find the associated user ID

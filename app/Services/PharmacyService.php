@@ -6,6 +6,9 @@ use App\Models\Hospital;
 use App\Models\Pharmacy;
 use App\Traits\SMSTrait;
 use App\Traits\UploadFileTrait;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 
 class PharmacyService
@@ -18,12 +21,17 @@ class PharmacyService
      * @param  mixed  $request
      * @return void
      */
-    public function list($request)
+    public function list(Request $request): LengthAwarePaginator
     {
         $user = auth()->user();
         $hospital = Hospital::where('user_id', $user->id)->first();
         $hospitalId = $hospital?->id;
         $doctor = $user->doctor;
+        $filters = [
+            'keyword' => trim((string) $request->input('keyword', '')),
+            'status' => $request->input('status', ''),
+            'verification' => $request->input('verification', ''),
+        ];
 
         $query = Pharmacy::with('user')
             ->select('pharmacies.*')
@@ -40,27 +48,56 @@ class PharmacyService
             $query->whereRaw('1 = 0');
         }
 
-        return $query
-            ->when(request('search'), function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('pharmacies.name', 'like', "%{$search}%")
-                        ->orWhere('pharmacies.license_number', 'like', "%{$search}%")
-                        ->orWhere('pharmacies.city', 'like', "%{$search}%")
-                        ->orWhere('pharmacies.pincode', 'like', "%{$search}%")
-                        ->orWhereHas('user', function ($uq) use ($search) {
-                            $uq->where('name', 'like', "%{$search}%")
-                                ->orWhere('email', 'like', "%{$search}%");
+        $pharmacies = $query
+            ->when($filters['keyword'], function ($query, $keyword) {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('pharmacies.name', 'like', "%{$keyword}%")
+                        ->orWhere('pharmacies.license_number', 'like', "%{$keyword}%")
+                        ->orWhere('pharmacies.address', 'like', "%{$keyword}%")
+                        ->orWhere('pharmacies.city', 'like', "%{$keyword}%")
+                        ->orWhere('pharmacies.pincode', 'like', "%{$keyword}%")
+                        ->orWhere('pharmacies.mobile', 'like', "%{$keyword}%")
+                        ->orWhere('pharmacies.email', 'like', "%{$keyword}%")
+                        ->orWhereHas('user', function ($uq) use ($keyword) {
+                            $uq->where('name', 'like', "%{$keyword}%")
+                                ->orWhere('email', 'like', "%{$keyword}%")
+                                ->orWhere('mobile', 'like', "%{$keyword}%");
                         });
                 });
             })
-            ->when(request('is_verified') !== null, function ($query) {
-                $query->where('pharmacies.is_verified', request('is_verified'));
+            ->when($filters['verification'] !== '', function ($query) use ($filters) {
+                $query->where('pharmacies.is_verified', filter_var($filters['verification'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE));
             })
-            ->when(request('is_active') !== null, function ($query) {
-                $query->where('pharmacies.is_active', request('is_active'));
+            ->when($filters['status'] !== '', function ($query) use ($filters) {
+                $query->where('pharmacies.is_active', filter_var($filters['status'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE));
             })
             ->orderBy('pharmacies.created_at', 'desc')
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->paginate($request->integer('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $pharmacies->getCollection()->transform(function (Pharmacy $pharmacy) {
+            $pharmacy->display_name = $pharmacy->name;
+            $pharmacy->contact_name = trim((string) ($pharmacy->user?->name ?? $pharmacy->contact_person ?? ''));
+            $pharmacy->contact_email = $pharmacy->email ?: $pharmacy->user?->email;
+            $pharmacy->contact_mobile = $pharmacy->mobile ?: $pharmacy->user?->mobile;
+            $pharmacy->banner_url = $pharmacy->banner
+                ? (str_starts_with($pharmacy->banner, 'http') ? $pharmacy->banner : Storage::url($pharmacy->banner))
+                : asset('images/avatar.webp');
+            $pharmacy->address_sort = collect([
+                $pharmacy->address,
+                $pharmacy->city,
+                $pharmacy->state,
+                $pharmacy->country,
+                $pharmacy->pincode,
+            ])->filter()->implode(', ');
+            $pharmacy->created_label = optional($pharmacy->created_at)?->format('F d, Y');
+            $pharmacy->status_label = $pharmacy->is_active ? 'Active' : 'Inactive';
+            $pharmacy->verification_label = $pharmacy->is_verified ? 'Verified' : 'Pending';
+
+            return $pharmacy;
+        });
+
+        return $pharmacies;
     }
 
     /**

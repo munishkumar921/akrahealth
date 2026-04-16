@@ -2,7 +2,6 @@
 import { ref, computed, watch } from 'vue';
 import {router } from '@inertiajs/vue3';
 import AuthLayout from "@/Layouts/AuthLayout2.vue";
-import { defineProps } from "vue";
 import { Line } from 'vue-chartjs'
 import { Chart as ChartJS, Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale } from 'chart.js'
 import jsPDF from 'jspdf';

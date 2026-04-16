@@ -30,6 +30,7 @@ class Audit extends Model
     protected $fillable = [
         'user_id',
         'admin_id',
+        'hospital_id',
         'user_type',
         'module',
         'action',
@@ -68,6 +69,14 @@ class Audit extends Model
     public function admin(): BelongsTo
     {
         return $this->belongsTo(User::class, 'admin_id');
+    }
+
+    /**
+     * Get the hospital that owns the audit scope.
+     */
+    public function hospital(): BelongsTo
+    {
+        return $this->belongsTo(Hospital::class, 'hospital_id');
     }
 
     /**

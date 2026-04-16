@@ -77,8 +77,8 @@ class Doctor extends Model
     {
         return $this->name
             ?? trim(
-                ($this->first_name ?? $this->user?->first_name ?? '').
-                    ' '.
+                ($this->first_name ?? $this->user?->first_name ?? '') .
+                    ' ' .
                     ($this->last_name ?? $this->user?->last_name ?? '')
             );
     }
@@ -179,7 +179,7 @@ class Doctor extends Model
     public function getProfilePhotoUrlAttribute()
     {
         if ($this->profile_photo_path) {
-            return asset('storage/'.$this->profile_photo_path);
+            return asset('storage/' . $this->profile_photo_path);
         }
 
         return null;

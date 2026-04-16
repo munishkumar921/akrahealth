@@ -44,52 +44,40 @@ const sizeClass = computed(() => {
 </script>
 
 <template>
-    <transition name="fade">
-        <div
-            class="modal-overlay"
-            v-if="isOpen"
-            @click.self="autoClose && closeModal()"
-        >
-            <div :class="['modal-content', sizeClass]">
+    <Teleport to="body">
+        <transition name="fade">
+            <div class="modal-overlay" v-if="isOpen" @click.self="autoClose && closeModal()">
+                <div :class="['modal-content', sizeClass]">
 
-                <!-- HEADER -->
-                <div class="form-body bg-primary">
-                    <div class="form-items p-2">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <p class="title text-white mb-0">
-                                {{ title }}
-                            </p>
-                            <CloseButton
-                                v-if="showCloseButton"
-                                @close="closeModal()"
-                            />
+                    <!-- HEADER -->
+                    <div class="form-body bg-primary">
+                        <div class="form-items p-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <p class="title text-white mb-0">
+                                    {{ title }}
+                                </p>
+                                <CloseButton v-if="showCloseButton" @close="closeModal()" />
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- BODY -->
-                <div class="modal-scrollable-content p-3">
-                    <slot />
-                </div>
+                    <!-- BODY -->
+                    <div class="modal-scrollable-content p-3">
+                        <slot />
+                    </div>
 
-                <!-- FOOTER -->
-                <div
-                    class="modal-footer bg-primary"
-                    v-if="actionButtons.length"
-                >
-                    <button
-                        v-for="(button, index) in actionButtons"
-                        :key="index"
-                        class="btn btn-light btn-sm"
-                        @click="button.action"
-                    >
-                        {{ button.label }}
-                    </button>
-                </div>
+                    <!-- FOOTER -->
+                    <div class="modal-footer bg-primary" v-if="actionButtons.length">
+                        <button v-for="(button, index) in actionButtons" :key="index" class="btn btn-light btn-sm"
+                            @click="button.action">
+                            {{ button.label }}
+                        </button>
+                    </div>
 
+                </div>
             </div>
-        </div>
-    </transition>
+        </transition>
+    </Teleport>
 </template>
 
 <style scoped>
@@ -97,7 +85,7 @@ const sizeClass = computed(() => {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    z-index: 9999;
+    z-index: 20000;
     background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
@@ -112,7 +100,7 @@ const sizeClass = computed(() => {
     border-radius: 10px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     max-height: 90vh;
-     border-radius: 15px;
+    border-radius: 15px;
 }
 
 /* ================= BODY ================= */
@@ -133,10 +121,21 @@ const sizeClass = computed(() => {
 }
 
 /* ================= SIZE (DESKTOP) ================= */
-.modal-sm { width: 300px; }
-.modal-md { width: 420px; }
-.modal-lg { width: 600px; }
-.modal-xl { width: 760px; }
+.modal-sm {
+    width: 300px;
+}
+
+.modal-md {
+    width: 420px;
+}
+
+.modal-lg {
+    width: 600px;
+}
+
+.modal-xl {
+    width: 760px;
+}
 
 /* ================= MOBILE FIX ================= */
 @media (max-width: 768px) {
@@ -158,8 +157,9 @@ const sizeClass = computed(() => {
 
     .form-items {
         padding: 10px !important;
-       
+
     }
+
     .form-body {
         border-radius: 16px 16px 0 0;
     }
@@ -193,13 +193,18 @@ const sizeClass = computed(() => {
         position: static;
         display: block;
     }
+
     .modal-content {
         box-shadow: none;
         width: 100%;
         max-height: none;
     }
+
     .modal-scrollable-content {
         max-height: none;
     }
+}
+.modal-content{
+    height: auto!important;
 }
 </style>

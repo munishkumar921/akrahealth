@@ -22,15 +22,11 @@ class DFormsController extends Controller
         $doctorId = Auth::user()->doctor->id ?? null;
         $patientId = Auth::user()->doctor->selected_patient_id ?? null;
 
-        // ✅ Get user-specific form configuration
         $DoctorForms = DoctorForms::where('doctor_id', $doctorId)->first();
 
-        // Check if the record or form is empty
         if (! $DoctorForms || empty($DoctorForms->form)) {
-            // Load default YAML form
             $formYaml = File::get(resource_path('forms.yaml'));
 
-            // Create or update record
             DoctorForms::updateOrCreate(
                 ['doctor_id' => $doctorId],
                 ['form' => $formYaml]
@@ -41,12 +37,9 @@ class DFormsController extends Controller
             $yaml = $DoctorForms->form;
         }
 
-        // Parse YAML to array using Symfony YAML
         $formatterForm = Yaml::parse($yaml);
 
-        // ✅ Render Inertia page
-        // Complete Forms
-        $completdForms = Form::with('doctor')
+        $completedForms = Form::with('doctor')
             ->where('doctor_id', $doctorId)
             ->where('patient_id', $patientId)
             ->get();
@@ -54,16 +47,8 @@ class DFormsController extends Controller
         return Inertia::render('Doctors/Patient/Forms/Index', [
             'forms' => $DoctorForms,
             'formatterForm' => $formatterForm,
-            'completdForms' => $completdForms,
+            'completedForms' => $completedForms,
         ]);
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
     }
 
     /**

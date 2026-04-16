@@ -1,16 +1,13 @@
 <script setup>
 import { useForm, usePage } from "@inertiajs/vue3";
 import AuthLayout from "@/Layouts/AuthLayout.vue";
-import { ref } from "vue";
+import { computed } from "vue";
 
 const props = defineProps({
     data: Object,
 });
 
-  
 const encounterForm = useForm({
-
-    /* encounters */
     id: props.data?.encounter?.id,
     patient_id: usePage().props?.selected_patient?.id,
     chief_complaint: props.data?.encounter?.chief_complaint,
@@ -28,20 +25,14 @@ const encounterForm = useForm({
     complexity_of_encounter: props.data?.encounter?.complexity_of_encounter,
     referring_provider: props.data?.encounter?.referring_provider,
     encounter_role: props.data?.encounter?.encounter_role,
-
-    /* Patient illness histories */
     hpi: props.data?.encounter?.patient_illness_history?.hpi || "",
     forms: props.data?.encounter?.patient_illness_history?.forms || "",
     situation: props.data?.encounter?.patient_illness_history?.situation || "",
-
-    /* Review of systems */
     ros: props.data?.encounter?.review_of_system?.ros || "",
     ros_gen: props.data?.encounter?.review_of_system?.ros_gen || "",
     ros_eye: props.data?.encounter?.review_of_system?.ros_eye || "",
     ros_ent: props.data?.encounter?.review_of_system?.ros_ent || "",
     ros_resp: props.data?.encounter?.review_of_system?.ros_resp || "",
-
-    /* Vital Signs */
     vital_date: props.data?.encounter?.vital?.vital_date || "",
     age: props.data?.encounter?.vital?.age || "",
     passage: props.data?.encounter?.vital?.passage || "",
@@ -63,11 +54,7 @@ const encounterForm = useForm({
     hc_percentile: props.data?.encounter?.vital?.hc_percentile || "",
     wt_ht_percentile: props.data?.encounter?.vital?.wt_ht_percentile || "",
     bmi_percentile: props.data?.encounter?.vital?.bmi_percentile || "",
-
-    /* physical examination */
     pe: props.data?.encounter?.physical_examination?.pe || "",
-
-    /* assessments */
     assessment_date: props.data?.encounter?.assessment?.assessment_date || "",
     icd: props.data?.encounter?.assessment?.icd || "",
     other: props.data?.encounter?.assessment?.other || "",
@@ -75,658 +62,776 @@ const encounterForm = useForm({
     assessment_other: props.data?.encounter?.assessment?.assessment_other || "",
     differential_diagnoses: props.data?.encounter?.assessment?.differential_diagnoses || "",
     assessment_discussion: props.data?.encounter?.assessment?.assessment_discussion || "",
-
-    /* plans */
     plan_date: props.data?.encounter?.plan?.plan_date || "",
     plan: props.data?.encounter?.plan?.plan || "",
     duration: props.data?.encounter?.plan?.duration || "",
     followup: props.data?.encounter?.plan?.followup || "",
     goals: props.data?.encounter?.plan?.goals || "",
     tp: props.data?.encounter?.plan?.tp || "",
-
-    /* sign form */
-    date: "",
-    signed: "",
-    date_signed: "",
-    encounter_age: "",
-    location: "",
-    activity: "",
-    cc: "",
-
-    /* billing form */
-    bill_submitted: "",
-    addendum: "",
-    addendum_eid: "",
-    encounter_template: "",
-    bill_complex: "",
-
-    /* annotate */
-    annotate_image: "",
 });
 
 const print = () => {
     window.print();
 };
+
+const textOrFallback = (value, fallback = "Not recorded") =>
+    value !== null && value !== undefined && String(value).trim() !== "" ? value : fallback;
+
+const encounter = computed(() => props.data?.encounter || {});
+
+const patientName = computed(
+    () => encounter.value?.patient?.name || encounter.value?.patient?.user?.name || "Unknown patient"
+);
+
+const doctorName = computed(
+    () => encounter.value?.doctor?.name || encounter.value?.doctor?.user?.name || "Unknown provider"
+);
+
+const encounterLocationName = computed(
+    () => props.data?.locations?.[encounter.value?.encounter_location]?.name || "Not recorded"
+);
+
+const appointmentSummary = computed(() => {
+    if (!encounter.value?.appointment) return "No appointment linked";
+
+    const appointment = encounter.value.appointment;
+    const parts = [
+        appointment?.patient?.user?.name,
+        appointment?.patient?.user?.mobile ? `Mobile: ${appointment.patient.user.mobile}` : null,
+        appointment?.appointment_date && appointment?.appointment_time
+            ? `${appointment.appointment_date} ${appointment.appointment_time}`
+            : null,
+    ].filter(Boolean);
+
+    return parts.join(" • ");
+});
+
+const summaryCards = computed(() => [
+    { label: "Encounter ID", value: textOrFallback(encounterForm.id, "Pending") },
+    { label: "Date of Service", value: textOrFallback(encounterForm.encounter_date_of_service) },
+    { label: "Patient", value: patientName.value },
+    { label: "Provider", value: doctorName.value },
+]);
+
+const overviewItems = computed(() => [
+    { label: "Chief Complaint", value: textOrFallback(encounterForm.chief_complaint) },
+    { label: "Encounter Location", value: encounterLocationName.value },
+    { label: "Associated Appointment", value: appointmentSummary.value },
+    { label: "Provider Role", value: textOrFallback(encounterForm.encounter_role) },
+    { label: "Complexity", value: textOrFallback(encounterForm.complexity_of_encounter) },
+    { label: "Referring Provider", value: textOrFallback(encounterForm.referring_provider) },
+    { label: "Condition Related To Work", value: textOrFallback(encounter.value?.encounter_condition_work) },
+    { label: "Motor Vehicle Accident", value: textOrFallback(encounter.value?.encounter_condition_auto) },
+    { label: "Accident State", value: textOrFallback(encounter.value?.encounter_condition_auto_state) },
+    { label: "Other Accident", value: textOrFallback(encounter.value?.encounter_condition_other) },
+    { label: "Other Condition", value: textOrFallback(encounter.value?.encounter_condition) },
+]);
+
+const vitalItems = computed(() => [
+    { label: "Date", value: textOrFallback(encounterForm.vital_date) },
+    { label: "Age", value: textOrFallback(encounterForm.age) },
+    { label: "Weight", value: textOrFallback(encounterForm.weight) },
+    { label: "Height", value: textOrFallback(encounterForm.height) },
+    { label: "BMI", value: textOrFallback(encounterForm.bmi) },
+    {
+        label: "Blood Pressure",
+        value: `${textOrFallback(encounterForm.bp_systolic, "—")}/${textOrFallback(encounterForm.bp_diastolic, "—")}${
+            encounterForm.bp_position ? ` (${encounterForm.bp_position})` : ""
+        }`,
+    },
+    { label: "Pulse", value: textOrFallback(encounterForm.pulse) },
+    { label: "Respirations", value: textOrFallback(encounterForm.respirations) },
+    { label: "O2 Saturation", value: textOrFallback(encounterForm.o2_saturation) },
+    { label: "Temperature", value: textOrFallback(encounterForm.temperature) },
+    { label: "Temperature Method", value: textOrFallback(encounterForm.temperature_method) },
+    { label: "Other Vitals", value: textOrFallback(encounterForm.vitals_other) },
+]);
+
+const billingItems = computed(() => [
+    { label: "Procedure Code", value: textOrFallback(encounter.value?.billing_core?.cpt) },
+    { label: "Procedure Charge", value: textOrFallback(encounter.value?.billing_core?.cpt_charge) },
+    { label: "Units", value: textOrFallback(encounter.value?.billing_core?.unit) },
+    { label: "Modifier", value: textOrFallback(encounter.value?.billing_core?.modifier) },
+    { label: "Service Start", value: textOrFallback(encounter.value?.billing_core?.service_start) },
+    { label: "Service End", value: textOrFallback(encounter.value?.billing_core?.service_end) },
+    { label: "Diagnosis Pointer", value: textOrFallback(encounter.value?.billing_core?.icd_pointer) },
+    { label: "Primary Insurance", value: textOrFallback(encounter.value?.billing?.insurance_id_1) },
+    { label: "Secondary Insurance", value: textOrFallback(encounter.value?.billing?.insurance_id_2) },
+]);
+
+const referralItems = computed(() => [
+    { label: "Referral Details", value: textOrFallback(encounter.value?.referral?.detail) },
+    { label: "Diagnosis Codes", value: textOrFallback(encounter.value?.referral?.code) },
+    { label: "Specialty", value: textOrFallback(encounter.value?.referral?.specialty) },
+    {
+        label: "Referral Provider",
+        value: textOrFallback(
+            encounter.value?.referral?.doctor?.name || encounter.value?.referral?.doctor?.user?.name || encounter.value?.referral?.doctor
+        ),
+    },
+    { label: "Pending Date", value: textOrFallback(encounter.value?.referral?.pending_date) },
+    { label: "Insurance", value: textOrFallback(encounter.value?.referral?.insurance) },
+    { label: "Order Notes", value: textOrFallback(encounter.value?.referral?.note) },
+]);
 </script>
 
 <template>
-<AuthLayout title="View Encounter" description="View patient encounter details" heading="View Encounter">
-        <div class="mb-2 d-print-none">
-            <div class="d-flex justify-content-end gap-2">
-                <button @click="print()" class="btn btn-danger px-4 d-flex gap-2 align-items-center">
-                    <i class="bi bi-printer-fill"></i>
-                    Print
-                </button>
-            </div>
-        </div>
-
-        <div class="container-fluid-bkp">
-            <div class="card mb-3">
-                <div class="card-body">
-                   
-                    <h4 class="mb-3">Encounter Print Preview</h4>
-
-                    <div class="row mb-2">
-                        <div class="col-md-6"><strong>Encounter #:</strong>
-                            {{ encounterForm.id ?? '—' }}
-                        </div>
-                        <div class="col-md-6"><strong>Date of Service:</strong>
-                            {{ encounterForm.encounter_date_of_service ?? '—' }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-2">
-                        <div class="col-md-6"><strong>Patient Name:</strong>
-                            {{ data.encounter?.patient?.name ?? data.encounter?.patient?.user?.name ?? '—' }}
-                        </div>
-                        <div class="col-md-6"><strong>Doctor Name:</strong>
-                            {{ data.encounter?.doctor?.name ?? data.encounter?.doctor?.user?.name ?? '—' }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6"><strong>Chief Complaint:</strong>
-                            {{ encounterForm.chief_complaint ?? '—' }}
-                        </div>
-                        <div class="col-md-6"><strong>Encounter Location:</strong>
-                            {{ data.locations[data.encounter.encounter_location]?.name ?? '—' }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6"><strong>Associated Appointment:</strong>
-                            <template v-if="data.encounter?.appointment">
-                                {{ data.encounter?.appointment?.patient?.user?.name }},
-                                Mobile: {{ data.encounter?.appointment?.patient?.user?.mobile }},
-                                Time:{{ data.encounter?.appointment?.appointment_date }} -
-                                {{ data.encounter?.appointment?.appointment_time }}
-                            </template><template v-else>-</template>
-                        </div>
-                        <div class="col-md-6"><strong>Provider Role:</strong>
-                            {{ data.encounter.encounter_role ?? '—' }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6"><strong>Complexity of Encounter:</strong>
-                            {{ data.encounter.complexity_of_encounter ?? '—' }}
-                        </div>
-                        <div class="col-md-6"><strong>Referring Provider:</strong>
-                            {{ data.encounter.referring_provider ?? '—' }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6"><strong>Condition Related To Work:</strong>
-                            {{ data.encounter.encounter_condition_work ?? '—' }}
-                        </div>
-                        <div class="col-md-6"><strong>Condition Related To Motor Vehicle Accident:</strong>
-                            {{ data.encounter.encounter_condition_auto ?? '—' }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6"><strong>State Where Motor Vehicle Accident Occurred:</strong>
-                            {{ data.encounter.encounter_condition_auto_state ?? '—' }}
-                        </div>
-                        <div class="col-md-6"><strong>Condition Related To Other Accident:</strong>
-                            {{ data.encounter.encounter_condition_other ?? '—' }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-12"><strong>Other Condition:</strong>
-                            <span class="bg-light pl-2 pr-2">{{ data.encounter.encounter_condition ?? '—' }}</span>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mb-2">History of Present Illness (HPI)</h5>
-                    <pre class="p-2 bg-light">{{ encounterForm.hpi ?? '—' }}</pre>
-
-                    <h5 class="mt-3 mb-2">Review of Systems</h5>
-                    <pre class="p-2 bg-light">
-                        {{ encounterForm.ros ?? '—' }}
-                    </pre>
-
-                    <h5 class="mt-3 mb-2">Vital Signs</h5>
-                    <div class="table-responsive mb-3">
-                        <table class="table table-sm table-borderless d-none d-md-table">
-                            <tbody>
-                                <tr>
-                                    <td><strong>Date</strong></td>
-                                    <td>{{ encounterForm.vital_date ?? '—' }}</td>
-                                    <td><strong>Age</strong></td>
-                                    <td>{{ encounterForm.age ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Weight</strong></td>
-                                    <td>{{ encounterForm.weight ?? '—' }}</td>
-                                    <td><strong>Height</strong></td>
-                                    <td>{{ encounterForm.height ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>BMI</strong></td>
-                                    <td>{{ encounterForm.bmi ?? '—' }}</td>
-                                    <td><strong>BP</strong></td>
-                                    <td>
-                                        {{ encounterForm.bp_systolic ?? '—' }}/{{ encounterForm.bp_diastolic ?? '—' }}
-                                        ({{ encounterForm.bp_position ?? '' }})
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Pulse</strong></td>
-                                    <td>{{ encounterForm.pulse ?? '—' }}</td>
-                                    <td><strong>Respirations</strong></td>
-                                    <td>{{ encounterForm.respirations ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>O2 Sat</strong></td>
-                                    <td>{{ encounterForm.o2_saturation ?? '—' }}</td>
-                                    <td><strong>Other Vitals</strong></td>
-                                    <td>{{ encounterForm.vitals_other ?? '—' }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <!-- Mobile Card View -->
-                        <div class="mobile-table d-md-none">
-                            <div class="mobile-row-card">
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Date</span>
-                                    <span class="mobile-value">{{ encounterForm.vital_date ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Age</span>
-                                    <span class="mobile-value">{{ encounterForm.age ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Weight</span>
-                                    <span class="mobile-value">{{ encounterForm.weight ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Height</span>
-                                    <span class="mobile-value">{{ encounterForm.height ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">BMI</span>
-                                    <span class="mobile-value">{{ encounterForm.bmi ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">BP</span>
-                                    <span class="mobile-value">
-                                        {{ encounterForm.bp_systolic ?? '—' }}/{{ encounterForm.bp_diastolic ?? '—' }}
-                                        ({{ encounterForm.bp_position ?? '' }})
-                                    </span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Pulse</span>
-                                    <span class="mobile-value">{{ encounterForm.pulse ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Respirations</span>
-                                    <span class="mobile-value">{{ encounterForm.respirations ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">O2 Sat</span>
-                                    <span class="mobile-value">{{ encounterForm.o2_saturation ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Other Vitals</span>
-                                    <span class="mobile-value">{{ encounterForm.vitals_other ?? '—' }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <h5 class="mt-3 mb-2">Physical Examination</h5>
-                    <pre class="p-2 bg-light">{{ encounterForm.pe ?? '—' }}</pre>
-
-                    <h5 class="mt-3 mb-2">Assessment</h5>
-                    <div class="mb-2">
-                        <div class="mt-2"><strong>Additional Diagnoses:</strong></div>
-                        <div class="p-2 bg-light">
-                            {{ encounterForm.assessment_other ?? '—' }}
-                        </div>
-
-                        <div class="mt-2"><strong>Differential Diagnoses:</strong></div>
-                        <div class="p-2 bg-light">
-                            {{ encounterForm.differential_diagnoses ?? '—' }}
-                        </div>
-
-                        <div class="mt-2"><strong>Assessment Discussion:</strong></div>
-                        <div class="p-2 bg-light">
-                            {{ encounterForm.assessment_discussion ?? '—' }}
-                        </div>
-                    </div>
-
-                    <h5 class="mt-3 mb-2">Plan</h5>
-                    <div class="mb-2">
-                        <!-- <div><strong>Date:</strong> {{ encounterForm.plan_date ?? '—' }}</div> -->
-                        <div class="mt-2"><strong>Plan Recommendations:</strong></div>
-                        <pre class="p-2 bg-light">{{ encounterForm.plan ?? '—' }}</pre>
-                        <div class="mt-2">
-                            <div class="ms-2">
-                                <div><strong>Duration:</strong>
-                                    <span class="bg-light pl-2 pr-2">{{ encounterForm.duration ?? '—' }} minutes</span>
-                                </div>
-                                <div><strong>Follow-up:</strong>
-                                    <span class="bg-light pl-2 pr-2">{{ encounterForm.followup ?? '—' }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Prescriptions</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.prescriptions.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th>Medication Name</th>
-                                        <th>Dosage</th>
-                                        <th>Dosage Unit</th>
-                                        <th>Frequency</th>
-                                        <th>Duration</th>
-                                        <th>Instructions</th>
-                                        <th>Reason</th>
-                                        <th>Date active</th>
-                                    </tr>
-                                    <tr v-for="prescription in data.encounter.prescriptions" :key="prescription.id">
-                                        <td>{{ prescription.medication ?? '—' }}</td>
-                                        <td>{{ prescription.dosage ?? '—' }}</td>
-                                        <td>{{ prescription.dosage_unit ?? '—' }}</td>
-                                        <td>{{ prescription.frequency ?? '—' }}</td>
-                                        <td>{{ prescription.frequency ?? '—' }}</td>
-                                        <td>{{ prescription.instructions ?? '—' }}</td>
-                                        <td>{{ prescription.reason ?? '—' }}</td>
-                                        <td>{{ prescription.date_active ?? '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Supplements</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.supplements.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th>Supplement</th>
-                                        <th>Dosage</th>
-                                        <th>Dosage Unit</th>
-                                        <th>Frequency</th>
-                                        <th>Instructions</th>
-                                        <th>Reason</th>
-                                        <th>Date active</th>
-                                    </tr>
-                                    <tr v-for="supplement in data.encounter.supplements" :key="supplement.id">
-                                        <td>{{ supplement.supplement ?? '—' }}</td>
-                                        <td>{{ supplement.dosage ?? '—' }}</td>
-                                        <td>{{ supplement.dosage_unit ?? '—' }}</td>
-                                        <td>{{ supplement.frequency ?? '—' }}</td>
-                                        <td>{{ supplement.instructions ?? '—' }}</td>
-                                        <td>{{ supplement.reason ?? '—' }}</td>
-                                        <td>{{ supplement.date_active ?? '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Lab orders</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.lab_orders.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th>Insurance</th>
-                                        <th>Order</th>
-                                        <th>Code</th>
-                                        <th>Note</th>
-                                    </tr>
-                                    <tr v-for="supplement in data.encounter.lab_orders" :key="supplement.id">
-                                        <td>{{ supplement.insurance ?? '—' }}</td>
-                                        <td>{{ supplement.labs ?? '—' }}</td>
-                                        <td>{{ supplement.labs_icd ?? '—' }}</td>
-                                        <td>{{ supplement.notes ?? '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Imaging orders</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.radiology_orders.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th>Insurance</th>
-                                        <th>Order</th>
-                                        <th>Code</th>
-                                        <th>Note</th>
-                                    </tr>
-                                    <tr v-for="order in data.encounter.radiology_orders" :key="data.id">
-                                        <td>{{ order.insurance ?? '—' }}</td>
-                                        <td>{{ order.radiology ?? '—' }}</td>
-                                        <td>{{ order.radiology_icd ?? '—' }}</td>
-                                        <td>{{ order.notes ?? '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Cardiopulmonary orders</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.card_orders.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th>Insurance</th>
-                                        <th>Order</th>
-                                        <th>Code</th>
-                                        <th>Note</th>
-                                    </tr>
-                                    <tr v-for="order in data.encounter.card_orders" :key="order.id">
-                                        <td>{{ order.insurance ?? '—' }}</td>
-                                        <td>{{ order.cp ?? '—' }}</td>
-                                        <td>{{ order.cp_icd ?? '—' }}</td>
-                                        <td>{{ order.notes ?? '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Anatomical Image</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.images.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th>description</th>
-                                        <th class="text-right">Image</th>
-                                    </tr>
-                                    <tr v-for="image in data.encounter.images" :key="image.id">
-                                        <td>{{ image.description ?? '—' }}</td>
-                                        <td class="float-end">
-                                            <img :src="image.url" alt="Anatomical Image" width="100" />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Photos</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.photos.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th>description</th>
-                                        <th class="text-right">Photo</th>
-                                    </tr>
-                                    <tr v-for="image in data.encounter.photos" :key="image.id">
-                                        <td>{{ image.description ?? '—' }}</td>
-                                        <td class="float-end">
-                                            <img :src="image.url" alt="Anatomical Image" width="100" />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Procedure</h5>
-                    <div class="mb-2">
-                        {{ data.encounter.procedures.length > 0 ? '' : 'No data available.' }}
-                        <div class="mb-3">
-                            <table class="table table-sm mb-2">
-                                <tbody>
-                                    <tr>
-                                        <th style="width:30%">Type</th>
-                                        <th style="width:30%">Code</th>
-                                        <th style="width:40%">Description</th>
-                                    </tr>
-                                    <tr v-for="procedure in data.encounter.procedures" :key="procedure.id">
-                                        <td>{{ procedure.type ?? '—' }}</td>
-                                        <td>{{ procedure?.cpt ?? '—' }}</td>
-                                        <td>{{ procedure.description ?? '—' }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Billing</h5>
-                    <div class="table-responsive mb-3">
-                        <table class="table table-sm table-borderless d-none d-md-table">
-                            <tbody>
-                                <tr>
-                                    <td><strong>Procedure Code</strong></td>
-                                    <td>{{ data.encounter.billing_core?.cpt ?? '—' }}</td>
-                                    <td><strong>Procedure Charge</strong></td>
-                                    <td>{{ data.encounter.billing_core?.cpt_charge ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Unit(s)</strong></td>
-                                    <td>{{ data.encounter.billing_core?.unit ?? '—' }}</td>
-                                    <td><strong>Modifier</strong></td>
-                                    <td>{{ data.encounter.billing_core?.modifier ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Date of Service From</strong></td>
-                                    <td>{{ data.encounter.billing_core?.service_start ?? '—' }}</td>
-                                    <td><strong>Date of Service To</strong></td>
-                                    <td>{{ data.encounter.billing_core?.service_end ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Diagnosis Pointer</strong></td>
-                                    <td>{{ data.encounter.billing_core?.icd_pointer ?? '—' }}</td>
-                                    <td><strong></strong></td>
-                                    <td></td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Primary Insurance</strong></td>
-                                    <td>{{ data.encounter.billing?.insurance_id_1 ?? '—' }}</td>
-                                    <td><strong>Secondary Insurance</strong></td>
-                                    <td>{{ data.encounter.billing?.insurance_id_2 ?? '—' }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <!-- Mobile Card View -->
-                        <div class="mobile-table d-md-none">
-                            <div class="mobile-row-card">
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Procedure Code</span>
-                                    <span class="mobile-value">{{ data.encounter.billing_core?.cpt ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Procedure Charge</span>
-                                    <span class="mobile-value">{{ data.encounter.billing_core?.cpt_charge ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Unit(s)</span>
-                                    <span class="mobile-value">{{ data.encounter.billing_core?.unit ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Modifier</span>
-                                    <span class="mobile-value">{{ data.encounter.billing_core?.modifier ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Date of Service From</span>
-                                    <span class="mobile-value">{{ data.encounter.billing_core?.service_start ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Date of Service To</span>
-                                    <span class="mobile-value">{{ data.encounter.billing_core?.service_end ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Diagnosis Pointer</span>
-                                    <span class="mobile-value">{{ data.encounter.billing_core?.icd_pointer ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Primary Insurance</span>
-                                    <span class="mobile-value">{{ data.encounter.billing?.insurance_id_1 ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Secondary Insurance</span>
-                                    <span class="mobile-value">{{ data.encounter.billing?.insurance_id_2 ?? '—' }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <hr />
-
-                    <h5 class="mt-3 mb-2">Referral</h5>
-                    <div class="table-responsive mb-3">
-                        <table class="table table-sm table-borderless d-none d-md-table">
-                            <tbody>
-                                <tr>
-                                    <td><strong>Referral Details</strong></td>
-                                    <td>{{ data.encounter.referral?.detail ?? '—' }}</td>
-                                    <td><strong>Diagnosis Codes</strong></td>
-                                    <td>{{ data.encounter.referral?.code ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Select Specialty</strong></td>
-                                    <td>{{ data.encounter.referral?.specialty ?? '—' }}</td>
-                                    <td><strong>Referral Provider</strong></td>
-                                    <td>{{ data.encounter.referral?.doctor?.name ?? data.encounter.referral?.doctor ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Order Pending Date</strong></td>
-                                    <td>{{ data.encounter.referral?.pending_date ?? '—' }}</td>
-                                    <td><strong>Insurance</strong></td>
-                                    <td>{{ data.encounter.referral?.insurance ?? '—' }}</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Notes about Order</strong></td>
-                                    <td>{{ data.encounter.referral?.note ?? '—' }}</td>
-                                    <td><strong></strong></td>
-                                    <td></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <!-- Mobile Card View -->
-                        <div class="mobile-table d-md-none">
-                            <div class="mobile-row-card">
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Referral Details</span>
-                                    <span class="mobile-value">{{ data.encounter.referral?.detail ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Diagnosis Codes</span>
-                                    <span class="mobile-value">{{ data.encounter.referral?.code ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Select Specialty</span>
-                                    <span class="mobile-value">{{ data.encounter.referral?.specialty ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Referral Provider</span>
-                                    <span class="mobile-value">{{ data.encounter.referral?.doctor?.name ?? data.encounter.referral?.doctor?.user?.name ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Order Pending Date</span>
-                                    <span class="mobile-value">{{ data.encounter.referral?.pending_date ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Insurance</span>
-                                    <span class="mobile-value">{{ data.encounter.referral?.insurance ?? '—' }}</span>
-                                </div>
-                                <div class="mobile-row-item">
-                                    <span class="mobile-label">Notes about Order</span>
-                                    <span class="mobile-value">{{ data.encounter.referral?.note ?? '—' }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
+    <AuthLayout title="View Encounter" description="View patient encounter details" heading="View Encounter">
+        <div class="encounter-page">
+            <section class="encounter-hero">
+                <div class="encounter-hero__copy">
+                    <span class="encounter-hero__eyebrow">Encounter Summary</span>
+                    <h1 class="encounter-hero__title">{{ textOrFallback(encounterForm.chief_complaint, "Clinical encounter") }}</h1>
+                    <p class="encounter-hero__description">
+                        Review the full clinical documentation, orders, billing details, and supporting notes for this encounter.
+                    </p>
                 </div>
+
+                <div class="encounter-hero__actions d-print-none">
+                    <p @click="print()" class="cursor-pointer">
+                        <i class="bi bi-printer-fill mr-2"></i>
+                    </p>
+                </div>
+
+                <div class="encounter-hero__stats">
+                    <div v-for="card in summaryCards" :key="card.label" class="encounter-stat">
+                        <span class="encounter-stat__label">{{ card.label }}</span>
+                        <strong class="encounter-stat__value">{{ card.value }}</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="encounter-card">
+                <div class="encounter-card__header">
+                    <div>
+                        <span class="encounter-card__eyebrow">Core Details</span>
+                        <h2 class="encounter-card__title">Encounter Overview</h2>
+                    </div>
+                </div>
+
+                <div class="encounter-grid">
+                    <div v-for="item in overviewItems" :key="item.label" class="encounter-detail">
+                        <span class="encounter-detail__label">{{ item.label }}</span>
+                        <strong class="encounter-detail__value">{{ item.value }}</strong>
+                    </div>
+                </div>
+            </section>
+
+            <div class="encounter-layout">
+                <div class="encounter-main">
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Clinical Narrative</span>
+                                <h2 class="encounter-card__title">History & Examination</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-content-block">
+                            <h3>History of Present Illness</h3>
+                            <div class="encounter-note">{{ textOrFallback(encounterForm.hpi) }}</div>
+                        </div>
+
+                        <div class="encounter-content-block">
+                            <h3>Review of Systems</h3>
+                            <div class="encounter-note">{{ textOrFallback(encounterForm.ros) }}</div>
+                        </div>
+
+                        <div class="encounter-content-block">
+                            <h3>Physical Examination</h3>
+                            <div class="encounter-note">{{ textOrFallback(encounterForm.pe) }}</div>
+                        </div>
+                    </section>
+
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Vitals</span>
+                                <h2 class="encounter-card__title">Vital Signs</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-grid encounter-grid--compact">
+                            <div v-for="item in vitalItems" :key="item.label" class="encounter-detail">
+                                <span class="encounter-detail__label">{{ item.label }}</span>
+                                <strong class="encounter-detail__value">{{ item.value }}</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Assessment & Plan</span>
+                                <h2 class="encounter-card__title">Clinical Decision Making</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-content-block">
+                            <h3>Additional Diagnoses</h3>
+                            <div class="encounter-note">{{ textOrFallback(encounterForm.assessment_other) }}</div>
+                        </div>
+
+                        <div class="encounter-content-block">
+                            <h3>Differential Diagnoses</h3>
+                            <div class="encounter-note">{{ textOrFallback(encounterForm.differential_diagnoses) }}</div>
+                        </div>
+
+                        <div class="encounter-content-block">
+                            <h3>Assessment Discussion</h3>
+                            <div class="encounter-note">{{ textOrFallback(encounterForm.assessment_discussion) }}</div>
+                        </div>
+
+                        <div class="encounter-content-block">
+                            <h3>Plan Recommendations</h3>
+                            <div class="encounter-note">{{ textOrFallback(encounterForm.plan) }}</div>
+                        </div>
+
+                        <div class="encounter-grid encounter-grid--compact mt-4">
+                            <div class="encounter-detail">
+                                <span class="encounter-detail__label">Duration</span>
+                                <strong class="encounter-detail__value">
+                                    {{ encounterForm.duration ? `${encounterForm.duration} minutes` : "Not recorded" }}
+                                </strong>
+                            </div>
+                            <div class="encounter-detail">
+                                <span class="encounter-detail__label">Follow-up</span>
+                                <strong class="encounter-detail__value">{{ textOrFallback(encounterForm.followup) }}</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Medication Orders</span>
+                                <h2 class="encounter-card__title">Prescriptions & Supplements</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-table-block">
+                            <h3>Prescriptions</h3>
+                            <div v-if="!encounter.prescriptions?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="table-responsive">
+                                <table class="table encounter-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Medication</th>
+                                            <th>Dosage</th>
+                                            <th>Dosage Unit</th>
+                                            <th>Frequency</th>
+                                            <th>Duration</th>
+                                            <th>Instructions</th>
+                                            <th>Reason</th>
+                                            <th>Date Active</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="prescription in encounter.prescriptions" :key="prescription.id">
+                                            <td>{{ textOrFallback(prescription.medication) }}</td>
+                                            <td>{{ textOrFallback(prescription.dosage) }}</td>
+                                            <td>{{ textOrFallback(prescription.dosage_unit) }}</td>
+                                            <td>{{ textOrFallback(prescription.frequency) }}</td>
+                                            <td>{{ textOrFallback(prescription.duration || prescription.frequency) }}</td>
+                                            <td>{{ textOrFallback(prescription.instructions) }}</td>
+                                            <td>{{ textOrFallback(prescription.reason) }}</td>
+                                            <td>{{ textOrFallback(prescription.date_active) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="encounter-table-block">
+                            <h3>Supplements</h3>
+                            <div v-if="!encounter.supplements?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="table-responsive">
+                                <table class="table encounter-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Supplement</th>
+                                            <th>Dosage</th>
+                                            <th>Dosage Unit</th>
+                                            <th>Frequency</th>
+                                            <th>Instructions</th>
+                                            <th>Reason</th>
+                                            <th>Date Active</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="supplement in encounter.supplements" :key="supplement.id">
+                                            <td>{{ textOrFallback(supplement.supplement) }}</td>
+                                            <td>{{ textOrFallback(supplement.dosage) }}</td>
+                                            <td>{{ textOrFallback(supplement.dosage_unit) }}</td>
+                                            <td>{{ textOrFallback(supplement.frequency) }}</td>
+                                            <td>{{ textOrFallback(supplement.instructions) }}</td>
+                                            <td>{{ textOrFallback(supplement.reason) }}</td>
+                                            <td>{{ textOrFallback(supplement.date_active) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Orders</span>
+                                <h2 class="encounter-card__title">Diagnostics & Procedures</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-table-block">
+                            <h3>Lab Orders</h3>
+                            <div v-if="!encounter.lab_orders?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="table-responsive">
+                                <table class="table encounter-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Insurance</th>
+                                            <th>Order</th>
+                                            <th>Code</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="order in encounter.lab_orders" :key="order.id">
+                                            <td>{{ textOrFallback(order.insurance) }}</td>
+                                            <td>{{ textOrFallback(order.labs) }}</td>
+                                            <td>{{ textOrFallback(order.labs_icd) }}</td>
+                                            <td>{{ textOrFallback(order.notes) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="encounter-table-block">
+                            <h3>Imaging Orders</h3>
+                            <div v-if="!encounter.radiology_orders?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="table-responsive">
+                                <table class="table encounter-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Insurance</th>
+                                            <th>Order</th>
+                                            <th>Code</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="order in encounter.radiology_orders" :key="order.id">
+                                            <td>{{ textOrFallback(order.insurance) }}</td>
+                                            <td>{{ textOrFallback(order.radiology) }}</td>
+                                            <td>{{ textOrFallback(order.radiology_icd) }}</td>
+                                            <td>{{ textOrFallback(order.notes) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="encounter-table-block">
+                            <h3>Cardiopulmonary Orders</h3>
+                            <div v-if="!encounter.card_orders?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="table-responsive">
+                                <table class="table encounter-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Insurance</th>
+                                            <th>Order</th>
+                                            <th>Code</th>
+                                            <th>Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="order in encounter.card_orders" :key="order.id">
+                                            <td>{{ textOrFallback(order.insurance) }}</td>
+                                            <td>{{ textOrFallback(order.cp) }}</td>
+                                            <td>{{ textOrFallback(order.cp_icd) }}</td>
+                                            <td>{{ textOrFallback(order.notes) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="encounter-table-block">
+                            <h3>Procedures</h3>
+                            <div v-if="!encounter.procedures?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="table-responsive">
+                                <table class="table encounter-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Code</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="procedure in encounter.procedures" :key="procedure.id">
+                                            <td>{{ textOrFallback(procedure.type) }}</td>
+                                            <td>{{ textOrFallback(procedure.cpt) }}</td>
+                                            <td>{{ textOrFallback(procedure.description) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="encounter-sidebar">
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Billing</span>
+                                <h2 class="encounter-card__title">Billing Snapshot</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-grid encounter-grid--single">
+                            <div v-for="item in billingItems" :key="item.label" class="encounter-detail">
+                                <span class="encounter-detail__label">{{ item.label }}</span>
+                                <strong class="encounter-detail__value">{{ item.value }}</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Referral</span>
+                                <h2 class="encounter-card__title">Referral Details</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-grid encounter-grid--single">
+                            <div v-for="item in referralItems" :key="item.label" class="encounter-detail">
+                                <span class="encounter-detail__label">{{ item.label }}</span>
+                                <strong class="encounter-detail__value">{{ item.value }}</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="encounter-card">
+                        <div class="encounter-card__header">
+                            <div>
+                                <span class="encounter-card__eyebrow">Media</span>
+                                <h2 class="encounter-card__title">Images & Photos</h2>
+                            </div>
+                        </div>
+
+                        <div class="encounter-media-block">
+                            <h3>Anatomical Images</h3>
+                            <div v-if="!encounter.images?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="encounter-media-grid">
+                                <div v-for="image in encounter.images" :key="image.id" class="encounter-media-card">
+                                    <img :src="image.url" :alt="image.description || 'Anatomical image'" />
+                                    <p>{{ textOrFallback(image.description) }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="encounter-media-block">
+                            <h3>Photos</h3>
+                            <div v-if="!encounter.photos?.length" class="encounter-empty">No data available.</div>
+                            <div v-else class="encounter-media-grid">
+                                <div v-for="image in encounter.photos" :key="image.id" class="encounter-media-card">
+                                    <img :src="image.url" :alt="image.description || 'Encounter photo'" />
+                                    <p>{{ textOrFallback(image.description) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </aside>
             </div>
         </div>
     </AuthLayout>
 </template>
 
 <style scoped>
-/* Mobile Card View Styles */
-@media (max-width: 1024px) {
-    .mobile-table {
-        display: block;
+.encounter-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.encounter-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) auto;
+    gap: 1.5rem;
+    padding: 2rem;
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 42%),
+        linear-gradient(135deg, #fbfdff 0%, #edf7ff 45%, #f8fbff 100%);
+    border: 1px solid #dbe8f5;
+    box-shadow: 0 22px 44px rgba(15, 23, 42, 0.07);
+}
+
+.encounter-hero__copy {
+    min-width: 0;
+}
+
+.encounter-hero__eyebrow,
+.encounter-card__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.12);
+    color: #0369a1;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.encounter-hero__title {
+    margin: 0.95rem 0 0.6rem;
+    color: #0f172a;
+    font-size: clamp(2rem, 3vw, 3rem);
+    line-height: 1.05;
+}
+
+.encounter-hero__description {
+    max-width: 680px;
+    margin: 0;
+    color: #475569;
+    font-size: 1rem;
+}
+
+.encounter-hero__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.encounter-print {
+    padding: 0.65rem 0.95rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    box-shadow: 0 14px 30px rgba(220, 38, 38, 0.18);
+}
+
+.encounter-print:hover {
+    color: #ffffff;
+}
+
+.encounter-hero__stats {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.encounter-stat,
+.encounter-card,
+.encounter-detail,
+.encounter-note,
+.encounter-media-card {
+    background: #ffffff;
+    border: 1px solid #e6edf5;
+    box-shadow: 0 18px 35px rgba(15, 23, 42, 0.05);
+}
+
+.encounter-stat {
+    padding: 1.1rem 1.2rem;
+    border-radius: 20px;
+}
+
+.encounter-stat__label,
+.encounter-detail__label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.encounter-stat__value,
+.encounter-detail__value {
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.encounter-card {
+    padding: 1.35rem;
+    border-radius: 24px;
+}
+
+.encounter-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+.encounter-card__title {
+    margin: 0.7rem 0 0;
+    color: #0f172a;
+    font-size: 1.55rem;
+    font-weight: 700;
+}
+
+.encounter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.encounter-grid--compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.encounter-grid--single {
+    grid-template-columns: 1fr;
+}
+
+.encounter-detail {
+    padding: 1rem 1.05rem;
+    border-radius: 18px;
+}
+
+.encounter-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.8fr);
+    gap: 1.5rem;
+}
+
+.encounter-main,
+.encounter-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.encounter-content-block + .encounter-content-block,
+.encounter-table-block + .encounter-table-block,
+.encounter-media-block + .encounter-media-block {
+    margin-top: 1.4rem;
+}
+
+.encounter-content-block h3,
+.encounter-table-block h3,
+.encounter-media-block h3 {
+    margin: 0 0 0.8rem;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.encounter-note {
+    padding: 1rem 1.1rem;
+    border-radius: 18px;
+    color: #475569;
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+
+.encounter-table {
+    margin: 0;
+    overflow: hidden;
+}
+
+.encounter-table thead th {
+    border-top: 0;
+    border-bottom: 1px solid #e6edf5;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.encounter-table tbody td {
+    color: #334155;
+    vertical-align: top;
+    border-color: #eef4fa;
+}
+
+.encounter-empty {
+    color: #64748b;
+    padding: 0.25rem 0;
+}
+
+.encounter-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.encounter-media-card {
+    padding: 0.8rem;
+    border-radius: 18px;
+}
+
+.encounter-media-card img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    border-radius: 14px;
+    margin-bottom: 0.7rem;
+    background: #f8fafc;
+}
+
+.encounter-media-card p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.6;
+}
+
+@media (max-width: 1199.98px) {
+    .encounter-layout,
+    .encounter-grid--compact,
+    .encounter-hero__stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991.98px) {
+    .encounter-hero,
+    .encounter-layout,
+    .encounter-grid,
+    .encounter-grid--compact,
+    .encounter-hero__stats {
+        grid-template-columns: 1fr;
     }
 
-    .mobile-row-card {
-        background: #fff;
-        border-radius: 12px;
-        padding: 12px;
-        margin-bottom: 12px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        overflow: hidden;
+    .encounter-hero__actions {
+        justify-content: flex-start;
+    }
+}
+
+@media print {
+    .encounter-hero,
+    .encounter-card,
+    .encounter-stat,
+    .encounter-detail,
+    .encounter-note,
+    .encounter-media-card {
+        box-shadow: none !important;
     }
 
-    .mobile-row-item {
-        display: flex;
-        justify-content: space-between;
-        font-size: 14px;
-        padding: 6px 0;
-        border-bottom: 1px dashed #eee;
+    .encounter-page {
+        gap: 1rem;
     }
+}
 
-    .mobile-row-item:last-child {
-        border-bottom: none;
-    }
-
-    .mobile-label {
-        font-weight: 600;
-        color: #6c757d;
-    }
-
-    .mobile-value {
-        text-align: right;
-        word-break: break-word;
-        max-width: 60%;
+@media (max-width: 767.98px) {
+    .encounter-hero,
+    .encounter-card {
+        padding: 1.15rem;
     }
 }
 </style>

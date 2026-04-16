@@ -111,11 +111,11 @@ class CheckSubscription
             }
 
             if ($user->hasRole('Admin')) {
-                return redirect()->route('admin.subscription')->with('error', "Your {$planName}subscription has expired. Please renew.");
+                // return redirect()->route('admin.subscription')->with('error', "Your {$planName} subscription has expired. Please renew.");
             }
 
             // Redirect others to generic subscription page
-            return redirect()->route('subscriptions.index')->with('error', "{$planName}Subscription has expired.");
+            // return redirect()->route('subscriptions.index')->with('error', "{$planName}Subscription has expired.");
         }
 
         return $next($request);

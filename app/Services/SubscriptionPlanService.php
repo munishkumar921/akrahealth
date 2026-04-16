@@ -14,15 +14,34 @@ class SubscriptionPlanService
      */
     public function list($request)
     {
+        $keyword = trim((string) ($request->keyword ?? $request->search ?? ''));
+        $planFor = trim((string) ($request->plan_for ?? ''));
+        $currency = trim((string) ($request->currency ?? ''));
+        $countryId = trim((string) ($request->country_id ?? ''));
+        $frequency = trim((string) ($request->frequency ?? ''));
+        $status = $request->status;
+        $sort = (string) ($request->sort ?? 'created_at');
+        $direction = strtolower((string) ($request->direction ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+        $allowedSorts = ['plan_for', 'title', 'price', 'currency', 'frequency', 'status', 'created_at'];
+        $sort = in_array($sort, $allowedSorts, true) ? $sort : 'created_at';
+
         return SubscriptionPlan::query()
-            ->where('status', true)
-            ->when(
-                $request->search,
-                fn ($q) => $q->where('title', 'like', "%{$request->search}%")
-                    ->orWhere('price', 'like', "%{$request->search}%")
-            )
-            ->orderBy('created_at', 'desc')
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($subQuery) use ($keyword) {
+                    $subQuery->where('title', 'like', "%{$keyword}%")
+                        ->orWhere('plan_for', 'like', "%{$keyword}%")
+                        ->orWhere('price', 'like', "%{$keyword}%")
+                        ->orWhere('currency', 'like', "%{$keyword}%")
+                        ->orWhere('frequency', 'like', "%{$keyword}%");
+                });
+            })
+            ->when($planFor !== '', fn ($query) => $query->where('plan_for', $planFor))
+            ->when($currency !== '', fn ($query) => $query->where('currency', $currency))
+            ->when($countryId !== '', fn ($query) => $query->where('country_id', $countryId))
+            ->when($frequency !== '', fn ($query) => $query->where('frequency', $frequency))
+            ->when($status !== null && $status !== '', fn ($query) => $query->where('status', filter_var($status, FILTER_VALIDATE_BOOLEAN)))
+            ->orderBy($sort, $direction)
+            ->paginate(request('per_page', 20))->withQueryString();
     }
 
     /**

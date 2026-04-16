@@ -15,17 +15,21 @@ const isSubmitting = ref(false)
 const submit = () => {
     isSubmitting.value = true;
 
+    // Close modal immediately to prevent z-index issues
+    $('.close-modal').click();
+
     form.post(route('demo-request.store'), {
         onSuccess: () => {
             isSubmitting.value = false;
             form.reset();
-            
-            $('.close-modal').click();
+            toast('Demo request submitted successfully!', 'success', 500);
         },
         onError: () => {
             isSubmitting.value = false;
+            // Re-open modal if there are errors
+            $('#demo-request-modal').modal('show');
         },
-        
+
     });
 };
 </script>

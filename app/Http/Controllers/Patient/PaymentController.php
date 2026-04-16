@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Patient;
 
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
+use App\Services\InAppNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -54,6 +55,7 @@ class PaymentController extends Controller
         }
 
         try {
+            $notificationService = app(InAppNotificationService::class);
             // Verify payment signature
             $api = new \Razorpay\Api\Api(
                 config('services.razorpay.key'),
@@ -82,6 +84,58 @@ class PaymentController extends Controller
 
             $appointment->doctor->user->notify(
                 new \App\Notifications\AppointmentPaymentReceived($appointment)
+            );
+
+            $notificationService->notifyPatient(
+                $appointment->patient,
+                $notificationService->buildPayload(
+                    'Payment received',
+                    'Your payment for the appointment has been received successfully.',
+                    'payment_received',
+                    [
+                        'recipient_role' => 'Patient',
+                        'appointment_id' => $appointment->id,
+                        'patient_id' => $appointment->patient_id,
+                        'doctor_id' => $appointment->doctor_id,
+                        'action_url' => route('patient.booking.list'),
+                        'related_model_type' => Appointment::class,
+                        'related_model_id' => $appointment->id,
+                    ]
+                )
+            );
+
+            $notificationService->notifyUser(
+                $appointment->doctor?->user,
+                $notificationService->buildPayload(
+                    'Patient payment received',
+                    ($appointment->patient?->name ?? 'A patient').' completed an appointment payment.',
+                    'payment_received',
+                    [
+                        'recipient_role' => 'Doctor',
+                        'appointment_id' => $appointment->id,
+                        'patient_id' => $appointment->patient_id,
+                        'doctor_id' => $appointment->doctor_id,
+                        'related_model_type' => Appointment::class,
+                        'related_model_id' => $appointment->id,
+                    ]
+                )
+            );
+
+            $notificationService->notifyAdminsForHospital(
+                $appointment->doctor?->hospital_id,
+                $notificationService->buildPayload(
+                    'Patient payment received',
+                    ($appointment->patient?->name ?? 'A patient').' made a payment for an appointment.',
+                    'payment_received',
+                    [
+                        'recipient_role' => 'Admin',
+                        'appointment_id' => $appointment->id,
+                        'patient_id' => $appointment->patient_id,
+                        'doctor_id' => $appointment->doctor_id,
+                        'related_model_type' => Appointment::class,
+                        'related_model_id' => $appointment->id,
+                    ]
+                )
             );
 
             return response()->json([

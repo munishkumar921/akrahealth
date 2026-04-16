@@ -2,14 +2,13 @@
 import axios from "axios";
 import { useForm, router, usePage } from "@inertiajs/vue3";
 import AuthLayout from "@/Layouts/AuthLayout2.vue";
-import { ref, defineEmits, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import BaseSelect from "@/Components/Common/Input/BaseSelect.vue";
 import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
  import Search from "@/Components/Common/Search.vue";
  import { Country, State } from "country-state-city";
- import 'sweetalert2/src/sweetalert2.scss';
  import Template from './template.vue';
 const props = defineProps({
     data: Object,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -22,57 +23,44 @@ class PharmacyRequest extends FormRequest
      */
     public function rules(): array
     {
+        $user_id = $this->request->get('user_id');
         $rules = [
-            // Contact Person Information
+            /* Contact Person Information */
             'first_name' => ['required', 'string', 'max:255', 'min:2'],
             'last_name' => ['nullable', 'string', 'max:255', 'min:2'],
+            'mobile' => ['required', 'string', 'max:20', 'min:10'],
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                Rule::unique('users')->ignore($this->user_id ?? null),
+                Rule::unique('users')->ignore($user_id, 'id'),
             ],
-            'mobile' => ['required', 'string', 'max:20', 'min:10'],
 
-            // Pharmacy Details
+            /* Pharmacy Details */
             'pharmacy_name' => ['required', 'string', 'max:255', 'min:2'],
             'license_number' => ['required', 'string', 'max:100'],
             'pharmacy_mobile' => ['required', 'string', 'max:20', 'min:10'],
             'pharmacy_email' => ['required', 'email', 'max:255'],
-
-            // Profile Photo
             'profile_photo' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
-
-            // Address Information
             'street_address1' => ['required', 'string', 'max:500', 'min:5'],
             'street_address2' => ['nullable', 'string', 'max:500'],
             'city' => ['required', 'string', 'max:100'],
             'country' => ['required', 'string', 'max:100'],
             'state' => ['nullable', 'string', 'max:100'],
             'zip' => ['required', 'string', 'max:20', 'min:3'],
-
-            // Operational Hours
-            'opening_time' => ['nullable', 'date_format:h:i:s A'],
-            'closing_time' => ['nullable', 'date_format:h:i:s A', 'after:opening_time'],
-
-            // Status Fields
+            'opening_time' => ['nullable', 'date_format:h:i A'],
+            'closing_time' => ['nullable', 'date_format:h:i A', 'after:opening_time'],
             'is_active' => ['required', 'boolean'],
             'is_verified' => ['required', 'boolean'],
-
-            // About (optional)
             'about' => ['nullable', 'string', 'max:2000'],
-
-            // Banner (optional file upload)
             'banner' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'],
-
-            // Other documents/images (optional file uploads)
             'license' => ['nullable', 'file', 'mimes:pdf,jpeg,png,jpg', 'max:5120'],
             'gst_license' => ['nullable', 'file', 'mimes:pdf,jpeg,png,jpg', 'max:5120'],
             'store_front_photo' => ['nullable', 'file', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'],
             'owner_id_proof' => ['nullable', 'file', 'mimes:pdf,jpeg,png,jpg', 'max:5120'],
         ];
 
-        // For updates, make all fields optional
+        /* For updates, make all fields optional */
         if ($this->isMethod('PUT') || $this->isMethod('PATCH')) {
             foreach ($rules as $key => $rule) {
                 $rules[$key] = ['sometimes', ...$rule];

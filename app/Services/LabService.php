@@ -5,18 +5,27 @@ namespace App\Services;
 use App\Models\Hospital;
 use App\Models\Lab;
 use App\Traits\UploadFileTrait;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 
 class LabService
 {
     use UploadFileTrait;
 
-    public function list($request)
+    public function list(Request $request): LengthAwarePaginator
     {
         $user = auth()->user();
         $hospital = Hospital::where('user_id', $user->id)->first();
         $hospitalId = $hospital?->id;
         $doctor = $user->doctor;
+        $filters = [
+            'keyword' => trim((string) $request->input('keyword', '')),
+            'status' => $request->input('status', ''),
+            'verification' => $request->input('verification', ''),
+            'category' => $request->input('category', ''),
+        ];
 
         $query = Lab::query()
             ->with(['user', 'user.address'])
@@ -54,14 +63,15 @@ class LabService
     | Search
     |--------------------------------------------------------------------------
     */
-        $query->when(request('search'), function ($query, $search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('labs.name', 'like', "%{$search}%")
-                    ->orWhere('labs.license_number', 'like', "%{$search}%")
-                    ->orWhere('labs.city', 'like', "%{$search}%")
-                    ->orWhere('labs.pincode', 'like', "%{$search}%")
-                    ->orWhere('users.name', 'like', "%{$search}%")
-                    ->orWhere('users.email', 'like', "%{$search}%");
+        $query->when($filters['keyword'], function ($query, $keyword) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('labs.name', 'like', "%{$keyword}%")
+                    ->orWhere('labs.email', 'like', "%{$keyword}%")
+                    ->orWhere('labs.mobile', 'like', "%{$keyword}%")
+                    ->orWhere('labs.license_number', 'like', "%{$keyword}%")
+                    ->orWhere('users.name', 'like', "%{$keyword}%")
+                    ->orWhere('users.email', 'like', "%{$keyword}%")
+                    ->orWhere('users.mobile', 'like', "%{$keyword}%");
             });
         });
 
@@ -70,25 +80,57 @@ class LabService
     | Status filters
     |--------------------------------------------------------------------------
     */
-        $query->when(
-            request('is_verified') !== null,
-            fn ($q) => $q->where('labs.is_verified', request('is_verified'))
-        );
+        $query->when($filters['status'] !== '', function ($q) use ($filters) {
+            $q->where('labs.is_active', filter_var($filters['status'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE));
+        });
 
-        $query->when(
-            request('is_active') !== null,
-            fn ($q) => $q->where('labs.is_active', request('is_active'))
-        );
+        $query->when($filters['verification'] !== '', function ($q) use ($filters) {
+            $q->where('labs.is_verified', filter_var($filters['verification'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE));
+        });
+
+        $query->when($filters['category'] !== '', function ($q) use ($filters) {
+            $q->where(function ($categoryQuery) use ($filters) {
+                $categoryQuery
+                    ->whereJsonContains('labs.categories', $filters['category'])
+                    ->orWhere('labs.categories', 'like', '%"'.$filters['category'].'"%');
+            });
+        });
 
         /*
     |--------------------------------------------------------------------------
     | Pagination
     |--------------------------------------------------------------------------
     */
-        return $query
+        $labs = $query
             ->orderBy('labs.created_at', 'desc')
-            ->paginate(request('per_page', paginateLimit()))
+            ->paginate($request->integer('per_page', paginateLimit()))
             ->withQueryString();
+
+        $labs->getCollection()->transform(function (Lab $lab) {
+            $address = $lab->user?->address;
+
+            $lab->display_name = $lab->name ?: $lab->user_name;
+            $lab->email = $lab->email ?: $lab->user_email;
+            $lab->mobile = $lab->mobile ?: $lab->user_mobile;
+            $lab->banner_url = $lab->banner
+                ? (str_starts_with($lab->banner, 'http') ? $lab->banner : Storage::url($lab->banner))
+                : asset('images/avatar.webp');
+            $lab->created_label = optional($lab->created_at)?->format('F d, Y');
+            $lab->status_label = $lab->is_active ? 'Active' : 'Inactive';
+            $lab->verification_label = $lab->is_verified ? 'Verified' : 'Pending';
+            $lab->address_sort = collect([
+                $address?->address_1,
+                $address?->address_2,
+                $address?->city,
+                $address?->state,
+                $address?->country,
+                $address?->zip,
+            ])->filter()->implode(', ');
+
+            return $lab;
+        });
+
+        return $labs;
     }
 
     /**

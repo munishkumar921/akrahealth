@@ -39,33 +39,86 @@ class DResultsController extends Controller
     {
         $doctor = auth()->user()->doctor;
         $patientId = $doctor->selected_patient_id ?? null;
-        // 🧪 Test Results
-        $results = Test::where('patient_id', $patientId)->where('doctor_id', $doctor->id)
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $keyword = '%'.$request->get('search').'%';
-                $q->where('name', 'like', $keyword)
-                    ->orWhere('code', 'like', 'like', $keyword)
-                    ->orWhere('result', 'like', $keyword);
+
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $tab = trim((string) $request->input('tab', 'Laboratory'));
+        $perPage = (int) $request->input('per_page', paginateLimit());
+
+        $results = Test::where('patient_id', $patientId)
+            ->where('doctor_id', $doctor->id)
+            ->when($tab !== 'Vital Signs', function ($query) use ($tab) {
+                $query->where('type', $tab);
             })
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $search = '%'.$keyword.'%';
+                $query->where(function ($subQuery) use ($search) {
+                    $subQuery->where('name', 'like', $search)
+                        ->orWhere('code', 'like', $search)
+                        ->orWhere('result', 'like', $search)
+                        ->orWhere('units', 'like', $search)
+                        ->orWhere('reference', 'like', $search)
+                        ->orWhere('flags', 'like', $search)
+                        ->orWhere('time', 'like', $search);
+                });
+            })
+            ->orderByDesc('created_at')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $results->getCollection()->transform(function (Test $result) {
+            return [
+                'id' => $result->id,
+                'name' => $result->name,
+                'code' => $result->code,
+                'result' => $result->result,
+                'units' => $result->units,
+                'reference' => $result->reference,
+                'flags' => $result->flags,
+                'time' => $result->time,
+                'type' => $result->type,
+                'created_at' => $result->created_at,
+            ];
+        });
+
         $encounter_vitals = Vital::where('patient_id', $patientId)
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $keyword = '%'.$request->get('search').'%';
+            ->when($keyword !== '', function ($q) use ($keyword) {
+                $search = '%'.$keyword.'%';
                 $q->where(function ($sub) use ($keyword) {
-                    $sub->where('weight', 'like', $keyword)
-                        ->orWhere('height', 'like', $keyword)
-                        ->orWhere('bmi', 'like', $keyword)
-                        ->orWhere('temperature', 'like', $keyword)
-                        ->orWhere('bp_systolic', 'like', $keyword)
-                        ->orWhere('bp_diastolic', 'like', $keyword)
-                        ->orWhere('pulse', 'like', $keyword)
-                        ->orWhere('respirations', 'like', $keyword)
-                        ->orWhere('o2_saturation', 'like', $keyword)
-                        ->orWhere('vitals_other', 'like', $keyword);
+                    $search = '%'.$keyword.'%';
+                    $sub->where('weight', 'like', $search)
+                        ->orWhere('height', 'like', $search)
+                        ->orWhere('head_circumference', 'like', $search)
+                        ->orWhere('bmi', 'like', $search)
+                        ->orWhere('temperature', 'like', $search)
+                        ->orWhere('bp_systolic', 'like', $search)
+                        ->orWhere('bp_diastolic', 'like', $search)
+                        ->orWhere('pulse', 'like', $search)
+                        ->orWhere('respirations', 'like', $search)
+                        ->orWhere('o2_saturation', 'like', $search)
+                        ->orWhere('vitals_other', 'like', $search)
+                        ->orWhere('vital_date', 'like', $search);
                 });
             })
             ->orderByDesc('vital_date')
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->paginate($perPage)
+            ->withQueryString();
+
+        $encounter_vitals->getCollection()->transform(function (Vital $vital) {
+            return [
+                'id' => $vital->id,
+                'vital_date' => $vital->vital_date,
+                'weight' => $vital->weight,
+                'height' => $vital->height,
+                'head_circumference' => $vital->head_circumference,
+                'bmi' => $vital->bmi,
+                'temperature' => $vital->temperature,
+                'bp_systolic' => $vital->bp_systolic,
+                'bp_diastolic' => $vital->bp_diastolic,
+                'pulse' => $vital->pulse,
+                'respirations' => $vital->respirations,
+                'o2_saturation' => $vital->o2_saturation,
+            ];
+        });
         // 👨‍⚕️ Doctors (with relationship)
         $doctors = Doctor::with('user:id,name')
             ->where('hospital_id', $doctor->hospital_id)
@@ -107,13 +160,15 @@ class DResultsController extends Controller
             }
         }
 
-        // 🧭 Return to Inertia
         return Inertia::render('Doctors/Patient/Results/Index', [
             'results' => $results,
             'encounter_vitals' => $encounter_vitals,
             'doctors' => $doctors,
             'tests' => $tests_arr,
-            'serach' => $request->get('search'),
+            'filters' => [
+                'keyword' => $keyword,
+                'tab' => $tab,
+            ],
         ]);
     }
 

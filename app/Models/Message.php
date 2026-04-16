@@ -42,6 +42,8 @@ class Message extends Model
         't_messages_id',
         'mailbox',
         'status',
+        'lab_id',
+        'pharmacy_id',
     ];
 
     /**
@@ -57,21 +59,61 @@ class Message extends Model
         'updated_at' => 'datetime:M d, Y',
     ];
 
+    /**
+     * lab
+     *
+     * @return void
+     */
+    public function lab()
+    {
+        return $this->belongsTo(Lab::class);
+    }
+
+    /**
+     * pharmacy
+     *
+     * @return void
+     */
+    public function pharmacy()
+    {
+        return $this->belongsTo(Pharmacy::class);
+    }
+
+    /**
+     * patient
+     *
+     * @return void
+     */
     public function patient()
     {
         return $this->belongsTo(Patient::class, 'patient_id');
     }
 
+    /**
+     * doctor
+     *
+     * @return void
+     */
     public function doctor()
     {
         return $this->belongsTo(Doctor::class);
     }
 
+    /**
+     * hospital
+     *
+     * @return void
+     */
     public function hospital()
     {
         return $this->belongsTo(Hospital::class);
     }
 
+    /**
+     * document
+     *
+     * @return void
+     */
     public function document()
     {
         return $this->belongsTo(Document::class);

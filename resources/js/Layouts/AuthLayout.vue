@@ -1,6 +1,6 @@
 <script setup>
-import { computed, watch, onMounted, ref } from "vue";
-import { Head, router, usePage } from "@inertiajs/vue3";
+import { computed, onMounted, ref, onBeforeUnmount } from "vue";
+import { Head, usePage } from "@inertiajs/vue3";
 import AuthTopBar from "@/Partials/AuthTopBar.vue";
 import MobileSidebar from "../Components/Sidebar/MobileSidebar.vue";
 import Sidebar from "../Components/Sidebar/Sidebar.vue";
@@ -98,6 +98,27 @@ const isViewingAsAdmin = computed(() => {
     return page.props?.switched_role !== 'Doctor';
 });
 
+
+let userChannel = null
+onMounted(() => {
+    const userId = usePage().props.auth.user.id
+
+    userChannel = Echo.private(`user.${userId}`)
+        .subscribed(() => {
+            // console.log('AppLayout subscribed')
+        })
+        .listen('MessageSent', (e) => {
+            console.log(e);
+            toast(`${e.sender.name}: ${e.message}`, 'success', 10000);
+            e = {};
+        })
+})
+
+onBeforeUnmount(() => {
+    if (userChannel) {
+        Echo.leave(`user.${usePage().props.auth.user.id}`)
+    }
+})
 </script>
 <template>
     <div class="wrapper">
@@ -116,7 +137,9 @@ const isViewingAsAdmin = computed(() => {
 
         <div id="content-page" class="content-page">
             <div class="container-fluid">
-                <div v-if="isViewingAsAdmin && subscriptionExpiry" class="alert alert-dismissible mb-4"
+
+
+                <div v-if="isViewingAsAdmin && subscriptionExpiry?.isExpired" class="alert alert-dismissible mb-4"
                     :class="subscriptionClass" role="alert">
                     <div class="d-flex align-items-center">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -126,19 +149,26 @@ const isViewingAsAdmin = computed(() => {
                                 Your {{ displayPlanName }} subscription has expired. Please renew to continue using all
                                 features.
                             </template>
-                            <template v-else-if="subscriptionExpiry.isExpiringSoon">
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="isViewingAsAdmin && subscriptionExpiry?.isExpiringSoon" class="alert alert-dismissible mb-4"
+                    :class="subscriptionClass" role="alert">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <div>
+                            <template v-if="subscriptionExpiry.isExpiringSoon">
                                 <strong>Warning!</strong>
                                 Your {{ displayPlanName }} subscription expires in {{ subscriptionExpiry.daysLeft }}
                                 days. Please renew to continue using all features.
                             </template>
-                            <template v-else>
-                                <strong>Success!</strong>
-                                Your {{ displayPlanName }} subscription is active and expires in {{
-                                    subscriptionExpiry.daysLeft }} days.
-                            </template>
                         </div>
                     </div>
                 </div>
+
+
+
                 <div class="row mb-3">
                     <div class="col-sm-12 px-0">
                         {{ notification($page.props.flash) }}
@@ -146,6 +176,10 @@ const isViewingAsAdmin = computed(() => {
                         <main class="mt-2 iq-card p-4">
                             <slot />
                         </main>
+
+                        <div class="app-footer text-center mt-3 mb-2">
+                            &copy; 2018 - {{ new Date().getFullYear() }} Akra Health. All rights reserved
+                        </div>
                     </div>
 
                 </div>
@@ -157,5 +191,10 @@ const isViewingAsAdmin = computed(() => {
 <style scoped>
 .iq-card {
     min-height: 81vh !important;
+}
+
+.app-footer {
+    color: #64748b;
+    font-size: 0.875rem;
 }
 </style>

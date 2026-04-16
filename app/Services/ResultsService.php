@@ -22,6 +22,7 @@ class ResultsService
     public function store($input)
     {
         $doctor = auth()->user()->doctor;
+        $notificationService = app(InAppNotificationService::class);
 
         $hospitalId = $doctor->hospital_id;
 
@@ -30,7 +31,7 @@ class ResultsService
             $hospitalId = null;
         }
 
-        Test::updateOrCreate(
+        $test = Test::updateOrCreate(
 
             ['id' => $input['id'] ?? null],
             [
@@ -47,13 +48,54 @@ class ResultsService
                 'code' => $input['loinc_code'] ?? null,
             ]
         );
+
+        $notificationPayload = $notificationService->buildPayload(
+            'Results uploaded',
+            'New results have been uploaded to the patient chart.',
+            'results_uploaded',
+            [
+                'encounter_id' => $input['encounter_id'] ?? null,
+                'patient_id' => $doctor->selected_patient_id,
+                'doctor_id' => $input['doctor_id'] ?? $doctor?->id,
+                'related_model_type' => Test::class,
+                'related_model_id' => $test->id,
+            ]
+        );
+
+        $notificationService->notifyPatient(
+            $doctor->selected_patient_id,
+            array_merge($notificationPayload, [
+                'recipient_role' => 'Patient',
+                'action_url' => route('patient.results'),
+                'message' => 'New test results have been uploaded to your chart.',
+            ])
+        );
+
+        $notificationService->notifyUser(
+            $doctor?->user,
+            array_merge($notificationPayload, [
+                'recipient_role' => 'Doctor',
+            ])
+        );
+
+        app(EmailNotificationService::class)->queueDoctorOrderWorkflowEmail(
+            $doctor?->user,
+            'Results uploaded',
+            'New results have been uploaded to the patient chart.',
+            [
+                'Patient: '.($test->patient?->user?->name ?? $test->patient?->name ?? 'N/A'),
+                'Test: '.($test->name ?? 'N/A'),
+                'Date: '.($test->time ?? 'N/A'),
+            ],
+            route('doctor.results.index')
+        );
     }
 
     public function reply(array $input): bool
     {
         return DB::transaction(function () use ($input) {
+            $notificationService = app(InAppNotificationService::class);
 
-            /* ================= PATIENT & CONTEXT ================= */
             $doctor = auth()->user()->doctor;
 
             if (! $doctor || ! $doctor->selected_patient_id) {
@@ -75,7 +117,6 @@ class ResultsService
             $providerName = auth()->user()->name ?? 'Unknown Provider';
             $fromUserId = auth()->user()->id;
 
-            /* ================= BUILD MESSAGE BODY ================= */
             $body = '';
             $testsPerformed = (array) ($input['testsPerformed'] ?? []);
 
@@ -121,7 +162,6 @@ class ResultsService
 
             $action = $input['actionAfterSaving'] ?? 'Send Message to Portal';
 
-            /* ================= SEND LETTER ================= */
             if ($action === 'Send Letter') {
 
                 $dir = public_path(trim($hospital->documents_dir ?? 'documents', '/'))."/{$pid}";
@@ -140,7 +180,7 @@ class ResultsService
 
                 $this->generate_pdf($html, $filePath);
 
-                Document::create([
+                $document = Document::create([
                     'patient_id' => $pid,
                     'hospital_id' => $hospital->id,
                     'url' => $filePath,
@@ -150,9 +190,25 @@ class ResultsService
                     'viewed' => $providerName,
                     'date' => now(),
                 ]);
+
+                $notificationService->notifyUser(
+                    $doctor?->user,
+                    $notificationService->buildPayload(
+                        'Document uploaded by lab',
+                        'A result letter has been uploaded to the patient chart.',
+                        'document_uploaded',
+                        [
+                            'recipient_role' => 'Doctor',
+                            'patient_id' => $pid,
+                            'doctor_id' => $doctor?->id,
+                            'action_url' => route('doctor.documents.index'),
+                            'related_model_type' => Document::class,
+                            'related_model_id' => $document->id ?? null,
+                        ]
+                    )
+                );
             }
 
-            /* ================= SEND PORTAL MESSAGE ================= */
             if ($action === 'Send Message to Portal') {
                 // Check if patient has portal access
                 $row_relate = PatientRelate::where('patient_id', '=', $pid)
@@ -193,6 +249,47 @@ class ResultsService
                     'document_id' => $document->id,
                     'date' => now(),
                 ]);
+
+                $notificationService->notifyPatient(
+                    $pid,
+                    $notificationService->buildPayload(
+                        'Order update from lab',
+                        'Your lab order has been updated and new results are available.',
+                        'lab_order_updated',
+                        [
+                            'recipient_role' => 'Patient',
+                            'patient_id' => $pid,
+                            'doctor_id' => $doctor?->id,
+                            'action_url' => route('patient.results'),
+                        ]
+                    )
+                );
+
+                $notificationService->notifyUser(
+                    $doctor?->user,
+                    $notificationService->buildPayload(
+                        'Order updated by lab',
+                        'Lab results have been uploaded for your patient.',
+                        'lab_order_updated',
+                        [
+                            'recipient_role' => 'Doctor',
+                            'patient_id' => $pid,
+                            'doctor_id' => $doctor?->id,
+                            'action_url' => route('doctor.results.index'),
+                        ]
+                    )
+                );
+
+                app(EmailNotificationService::class)->queueDoctorOrderWorkflowEmail(
+                    $doctor?->user,
+                    'Lab order updated',
+                    'Lab results have been uploaded for your patient.',
+                    [
+                        'Patient: '.($patient->user?->name ?? $patient->name ?? 'N/A'),
+                        'Action: Results uploaded to chart',
+                    ],
+                    route('doctor.results.index')
+                );
 
                 // Send email notification
                 if (! empty($patientEmail)) {

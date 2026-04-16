@@ -53,7 +53,7 @@ Route::put('/login', function () {
 });
 
 /* Agora */
-Route::post('/agora/token/{doctor_id}/{appointment_id?}', [AgoraController::class, 'generateToken']);
+Route::post('/agora/token/{doctor_id}/{appointment_id?}', [AgoraController::class, 'generateToken'])->middleware('auth');
 Route::get('/video-call/{id}', [VideoCallController::class, 'videoCall'])->name('video.call');
 Route::get('/', [PageController::class, 'home'])->name('home');
 Route::get('/user_profile', [PageController::class, 'userProfile'])->name('user.profile');
@@ -120,6 +120,7 @@ Route::get('/signup/patient', [SignupController::class, 'RegisterPatient'])->nam
 Route::post('/signup/patient', [SignupController::class, 'storePatient'])->name('signup.patient.store');
 Route::get('/signup', [SignupController::class, 'index'])->name('signup');
 Route::post('/signup', [SignupController::class, 'store'])->name('signup.store');
+Route::get('/signup/payment/{subscriptionId}', [SignupController::class, 'showPayment'])->name('signup.payment.show');
 Route::post('/signup/payment/verify', [SignupController::class, 'verifyPayment'])->name('signup.payment.verify');
 Route::post('/signup/payment/failed', [SignupController::class, 'paymentFailed'])->name('signup.payment.failed');
 Route::post('/signup/resend-activation', [SignupController::class, 'resendActivation'])->name('signup.resend-activation');
@@ -206,6 +207,18 @@ Route::group(['middleware' => ['auth:sanctum', config('jetstream.auth_session'),
     Route::post('/chats', [ChatsController::class, 'store'])->name('chats.store');
     Route::patch('/chats/{chat}/read', [ChatsController::class, 'markRead'])->name('chats.read');
 
+});
+
+/* Chat routes */
+Route::middleware(['auth'])->group(function () {
+    Route::prefix('chat')->group(function () {
+        Route::get('/conversations', [ChatsController::class, 'conversations']);
+        Route::get('/conversation-id/{id}', [ChatsController::class, 'conversationID'])->name('conversation.id');
+        Route::post('/conversation', [ChatsController::class, 'getConversation']);
+        Route::get('/messages/{conversationId}', [ChatsController::class, 'messages']);
+        Route::post('/messages/{conversationId}', [ChatsController::class, 'sendMessage']);
+        Route::post('/read/{conversationId}', [ChatsController::class, 'markAsRead']);
+    });
 });
 
 Route::get('/speed-test', fn () => 'ok');

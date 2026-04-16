@@ -9,9 +9,11 @@ use App\Models\SocialHistory;
 use App\Models\User;
 use App\Traits\EmailTrait;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class PatientService extends BaseService
 {
@@ -103,6 +105,190 @@ class PatientService extends BaseService
         return $patients;
     }
 
+    public function listAdminPatients(Request $request): LengthAwarePaginator
+    {
+        $user = auth()->user();
+        $hospitalId = $user->hospital?->id ?? $user->doctor?->hospital_id;
+        $filters = $this->normalizeAdminPatientFilters($request);
+
+        $query = Patient::query()->with([
+            'user',
+            'doctorPatients.doctor.user:id,name',
+            'doctorPatients.doctor.hospital:id,name,main_branch_id',
+        ]);
+
+        if ($hospitalId) {
+            $query->whereHas('doctorPatients.doctor', function ($doctorQuery) use ($hospitalId) {
+                $doctorQuery->where('hospital_id', $hospitalId);
+            });
+        }
+
+        $query->when($filters['keyword'], function ($patientQuery) use ($filters) {
+            $keyword = $filters['keyword'];
+
+            $patientQuery->where(function ($inner) use ($keyword) {
+                $inner->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('first_name', 'like', "%{$keyword}%")
+                    ->orWhere('last_name', 'like', "%{$keyword}%")
+                    ->orWhere('email', 'like', "%{$keyword}%")
+                    ->orWhere('mobile', 'like', "%{$keyword}%")
+                    ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                        $userQuery->where('name', 'like', "%{$keyword}%")
+                            ->orWhere('email', 'like', "%{$keyword}%")
+                            ->orWhere('mobile', 'like', "%{$keyword}%");
+                    });
+            });
+        });
+
+        $query->when($filters['status'] !== null, function ($patientQuery) use ($filters) {
+            $patientQuery->where('is_active', $filters['status']);
+        });
+
+        $query->when($filters['doctor_id'], function ($patientQuery) use ($filters) {
+            $patientQuery->whereHas('doctorPatients', function ($doctorPatientQuery) use ($filters) {
+                $doctorPatientQuery->where('doctor_id', $filters['doctor_id']);
+            });
+        });
+
+        $patients = $query
+            ->latest()
+            ->paginate($request->input('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $patients->through(function (Patient $patient) {
+            $doctorPatient = $patient->doctorPatients
+                ->sortByDesc('created_at')
+                ->first();
+
+            $doctor = $doctorPatient?->doctor;
+            $branch = $doctor?->hospital;
+            $avatarUrl = $patient->photo
+                ? (str_starts_with($patient->photo, 'http') ? $patient->photo : Storage::url($patient->photo))
+                : ($patient->user?->profile_photo_url ?: asset('images/avatar.webp'));
+
+            return array_merge($patient->toArray(), [
+                'display_name' => $patient->name,
+                'doctor_name' => $doctor?->name ?? $doctor?->user?->name,
+                'doctor_id' => $doctor?->id,
+                'branch_name' => $branch?->name,
+                'branch_type' => $branch ? ($branch->main_branch_id ? 'Sub Branch' : 'Main Branch') : null,
+                'avatar_url' => $avatarUrl,
+                'created_label' => dateFormat($patient->created_at),
+                'status_label' => $patient->is_active ? 'Active' : 'Inactive',
+            ]);
+        });
+
+        return $patients;
+    }
+
+    public function listDoctorPatients(Request $request): LengthAwarePaginator
+    {
+        $doctor = auth()->user()?->doctor;
+        $filters = $this->normalizeDoctorPatientFilters($request);
+
+        $query = DoctorPatient::query()
+            ->where('doctor_id', $doctor?->id)
+            ->whereHas('patient')
+            ->with(['patient.user']);
+
+        $query->when($filters['keyword'], function ($doctorPatientQuery) use ($filters) {
+            $keyword = $filters['keyword'];
+
+            $doctorPatientQuery->whereHas('patient', function ($patientQuery) use ($keyword) {
+                $patientQuery->where(function ($inner) use ($keyword) {
+                    $inner->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('first_name', 'like', "%{$keyword}%")
+                        ->orWhere('last_name', 'like', "%{$keyword}%")
+                        ->orWhere('email', 'like', "%{$keyword}%")
+                        ->orWhere('mobile', 'like', "%{$keyword}%")
+                        ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                            $userQuery->where('name', 'like', "%{$keyword}%")
+                                ->orWhere('email', 'like', "%{$keyword}%")
+                                ->orWhere('mobile', 'like', "%{$keyword}%");
+                        });
+                });
+            });
+        });
+
+        $query->when($filters['status'] !== null, function ($doctorPatientQuery) use ($filters) {
+            $doctorPatientQuery->whereHas('patient', function ($patientQuery) use ($filters) {
+                $patientQuery->where('is_active', $filters['status']);
+            });
+        });
+
+        $query->when($filters['portal_status'], function ($doctorPatientQuery) use ($filters) {
+            $doctorPatientQuery->whereHas('patient', function ($patientQuery) use ($filters) {
+                if ($filters['portal_status'] === 'registered') {
+                    $patientQuery->whereNotNull('user_id');
+                }
+
+                if ($filters['portal_status'] === 'not_registered') {
+                    $patientQuery->whereNull('user_id');
+                }
+            });
+        });
+
+        $patients = $query
+            ->latest('id')
+            ->paginate($request->input('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $selectedPatientId = $doctor?->selected_patient_id;
+
+        $patients->through(function (DoctorPatient $doctorPatient) use ($selectedPatientId) {
+            $patient = $doctorPatient->patient;
+            $user = $patient?->user;
+
+            $avatarPath = $patient?->photo ?: $user?->profile_photo_path;
+            $avatarUrl = $avatarPath
+                ? (str_starts_with($avatarPath, 'http') ? $avatarPath : Storage::url($avatarPath))
+                : ($user?->profile_photo_url ?: asset('images/avatar.webp'));
+
+            return [
+                'id' => $patient?->id,
+                'display_name' => $patient?->name ?: trim(($patient?->first_name ?? '').' '.($patient?->last_name ?? '')),
+                'email' => $patient?->email ?: $user?->email,
+                'phone' => $patient?->mobile ?: $user?->mobile,
+                'avatar_url' => $avatarUrl,
+                'register_to_portal' => ! $user,
+                'portal_status_label' => $user ? 'Registered' : 'Not Registered',
+                'is_active' => (bool) $patient?->is_active,
+                'status_label' => $patient?->is_active ? 'Active' : 'Inactive',
+                'created_at' => optional($patient?->created_at)->format('M d, Y'),
+                'created_label' => optional($patient?->created_at)->format('M d, Y'),
+                'is_selected' => $selectedPatientId === $patient?->id,
+            ];
+        });
+
+        return $patients;
+    }
+
+    protected function normalizeAdminPatientFilters(Request $request): array
+    {
+        $keyword = trim((string) ($request->input('keyword', $request->input('search', ''))));
+        $doctorId = trim((string) $request->input('doctor_id', ''));
+        $status = $request->input('status', '');
+
+        return [
+            'keyword' => $keyword !== '' ? $keyword : null,
+            'doctor_id' => $doctorId !== '' ? $doctorId : null,
+            'status' => $status === '' ? null : filter_var($status, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
+        ];
+    }
+
+    protected function normalizeDoctorPatientFilters(Request $request): array
+    {
+        $keyword = trim((string) ($request->input('keyword', $request->input('search', ''))));
+        $status = $request->input('status', '');
+        $portalStatus = trim((string) $request->input('portal_status', ''));
+
+        return [
+            'keyword' => $keyword !== '' ? $keyword : null,
+            'status' => $status === '' ? null : filter_var($status, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
+            'portal_status' => in_array($portalStatus, ['registered', 'not_registered'], true) ? $portalStatus : null,
+        ];
+    }
+
     /**
      * Demographic data
      *
@@ -142,7 +328,7 @@ class PatientService extends BaseService
         ]);
 
         try {
-            DB::transaction(function () use ($validated, $request) {
+            $patient = DB::transaction(function () use ($validated, $request) {
 
                 // 🔹 Find patient
                 $patient = Patient::with('user')->findOrFail($request->id);
@@ -194,7 +380,30 @@ class PatientService extends BaseService
                         ]);
                     }
                 }
+
+                return $patient->fresh(['user', 'doctorPatients.doctor.user']);
             });
+
+            $notificationService = app(InAppNotificationService::class);
+            $doctorUsers = $patient?->doctorPatients
+                ->map(fn ($doctorPatient) => $doctorPatient->doctor?->user)
+                ->filter();
+
+            $notificationService->notifyUsers(
+                $doctorUsers ?? [],
+                $notificationService->buildPayload(
+                    'Patient profile updated',
+                    ($patient?->name ?? 'A patient').' updated demographic information.',
+                    'patient_updated',
+                    [
+                        'recipient_role' => 'Doctor',
+                        'patient_id' => $patient?->id,
+                        'action_url' => route('doctor.demographics'),
+                        'related_model_type' => Patient::class,
+                        'related_model_id' => $patient?->id,
+                    ]
+                )
+            );
 
             return back()->with('success', 'Demographics updated successfully');
         } catch (\Throwable $e) {
@@ -250,9 +459,29 @@ class PatientService extends BaseService
             $this->logUpdate($oldPatient, $patient, 'Patient updated via UserService');
         } else {
             $this->logCreate($patient, 'New patient created');
+
+            $hospitalId = Auth::user()->hospital?->id
+                ?? Auth::user()->doctor?->hospital_id
+                ?? ($data['hospital_id'] ?? null);
+
+            app(InAppNotificationService::class)->notifyAdminsForHospital(
+                $hospitalId,
+                app(InAppNotificationService::class)->buildPayload(
+                    'New patient added',
+                    ($patient->name ?? 'A patient').' was added to the system.',
+                    'patient_created',
+                    [
+                        'recipient_role' => 'Admin',
+                        'patient_id' => $patient->id,
+                        'related_model_type' => Patient::class,
+                        'related_model_id' => $patient->id,
+                        'action_url' => route('admin.patients.index'),
+                    ]
+                )
+            );
         }
 
-        $doctorId = Auth::user()->doctor?->id;
+        $doctorId = Auth::user()->doctor?->id ?? null;
         if ($patient && ! $data['id'] && $doctorId) {
             DoctorPatient::updateOrCreate([
                 'patient_id' => $patient->id,
@@ -324,6 +553,26 @@ class PatientService extends BaseService
         $socialHistory = SocialHistory::updateOrCreate(
             ['patient_id' => $data['patient_id']],
             $data
+        );
+
+        $patient = Patient::with(['doctorPatients.doctor.user'])->find($data['patient_id']);
+        $doctorUsers = $patient?->doctorPatients
+            ->map(fn ($doctorPatient) => $doctorPatient->doctor?->user)
+            ->filter();
+
+        app(InAppNotificationService::class)->notifyUsers(
+            $doctorUsers ?? [],
+            app(InAppNotificationService::class)->buildPayload(
+                'Patient history updated',
+                ($patient?->name ?? 'A patient').' updated social history information.',
+                'patient_updated',
+                [
+                    'recipient_role' => 'Doctor',
+                    'patient_id' => $patient?->id,
+                    'related_model_type' => SocialHistory::class,
+                    'related_model_id' => $socialHistory->id,
+                ]
+            )
         );
 
         return $socialHistory;

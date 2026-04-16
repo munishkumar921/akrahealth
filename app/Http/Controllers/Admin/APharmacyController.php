@@ -36,13 +36,14 @@ class APharmacyController extends Controller
     public function index()
     {
         $pharmacies = $this->pharmacyService->list(request());
-        $request = request();
-        $keyword = $request->get('keyword') ?? '';
 
         return inertia('Admin/Pharmacy/PharmacyList', [
             'pharmacies' => $pharmacies,
-            'request' => $request,
-            'keyword' => $keyword,
+            'filters' => [
+                'keyword' => request()->string('keyword')->toString(),
+                'status' => request()->input('status', ''),
+                'verification' => request()->input('verification', ''),
+            ],
         ]);
     }
 

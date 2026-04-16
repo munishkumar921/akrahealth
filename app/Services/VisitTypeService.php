@@ -16,7 +16,7 @@ class VisitTypeService
         $hospital = $user->hospital;
         $doctor = $user->doctor;
 
-        $query = VisitType::query()->with(['doctor', 'hospital']);
+        $query = VisitType::query()->with(['doctor.user', 'hospital']);
 
         /*
         |--------------------------------------------------------------------------
@@ -44,12 +44,26 @@ class VisitTypeService
         | Search
         |--------------------------------------------------------------------------
         */
-        $query->when($request->filled('search'), function ($q) use ($request) {
+        $query->when($request->filled('keyword'), function ($q) use ($request) {
             $q->where(function ($sub) use ($request) {
-                $sub->where('name', 'like', "%{$request->search}%")
-                    ->orWhere('colors', 'like', "%{$request->search}%")
-                    ->orWhere('description', 'like', "%{$request->search}%");
+                $sub->where('name', 'like', "%{$request->keyword}%")
+                    ->orWhere('colors', 'like', "%{$request->keyword}%")
+                    ->orWhere('description', 'like', "%{$request->keyword}%")
+                    ->orWhere('currency', 'like', "%{$request->keyword}%")
+                    ->orWhere('price', 'like', "%{$request->keyword}%")
+                    ->orWhere('duration', 'like', "%{$request->keyword}%")
+                    ->orWhereHas('doctor.user', function ($doctorQuery) use ($request) {
+                        $doctorQuery->where('name', 'like', "%{$request->keyword}%");
+                    });
             });
+        });
+
+        $query->when($request->filled('status'), function ($q) use ($request) {
+            $q->where('is_active', $request->status === 'true');
+        });
+
+        $query->when($request->filled('doctor_id'), function ($q) use ($request) {
+            $q->where('doctor_id', $request->doctor_id);
         });
 
         /*
@@ -60,7 +74,22 @@ class VisitTypeService
         return $query
             ->orderBy('created_at', 'desc')
             ->paginate(request('per_page', paginateLimit()))
-            ->withQueryString();
+            ->withQueryString()
+            ->through(function ($visitType) {
+                return [
+                    'id' => $visitType->id,
+                    'name' => $visitType->name,
+                    'description' => $visitType->description,
+                    'colors' => $visitType->colors,
+                    'is_active' => (bool) $visitType->is_active,
+                    'currency' => $visitType->currency,
+                    'price' => $visitType->price,
+                    'duration' => $visitType->duration,
+                    'provider_name' => $visitType->doctor?->user?->name ?? 'All Providers',
+                    'status_label' => $visitType->is_active ? 'Active' : 'Inactive',
+                    'created_label' => $visitType->created_at?->format('Y-m-d'),
+                ];
+            });
     }
 
     public function upsert($data)
@@ -72,8 +101,8 @@ class VisitTypeService
                 'description' => $data['description'],
                 'colors' => $data['colors'],
                 'is_active' => $data['is_active'],
-                'hospital_id' => $data['hospital_id'] ?? null,
-                'doctor_id' => $data['doctor_id'] ?? $data['provider'] ?? null,
+                'hospital_id' => auth()->user()->doctor->hospital_id,
+                'doctor_id' => auth()->user()->doctor->id, // will be removed
                 'currency' => $data['currency'] ?? null,
                 'price' => $data['price'] ?? null,
                 'duration' => $data['duration'] ?? null,

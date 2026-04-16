@@ -18,6 +18,7 @@ use App\Models\Plan;
 use App\Models\ReviewOfSystem;
 use App\Models\Vital;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 
 class EncounterService
 {
@@ -29,7 +30,11 @@ class EncounterService
      */
     public function upsert($data)
     {
+        $auditService = app(AuditService::class);
+        $notificationService = app(InAppNotificationService::class);
         $encounter = Encounter::where('id', $data['id'] ?? null)->first();
+        $oldEncounter = $encounter ? clone $encounter : null;
+        $invoiceCreated = null;
         if (! $encounter) {
             $encounter = new Encounter;
         }
@@ -49,12 +54,19 @@ class EncounterService
                 'recurring_type' => 'none',
             ]);
             $appointment_id = $appointment->id;
+
+            $auditService->logCreate(
+                'Appointment',
+                $appointment->fresh(),
+                'Appointment created from encounter'
+            );
         } else {
             $appointment_id = $data['appointment_id'];
 
             $appointment = Appointment::where('id', $appointment_id)->first();
         }
 
+        $encounterWasRecentlyCreated = ! $encounter->exists;
         $doctor = auth()->user()->doctor;
         $encounter->patient_id = $data['patient_id'];
         $encounter->appointment_id = $appointment_id;
@@ -78,52 +90,61 @@ class EncounterService
         $encounter->save();
 
         if ($appointment) {
+            $invoicePayload = [
+                'patient_id' => $appointment->patient_id,
+                'user_id' => $appointment->created_by,
+                'doctor_id' => $appointment->doctor_id,
+                'hospital_id' => $appointment?->doctor?->hospital?->id,
+                'appointment_id' => $appointment->id,
+                'lab_order_id' => null,
+                'pharmacy_order_id' => null,
+                'subscription_id' => null,
+                'amount' => $appointment->fee_amount ?? 0,
+                'tax_amount' => 0,
+                'discount_amount' => $appointment->discount ?? 0,
+                'total_amount' => $appointment->total_amount ?? 0,
+                'currency' => $appointment->currency ?? 'INR',
+                'status' => 'pending',
+                'razorpay_invoice_id' => null,
+                'razorpay_payment_id' => null,
+                'razorpay_order_id' => null,
+                'razorpay_customer_id' => null,
+                'payment_method' => 'razorpay',
+                'due_date' => now(),
+                'paid_at' => now(),
+                'sent_at' => now(),
+                'viewed_at' => now(),
+                'items' => [],
+                'customer_details' => [],
+                'notes' => '',
+                'terms_conditions' => '',
+                'created_by' => $appointment->created_by,
+                'updated_by' => $appointment->created_by,
+            ];
 
-            /* creating invoice with pending status */
-            $lastInvoice = Invoice::latest()->first();
-            if ($lastInvoice) {
-                $invoice_number = $lastInvoice->invoice_number + 1;
+            $existingInvoice = Invoice::where('appointment_id', $encounter->appointment_id)->first();
+
+            if ($existingInvoice) {
+                $existingInvoice->fill($invoicePayload);
+                $existingInvoice->save();
             } else {
-                $invoice_number = 1000001;
-            }
+                for ($attempt = 0; $attempt < 3; $attempt++) {
+                    try {
+                        $invoiceCreated = Invoice::create([
+                            'invoice_number' => Invoice::generateInvoiceNumber(),
+                            ...$invoicePayload,
+                        ]);
+                        break;
+                    } catch (QueryException $exception) {
+                        $isDuplicateInvoiceNumber = $exception->getCode() === '23000'
+                            && str_contains($exception->getMessage(), 'invoices_invoice_number_unique');
 
-            Invoice::updateOrCreate(
-                [
-                    'appointment_id' => $encounter->appointment_id,
-                ],
-                [
-                    'invoice_number' => $invoice_number,
-                    'patient_id' => $appointment->patient_id,
-                    'user_id' => $appointment->created_by,
-                    'doctor_id' => $appointment->doctor_id,
-                    'hospital_id' => $appointment?->doctor?->hospital?->id,
-                    'appointment_id' => $appointment->id,
-                    'lab_order_id' => null,
-                    'pharmacy_order_id' => null,
-                    'subscription_id' => null,
-                    'amount' => $appointment->fee_amount ?? 0,
-                    'tax_amount' => 0,
-                    'discount_amount' => $appointment->discount ?? 0,
-                    'total_amount' => $appointment->total_amount ?? 0,
-                    'currency' => $appointment->currency ?? 'INR',
-                    'status' => 'pending',
-                    'razorpay_invoice_id' => null,
-                    'razorpay_payment_id' => null,
-                    'razorpay_order_id' => null,
-                    'razorpay_customer_id' => null,
-                    'payment_method' => 'razorpay',
-                    'due_date' => now(),
-                    'paid_at' => now(),
-                    'sent_at' => now(),
-                    'viewed_at' => now(),
-                    'items' => [],
-                    'customer_details' => [],
-                    'notes' => '',
-                    'terms_conditions' => '',
-                    'created_by' => $appointment->created_by,
-                    'updated_by' => $appointment->created_by,
-                ]
-            );
+                        if (! $isDuplicateInvoiceNumber || $attempt === 2) {
+                            throw $exception;
+                        }
+                    }
+                }
+            }
         }
 
         if ($encounter) {
@@ -217,6 +238,105 @@ class EncounterService
                     ]);
                 }
             }
+        }
+
+        if ($encounterWasRecentlyCreated) {
+            $auditService->logCreate(
+                'Encounter',
+                $encounter->fresh(),
+                'Encounter created'
+            );
+
+            $notificationService->notifyPatient(
+                $encounter->patient_id,
+                $notificationService->buildPayload(
+                    'New encounter created',
+                    'A new encounter has been added to your chart.',
+                    'encounter_created',
+                    [
+                        'recipient_role' => 'Patient',
+                        'action_url' => route('patient.encounters.show', $encounter->id),
+                        'encounter_id' => $encounter->id,
+                        'patient_id' => $encounter->patient_id,
+                        'doctor_id' => $encounter->doctor_id,
+                        'related_model_type' => Encounter::class,
+                        'related_model_id' => $encounter->id,
+                    ]
+                )
+            );
+
+            $notificationService->notifyAdminsForHospital(
+                $encounter->hospital_id,
+                $notificationService->buildPayload(
+                    'New encounter created',
+                    'A new encounter was created for patient ID '.$encounter->patient_id.'.',
+                    'encounter_created',
+                    [
+                        'recipient_role' => 'Admin',
+                        'encounter_id' => $encounter->id,
+                        'patient_id' => $encounter->patient_id,
+                        'doctor_id' => $encounter->doctor_id,
+                        'action_url' => route('admin.allAppointments'),
+                        'related_model_type' => Encounter::class,
+                        'related_model_id' => $encounter->id,
+                    ]
+                )
+            );
+
+            app(EmailNotificationService::class)->queueDoctorEncounterEmail(
+                $encounter->doctor,
+                $encounter->fresh(['patient.user', 'doctor.user'])
+            );
+        } elseif ($oldEncounter) {
+            $auditService->logUpdate(
+                'Encounter',
+                $oldEncounter,
+                $encounter->fresh(),
+                'Encounter updated'
+            );
+        }
+
+        if ($invoiceCreated) {
+            $notificationPayload = $notificationService->buildPayload(
+                'New invoice created',
+                'A new invoice has been generated for your recent visit.',
+                'invoice_created',
+                [
+                    'recipient_role' => 'Patient',
+                    'invoice_id' => $invoiceCreated->id,
+                    'appointment_id' => $invoiceCreated->appointment_id,
+                    'patient_id' => $invoiceCreated->patient_id,
+                    'doctor_id' => $invoiceCreated->doctor_id,
+                    'action_url' => route('patient.billing'),
+                    'related_model_type' => Invoice::class,
+                    'related_model_id' => $invoiceCreated->id,
+                ]
+            );
+
+            $notificationService->notifyPatient($invoiceCreated->patient_id, $notificationPayload);
+            app(EmailNotificationService::class)->queueDoctorBillingEmail(
+                $invoiceCreated->fresh(['doctor.user'])->doctor?->user,
+                $invoiceCreated,
+                'A new invoice has been generated for your patient after the encounter.'
+            );
+
+            $notificationService->notifyAdminsForHospital(
+                $invoiceCreated->hospital_id,
+                $notificationService->buildPayload(
+                    'New invoice created',
+                    'A new invoice '.$invoiceCreated->invoice_number.' has been created.',
+                    'invoice_created',
+                    [
+                        'recipient_role' => 'Admin',
+                        'invoice_id' => $invoiceCreated->id,
+                        'appointment_id' => $invoiceCreated->appointment_id,
+                        'patient_id' => $invoiceCreated->patient_id,
+                        'doctor_id' => $invoiceCreated->doctor_id,
+                        'related_model_type' => Invoice::class,
+                        'related_model_id' => $invoiceCreated->id,
+                    ]
+                )
+            );
         }
 
         return $encounter;

@@ -1,17 +1,15 @@
 export const doctorNavOptions = [
-    { id: "fa-solid fa-calendar-plus", color: "#1be1b3", label: "Appointments", path: "doctor.schedule.index" },
+    { id: "fa-solid fa-calendar-plus", color: "#1be1b3", label: "Calendar", path: "doctor.schedule.index" },
     { id: "fa-solid fa-money", color: "#800080", label: "Financial", path: "doctor.finance.bills_to_submit"},
     { id: "fa-solid fa-video", color: "#FF0000", label: "Live", path: "doctor.triage.index"},
     { id: "fa-solid fa-stethoscope", color: "#00CFDE", label: "Encounter", path: "doctor.encounters.index"},
-    { id: "fa-solid fa-headset", color: "#007BFF", label: "Schedule", path: "doctor.todays.call"},
 ];
 
 export const assistantNavOptions = [
-    { id: "fa-solid fa-calendar-plus", color: "#1be1b3", label: "Appointments", path: "assistant.schedule.index" },
+    { id: "fa-solid fa-calendar-plus", color: "#1be1b3", label: "Calendar", path: "assistant.schedule.index" },
     { id: "fa-solid fa-money", color: "#800080", label: "Financial", path: "assistant.finance.bills_to_submit"},
     { id: "fa-solid fa-video", color: "#FF0000", label: "Live", path: "triage.index"},
     { id: "fa-solid fa-stethoscope", color: "#00CFDE", label: "Encounter", path: "assistant.encounters.index"},
-    { id: "fa-solid fa-headset", color: "#007BFF", label: "Schedule", path: "assistant.todays.call"},
 ];
 
 // For backward compatibility, keep navOptions pointing to doctorNavOptions

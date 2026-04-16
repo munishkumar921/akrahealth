@@ -167,26 +167,23 @@ const editOrder = (order) => {
 };
 
 const completeOrder = (order) => {
-        Swal.fire(confirmSettings('Are you sure to complete this order?')).then((result) => {
+    Swal.fire(confirmSettings('Are you sure to complete this order?')).then((result) => {
+        if (result.isConfirmed) {
             router.post(route('doctor.orders.complete', order.id), {}, {
-            onSuccess: () => {
-            }
-        });
-  
-        })
-        
+                onSuccess: () => {
+                }
+            });
+        }
+    })
 };
 
 const deleteOrder = (order) => {
     Swal.fire(confirmSettings('Are you sure to delete this data?', 'You want be get it back')).then((result) => {
         if (result.isConfirmed) {
             router.delete(route('doctor.orders.destroy', order.id));
-            
         }
     })
-        
 };
-
 
 const openLabOrderModal = () => {
     router.get(route('doctor.orders.create', { type: 'labs' }), {}, {
@@ -196,15 +193,12 @@ const openLabOrderModal = () => {
     });
 };
 
-
-
 const openImagingOrderModal = () => {
     router.get(route('doctor.orders.create', { type: 'imaging' }), {
         onSuccess: () => {
         },
     });
 };
-
 
 const openCardiopulmonaryOrderModal = () => {
     router.get(route('doctor.orders.create', { type: 'cardiopulmonary' }), {
@@ -213,14 +207,12 @@ const openCardiopulmonaryOrderModal = () => {
     });
 };
 
-
 const openReferralOrderModal = () => {
     router.get(route('doctor.orders.create', { type: 'referrals' }), {
         onSuccess: () => {
         },
     });
 };
-
 
 // Get status color based on order status
 const getStatusColor = (status) => {
@@ -235,7 +227,6 @@ const getStatusColor = (status) => {
             return 'primary';
     }
 };
-
 </script>
 
 <template>
@@ -347,7 +338,7 @@ const getStatusColor = (status) => {
                                                 </div>
                                             </div>
                                         </td>
-<td>
+                                        <td>
                                             <span class="badge bg-light text-dark">
                                                 {{ order.date }}
                                             </span>
@@ -386,64 +377,11 @@ const getStatusColor = (status) => {
 </template>
 
 <style scoped>
-.finance-menu {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.menu-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    background: #fff;
-    border: 1px solid #eef0f4;
-    border-radius: 12px;
-    padding: 12px 14px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, .04);
-    cursor: pointer;
-    transition: .2s;
-}
-
-.menu-item:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 18px rgba(0, 0, 0, .06);
-}
-
-.menu-item.active {
-    border-color: #6f42c1;
-    box-shadow: 0 10px 20px rgba(111, 66, 193, .15);
-}
-
 .icon {
     height: 10px;
     width: 10px;
     border-radius: 50%;
     flex-shrink: 0;
-}
-
-.icon-success {
-    color: #28a745;
-}
-
-.icon-warning {
-    color: #ffc107;
-}
-
-.icon-secondary {
-    color: #ff7b29;
-}
-
-.icon-primary {
-    color: #0d6efd;
-}
-
-.label {
-    font-size: 14px;
-    color: #2b2b2b;
-    font-weight: 600;
-    flex: 1;
 }
 
 .badge {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Patient;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AppointmentBookingRequest;
 use App\Models\Doctor;
 use App\Models\DoctorPatient;
 use App\Models\VisitType;
@@ -66,17 +67,8 @@ class PatientAppointmentController extends Controller
         return response()->json($data);
     }
 
-    public function storeAppointment(Request $request, AppointmentService $appointmentService)
+    public function storeAppointment(AppointmentBookingRequest $request, AppointmentService $appointmentService)
     {
-        $request->validate([
-            'doctor_id' => 'required|exists:doctors,id',
-            'appointment_date' => 'required|date',
-            'appointment_time' => 'required',
-            'appointment_type' => 'required|string',
-            'reason' => 'nullable|string|max:1000',
-            'fee_amount' => 'nullable|numeric|min:0',
-        ]);
-
         $doctor = Doctor::with(['user'])->where('id', $request->doctor_id)->first();
 
         $appointment_date = Carbon::parse($request->appointment_date)->format('Y-m-d');

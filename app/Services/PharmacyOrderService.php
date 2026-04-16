@@ -45,6 +45,7 @@ class PharmacyOrderService
     public function create(array $data)
     {
         return DB::transaction(function () use ($data) {
+            $notificationService = app(InAppNotificationService::class);
             $data['uuid'] = Str::uuid();
             $order = PharmacyOrder::create($data);
 
@@ -55,7 +56,33 @@ class PharmacyOrderService
                 ]);
             }
 
-            return $order->load(['items.medicine', 'patient', 'pharmacy', 'deliveryPartner']);
+            app(AuditService::class)->logCreate(
+                'PharmacyOrder',
+                $order->fresh(),
+                'Pharmacy order created'
+            );
+
+            $order->load(['items.medicine', 'patient.user', 'pharmacy.user', 'doctor.user', 'deliveryPartner']);
+
+            $notificationService->notifyPharmacy(
+                $order->pharmacy,
+                $notificationService->buildPayload(
+                    'New pharmacy order assigned',
+                    'A new encounter-related pharmacy order has been assigned to your portal.',
+                    'pharmacy_order_assigned',
+                    [
+                        'recipient_role' => 'Pharmacy',
+                        'pharmacy_order_id' => $order->id,
+                        'patient_id' => $order->patient_id,
+                        'doctor_id' => $order->doctor_id,
+                        'appointment_id' => $order->appointment_id,
+                        'related_model_type' => PharmacyOrder::class,
+                        'related_model_id' => $order->id,
+                    ]
+                )
+            );
+
+            return $order;
         });
     }
 
@@ -80,7 +107,9 @@ class PharmacyOrderService
     public function update($id, array $data)
     {
         return DB::transaction(function () use ($id, $data) {
+            $notificationService = app(InAppNotificationService::class);
             $order = PharmacyOrder::findOrFail($id);
+            $oldOrder = clone $order;
             $order->update($data);
 
             if (! empty($data['order_items'])) {
@@ -93,7 +122,67 @@ class PharmacyOrderService
                 }
             }
 
-            return $order->load(['items.medicine', 'patient', 'pharmacy', 'deliveryPartner']);
+            app(AuditService::class)->logUpdate(
+                'PharmacyOrder',
+                $oldOrder,
+                $order->fresh(),
+                'Pharmacy order updated'
+            );
+
+            $order->load(['items.medicine', 'patient.user', 'pharmacy.user', 'doctor.user', 'deliveryPartner']);
+
+            $notificationPayload = $notificationService->buildPayload(
+                'Pharmacy order updated',
+                'A pharmacy order has been updated.',
+                'pharmacy_order_updated',
+                [
+                    'pharmacy_order_id' => $order->id,
+                    'patient_id' => $order->patient_id,
+                    'doctor_id' => $order->doctor_id,
+                    'appointment_id' => $order->appointment_id,
+                    'related_model_type' => PharmacyOrder::class,
+                    'related_model_id' => $order->id,
+                ]
+            );
+
+            $notificationService->notifyUser(
+                $order->doctor?->user,
+                array_merge($notificationPayload, [
+                    'recipient_role' => 'Doctor',
+                    'message' => 'Pharmacy updated an assigned order.',
+                ])
+            );
+
+            app(EmailNotificationService::class)->queueDoctorOrderWorkflowEmail(
+                $order->doctor?->user,
+                'Pharmacy order updated',
+                'A pharmacy order for your patient has been updated.',
+                [
+                    'Patient: '.($order->patient?->user?->name ?? 'N/A'),
+                    'Order Number: '.($order->order_number ?? $order->id),
+                    'Status: '.($order->status ?? 'N/A'),
+                ],
+                route('doctor.orders.index')
+            );
+
+            $notificationService->notifyPatient(
+                $order->patient,
+                array_merge($notificationPayload, [
+                    'recipient_role' => 'Patient',
+                    'message' => 'Your pharmacy order status has been updated.',
+                    'action_url' => route('patient.orders'),
+                ])
+            );
+
+            $notificationService->notifyPharmacy(
+                $order->pharmacy,
+                array_merge($notificationPayload, [
+                    'recipient_role' => 'Pharmacy',
+                    'message' => 'A pharmacy order assigned to you was updated.',
+                ])
+            );
+
+            return $order;
         });
     }
 
@@ -106,8 +195,15 @@ class PharmacyOrderService
     public function delete($id)
     {
         $order = PharmacyOrder::findOrFail($id);
+        $auditModel = clone $order;
         $order->items()->delete();
         $order->delete();
+
+        app(AuditService::class)->logDelete(
+            'PharmacyOrder',
+            $auditModel,
+            'Pharmacy order deleted'
+        );
 
         return ['message' => 'Pharmacy order deleted successfully'];
     }

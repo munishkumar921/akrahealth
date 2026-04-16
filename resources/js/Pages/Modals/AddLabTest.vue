@@ -24,7 +24,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["close", "submit"]);
- 
+
 const form = useForm({
     id: '',
     lab_test_category_id: '',
@@ -55,18 +55,18 @@ const submitForm = () => {
         form.errors.lab_test_category_id = 'Please select a test category';
         return;
     }
-    
+
     form.post(route('admin.lab-tests.store'), {
         onSuccess: () => {
-             emit("submit");
+            emit("submit");
             closeModal();
-         },
+        },
         onError: () => {
- }
+        }
     });
 };
 
-const update=(data) =>{
+const update = (data) => {
     form.id = data.id;
     form.name = data.name;
     form.lab_test_category_id = data.lab_test_category_id;
@@ -99,50 +99,42 @@ const closeModal = () => {
             <div class="col-12">
                 <h6 class="text-primary mb-3">Basic Information</h6>
             </div>
-            
+
             <div class="col-md-6 mb-3">
                 <div class="mb-2">
                     <label class="form-label">Test Category <span class="text-danger">*</span></label>
-                    <select v-model="form.lab_test_category_id" class="form-select" :class="{ 'is-invalid': form.errors.lab_test_category_id }">
+                    <select v-model="form.lab_test_category_id" class="form-select"
+                        :class="{ 'is-invalid': form.errors.lab_test_category_id }">
                         <option value="" disabled>Select category</option>
                         <option v-for="category in categories" :key="category.id" :value="category.id">
                             {{ category.name }}
                         </option>
                     </select>
-                    <div v-if="form.errors.lab_test_category_id" class="text-danger mt-2">{{ form.errors.lab_test_category_id }}</div>
+                    <div v-if="form.errors.lab_test_category_id" class="text-danger mt-2">{{
+                        form.errors.lab_test_category_id }}</div>
                 </div>
             </div>
-            
+
             <div class="col-md-6 mb-3">
-                <BaseInput 
-                    v-model="form.name" 
-                    label="Test Name" 
-                    placeholder="Enter test name" 
-                    required 
-                    :error="form.errors.name" 
-                />
+                <BaseInput v-model="form.name" label="Test Name" placeholder="Enter test name" required
+                    :error="form.errors.name" />
             </div>
-            
+
             <div class="col-md-12 mb-3">
-                <BaseInput 
-                    v-model="form.description" 
-                    label="Description" 
-                    placeholder="Enter test description" 
-                    type="textarea"
-                    :rows="3"
-                    :error="form.errors.description" 
-                />
+                <BaseInput v-model="form.description" label="Description" placeholder="Enter test description"
+                    type="textarea" :rows="3" :error="form.errors.description" />
             </div>
 
             <!-- Sample Details -->
             <div class="col-12 mt-3">
                 <h6 class="text-primary mb-3">Sample Details</h6>
             </div>
-            
+
             <div class="col-md-6 mb-3">
                 <div class="mb-2">
                     <label class="form-label">Sample Type</label>
-                    <select v-model="form.sample_type" class="form-select" :class="{ 'is-invalid': form.errors.sample_type }">
+                    <select v-model="form.sample_type" class="form-select"
+                        :class="{ 'is-invalid': form.errors.sample_type }">
                         <option value="" disabled>Select sample type</option>
                         <option v-for="type in sampleTypes" :key="type.id" :value="type.id">
                             {{ type.name }}
@@ -151,85 +143,38 @@ const closeModal = () => {
                     <div v-if="form.errors.sample_type" class="text-danger mt-2">{{ form.errors.sample_type }}</div>
                 </div>
             </div>
-            
+
             <div class="col-md-6 mb-3">
-                <BaseInput 
-                    v-model="form.report_time" 
-                    label="Report Time" 
-                    placeholder="e.g., 24 hours" 
-                    :error="form.errors.report_time" 
-                />
+                <BaseInput v-model="form.report_time" label="Report Time" placeholder="e.g., 24 hours"
+                    :error="form.errors.report_time" />
             </div>
-            
+
             <div class="col-md-6 mb-3">
-                <div class="form-check form-switch">
-                    <input 
-                        class="form-check-input" 
-                        type="checkbox" 
-                        id="fasting_required"
-                        v-model="form.fasting_required"
-                    >
-                    <label class="form-check-label" for="fasting_required">
-                        Fasting Required
-                    </label>
-                </div>
-                <div v-if="form.errors.fasting_required" class="text-danger mt-2">
-                    {{ form.errors.fasting_required }}
-                </div>
-            </div>
-            
-            <div class="col-md-6 mb-3">
-                <BaseInput 
-                    v-model="form.instructions" 
-                    label="Pre-Test Instructions" 
-                    placeholder="Enter patient instructions" 
-                    type="textarea"
-                    :rows="3"
-                    :error="form.errors.instructions" 
-                />
+                <BaseInput v-model="form.instructions" label="Pre-Test Instructions"
+                    placeholder="Enter patient instructions" type="textarea" :rows="3"
+                    :error="form.errors.instructions" />
             </div>
 
             <!-- Pricing -->
             <div class="col-12 mt-3">
                 <h6 class="text-primary mb-3">Pricing</h6>
             </div>
-            
+
             <div class="col-md-4 mb-3">
-                <BaseInput 
-                    v-model="form.price" 
-                    label="Price" 
-                    placeholder="Enter price" 
-                    type="number"
-                    step="0.01"
-                    @input="calculateFinalPrice"
-                    :error="form.errors.price" 
-                />
+                <BaseInput v-model="form.price" label="Price" placeholder="Enter price" type="number" step="0.01"
+                    @input="calculateFinalPrice" :error="form.errors.price" />
             </div>
-            
+
             <div class="col-md-4 mb-3">
-                <BaseInput 
-                    v-model="form.discount" 
-                    label="Discount (%)" 
-                    placeholder="Enter discount percentage" 
-                    type="number"
-                    step="0.01"
-                    @input="calculateFinalPrice"
-                    :error="form.errors.discount" 
-                />
+                <BaseInput v-model="form.discount" label="Discount (%)" placeholder="Enter discount percentage"
+                    type="number" step="0.01" @input="calculateFinalPrice" :error="form.errors.discount" />
             </div>
-            
+
             <div class="col-md-4 mb-3">
-                <BaseInput 
-                    v-model="form.final_price" 
-                    label="Final Price" 
-                    placeholder="Calculated automatically" 
-                    type="number"
-                    step="0.01"
-                    readonly
-                    :error="form.errors.final_price" 
-                />
+                <BaseInput v-model="form.final_price" label="Final Price" placeholder="Calculated automatically"
+                    type="number" step="0.01" readonly :error="form.errors.final_price" />
             </div>
-            
+
             <div class="col-md-6 mb-3">
                 <div class="mb-2">
                     <label class="form-label">Currency</label>
@@ -247,15 +192,11 @@ const closeModal = () => {
             <div class="col-12 mt-3">
                 <h6 class="text-primary mb-3">Settings</h6>
             </div>
-            
-            <div class="col-md-6 mb-3">
+
+            <div class="col-md-4 mb-3">
                 <div class="form-check form-switch">
-                    <input 
-                        class="form-check-input" 
-                        type="checkbox" 
-                        id="is_home_collection_available"
-                        v-model="form.is_home_collection_available"
-                    >
+                    <input class="form-check-input" type="checkbox" id="is_home_collection_available"
+                        v-model="form.is_home_collection_available">
                     <label class="form-check-label" for="is_home_collection_available">
                         Home Collection Available
                     </label>
@@ -264,15 +205,10 @@ const closeModal = () => {
                     {{ form.errors.is_home_collection_available }}
                 </div>
             </div>
-            
-            <div class="col-md-6 mb-3">
+
+            <div class="col-md-4 mb-3">
                 <div class="form-check form-switch">
-                    <input 
-                        class="form-check-input" 
-                        type="checkbox" 
-                        id="is_active"
-                        v-model="form.is_active"
-                    >
+                    <input class="form-check-input" type="checkbox" id="is_active" v-model="form.is_active">
                     <label class="form-check-label" for="is_active">
                         Active
                     </label>
@@ -281,19 +217,33 @@ const closeModal = () => {
                     {{ form.errors.is_active }}
                 </div>
             </div>
+
+            <div class="col-md-4 mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="fasting_required"
+                        v-model="form.fasting_required">
+                    <label class="form-check-label" for="fasting_required">
+                        Fasting Required
+                    </label>
+                </div>
+                <div v-if="form.errors.fasting_required" class="text-danger mt-2">
+                    {{ form.errors.fasting_required }}
+                </div>
+            </div>
+
         </div>
 
         <div class="d-flex justify-content-end gap-2 mt-4">
-            <button type="submit" class="btn btn-primary" :disabled="form.processing" :aria-disabled="form.processing" aria-live="polite">
+            <button type="submit" class="btn btn-primary" :disabled="form.processing" :aria-disabled="form.processing"
+                aria-live="polite">
                 <span v-if="form.processing" class="d-flex align-items-center">
                     <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                     Saving...
                 </span>
                 <span v-else>Save</span>
             </button>
-                        <button type="button" class="btn btn-danger" @click="closeModal" :disabled="form.processing">Close</button>
+            <button type="button" class="btn btn-danger" @click="closeModal" :disabled="form.processing">Close</button>
 
         </div>
     </form>
 </template>
-

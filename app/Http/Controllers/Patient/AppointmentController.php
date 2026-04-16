@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Patient;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AppointmentBookingRequest;
 use App\Models\Doctor;
 use App\Models\DoctorPatient;
 use App\Models\Hospital;
@@ -92,17 +93,8 @@ class AppointmentController extends Controller
      * @param  mixed  $request
      * @return void
      */
-    public function storeAppointment(Request $request, AppointmentService $appointmentService)
+    public function storeAppointment(AppointmentBookingRequest $request, AppointmentService $appointmentService)
     {
-        $request->validate([
-            'doctor_id' => 'required|exists:doctors,id',
-            'appointment_date' => 'required|date',
-            'appointment_time' => 'required',
-            'appointment_type' => 'required|string',
-            'reason' => 'nullable|string|max:1000',
-            'fee_amount' => 'nullable|numeric|min:0',
-        ]);
-
         $doctor = Doctor::with(['user'])->where('id', $request->doctor_id)->first();
 
         $appointment_date = Carbon::parse($request->appointment_date)->format('Y-m-d');
@@ -117,8 +109,6 @@ class AppointmentController extends Controller
         $data['fee_amount'] = ! empty($request->fee_amount) ? (float) $request->fee_amount : (float) $doctor->consultation_fee;
         $data['discount'] = 0;
         $data['status'] = 'Pending';
-        $data['created_at'] = Carbon::parse($request->post('createdAt'))->format('Y-m-d H:i:s');
-        $data['updated_at'] = Carbon::parse($request->post('createdAt'))->format('Y-m-d H:i:s');
         $appointment = $appointmentService->upsert($data);
         if ($appointment) {
             $doctorPatient = DoctorPatient::where('doctor_id', $doctor->id)->where('patient_id', auth()->user()->patient->id)->first();

@@ -4,11 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 class Appointment extends Model
 {
-    use HasUuids;
+    use HasUuids, SoftDeletes;
 
     protected $keyType = 'string';
 

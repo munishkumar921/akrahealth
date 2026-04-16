@@ -1,5 +1,4 @@
 <script setup>
-import { defineProps } from "vue";
 import ContactItem from "./Partial/ContactItem.vue";
 import MessageItem from "./Partial/MessageItem.vue";
 import ChatInput from "./Partial/ChatInput.vue";

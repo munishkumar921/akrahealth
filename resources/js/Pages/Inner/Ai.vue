@@ -35,8 +35,8 @@ const billingPeriodText = computed(() => billingCycle.value === 'monthly' ? '/ m
     description="Explore AI in healthcare with Akrahealth’s smart EMR solutions, enhancing medical records, telemedicine, and operational efficiency with AI-driven technology.">
    
     <HeroSection
-      title="AI Receptionist for Healthcare Appointment Booking,"
-       description="THandle patient calls, book healthcare appointments, and respond instantly—using an AI receptionist designed to support modern healthcare operations, 24/7."
+      title="AI Receptionist for Healthcare Appointment Booking"
+       description="Handle patient calls, book healthcare appointments, and respond instantly—using an AI receptionist designed to support modern healthcare operations, 24/7."
       >
       <template v-slot:images>
         <div class="device-twin m-auto align-items-center">
@@ -336,7 +336,7 @@ const billingPeriodText = computed(() => billingCycle.value === 'monthly' ? '/ m
             <div class="shadow rounded text-center bg-primary p-5">
                 <div class="text-contrast">
                     <h2 class="mb-3 text-contrast bold fs-20">Ready to Transform Your Practice?</h2>
-                    <p class="font-size-16"> Join hundreds of protection using Akrahealth AI receptionist and appointment scheduling software foe medical officers to automate patient communication.</p>
+                    <p class="font-size-16"> Join hundreds of practices using Akrahealth AI receptionist and appointment scheduling software for medical officers</p>
                 </div>
                 <button  data-toggle="modal" data-target="#demo-request-modal" class="btn btn-outline-light btn-rounded mt-2 px-4">Request Demo</button>
             </div>
@@ -401,7 +401,7 @@ const billingPeriodText = computed(() => billingCycle.value === 'monthly' ? '/ m
                 </div>
                  <!-- <p class="small">.</p> -->
                 <a href="#" data-toggle="modal" data-target="#demo-request-modal" class="btn btn-primary w-100 mb-3">Subscribe Now</a>
-                <p class="bold">Includes everything in Growth, plus:</p>
+                <p class="bold">Includes everything in Starter, plus:</p>
                 <ul class="list-unstyled">
                   <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>300 calls / 1,500 minutes</li>
                   <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Multi-provider routing</li>
@@ -424,7 +424,7 @@ const billingPeriodText = computed(() => billingCycle.value === 'monthly' ? '/ m
                 </div>
                  <!-- <p class="small text-white">.</p> -->
                 <a href="#" data-toggle="modal" data-target="#demo-request-modal" class="btn btn-primary w-100 mb-3">Subscribe Now</a>
-                <p class="bold">Includes everything in Starter, plus:</p>
+                <p class="bold">Includes everything in Essential, plus:</p>
                 <ul class="list-unstyled">
                   <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>1,000+ minutes</li>
                   <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Custom call flows</li>

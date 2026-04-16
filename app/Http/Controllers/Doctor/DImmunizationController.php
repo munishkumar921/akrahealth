@@ -19,20 +19,51 @@ class DImmunizationController extends Controller
      */
     public function index(Request $request)
     {
-        $immunization = Immunization::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null);
-        if ($request->has('search')) {
-            $keyword = $request->get('search');
-            $immunization = $immunization->where('immunization', 'Like', '%'.$keyword.'%');
+        $selectedPatientId = auth()->user()->doctor->selected_patient_id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $routeName = trim((string) $request->input('route_name', ''));
+        $bodySite = trim((string) $request->input('body_site', ''));
+
+        $immunization = Immunization::where('patient_id', $selectedPatientId);
+
+        if ($keyword !== '') {
+            $immunization = $immunization->where(function ($query) use ($keyword) {
+                $query->where('immunization', 'like', '%'.$keyword.'%')
+                    ->orWhere('dosage', 'like', '%'.$keyword.'%')
+                    ->orWhere('dosage_unit', 'like', '%'.$keyword.'%')
+                    ->orWhere('sequence', 'like', '%'.$keyword.'%')
+                    ->orWhere('route', 'like', '%'.$keyword.'%')
+                    ->orWhere('body_site', 'like', '%'.$keyword.'%')
+                    ->orWhere('manufacturer', 'like', '%'.$keyword.'%')
+                    ->orWhere('brand', 'like', '%'.$keyword.'%')
+                    ->orWhere('cvx_code', 'like', '%'.$keyword.'%');
+            });
         }
-        $immunizations = $immunization->paginate(request('per_page', paginateLimit()))->withQueryString();
-        $encounters = Encounter::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null)->latest()->first();
+
+        if ($routeName !== '') {
+            $immunization->where('route', $routeName);
+        }
+
+        if ($bodySite !== '') {
+            $immunization->where('body_site', $bodySite);
+        }
+
+        $immunizations = $immunization
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+        $encounters = Encounter::where('patient_id', $selectedPatientId)->latest()->first();
 
         return Inertia::render('Doctors/Patient/Immunizations/Immunizations', [
             'immunizations' => $immunizations,
             'encounters' => $encounters,
-            'keyword' => $request->get('search'),
-            'immunizationRoute' => config('route'),
-            'bodyside' => config('bodyside'),
+            'filters' => [
+                'keyword' => $keyword,
+                'route_name' => $routeName,
+                'body_site' => $bodySite,
+            ],
+            'routeOptions' => config('route'),
+            'bodySiteOptions' => config('bodyside'),
         ]);
     }
 

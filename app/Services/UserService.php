@@ -2,13 +2,16 @@
 
 namespace App\Services;
 
-use App\Mail\UserCredentialsMail;
-use App\Mail\UserVerificationMail;
 use App\Models\Address;
+use App\Models\Doctor;
+use App\Models\Hospital;
 use App\Models\User;
 use App\Models\UserVerify;
 use App\Traits\EmailTrait;
 use App\Traits\UploadFileTrait;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
@@ -93,6 +96,221 @@ class UserService extends BaseService
         return $users;
     }
 
+    public function listAdminUsers(Request $request, Collection $hospitalIds): LengthAwarePaginator
+    {
+        $filters = $this->normalizeAdminUserFilters($request);
+
+        $users = User::query()
+            ->with(['roles', 'doctor.hospital', 'doctor.specialities:name', 'address', 'userSkills', 'hospital'])
+            ->whereHas('roles', function ($query) use ($filters) {
+                $query->whereIn('name', ['Doctor', 'Virtual Assistant', 'Biller']);
+
+                if ($filters['role']) {
+                    $query->where('name', $filters['role']);
+                }
+            })
+            ->where(function ($query) use ($hospitalIds) {
+                $query->whereHas('doctor', function ($doctorQuery) use ($hospitalIds) {
+                    $doctorQuery->whereNotNull('user_id')->whereIn('hospital_id', $hospitalIds);
+                })->orWhereIn('hospital_id', $hospitalIds);
+            })
+            ->when($filters['keyword'], function ($query) use ($filters) {
+                $keyword = $filters['keyword'];
+
+                $query->where(function ($inner) use ($keyword) {
+                    $inner->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('email', 'like', "%{$keyword}%")
+                        ->orWhere('mobile', 'like', "%{$keyword}%")
+                        ->orWhere('first_name', 'like', "%{$keyword}%")
+                        ->orWhere('last_name', 'like', "%{$keyword}%")
+                        ->orWhereHas('doctor', function ($doctorQuery) use ($keyword) {
+                            $doctorQuery->where('name', 'like', "%{$keyword}%")
+                                ->orWhere('first_name', 'like', "%{$keyword}%")
+                                ->orWhere('last_name', 'like', "%{$keyword}%");
+                        });
+                });
+            })
+            ->when($filters['status'] !== null, function ($query) use ($filters) {
+                $query->where('is_active', $filters['status']);
+            })
+            ->when($filters['branch_id'], function ($query) use ($filters) {
+                $query->where(function ($inner) use ($filters) {
+                    $inner->whereHas('doctor', function ($doctorQuery) use ($filters) {
+                        $doctorQuery->where('hospital_id', $filters['branch_id']);
+                    })->orWhere('hospital_id', $filters['branch_id']);
+                });
+            })
+            ->when($filters['speciality'], function ($query) use ($filters) {
+                $query->whereHas('doctor.specialities', function ($specialityQuery) use ($filters) {
+                    $specialityQuery->where('name', $filters['speciality']);
+                });
+            })
+            ->get()
+            ->map(fn (User $user) => $this->transformAdminUserRecord($user));
+
+        $doctors = Doctor::query()
+            ->with(['hospital', 'specialities', 'user.address', 'user.roles'])
+            ->whereNull('user_id')
+            ->whereIn('hospital_id', $hospitalIds)
+            ->when($filters['role'] && $filters['role'] !== 'Doctor', function ($query) {
+                $query->whereRaw('1 = 0');
+            })
+            ->when($filters['keyword'], function ($query) use ($filters) {
+                $keyword = $filters['keyword'];
+
+                $query->where(function ($inner) use ($keyword) {
+                    $inner->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('first_name', 'like', "%{$keyword}%")
+                        ->orWhere('last_name', 'like', "%{$keyword}%");
+                });
+            })
+            ->when($filters['status'] !== null, function ($query) use ($filters) {
+                $query->where('is_active', $filters['status']);
+            })
+            ->when($filters['branch_id'], function ($query) use ($filters) {
+                $query->where('hospital_id', $filters['branch_id']);
+            })
+            ->when($filters['speciality'], function ($query) use ($filters) {
+                $query->whereHas('specialities', function ($specialityQuery) use ($filters) {
+                    $specialityQuery->where('name', $filters['speciality']);
+                });
+            })
+            ->get()
+            ->map(fn (Doctor $doctor) => $this->transformAdminDoctorRecord($doctor));
+
+        $mergedItems = $users
+            ->merge($doctors)
+            ->sort(function (array $a, array $b) use ($filters) {
+                $sortBy = $filters['sort'] ?? 'name';
+                $direction = $filters['direction'] ?? 'asc';
+
+                $valueA = $this->normalizeAdminUserSortValue(data_get($a, $sortBy));
+                $valueB = $this->normalizeAdminUserSortValue(data_get($b, $sortBy));
+
+                $comparison = $valueA <=> $valueB;
+
+                return $direction === 'desc' ? -$comparison : $comparison;
+            })
+            ->values();
+
+        $perPage = (int) $request->input('per_page', paginateLimit());
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $offset = ($page - 1) * $perPage;
+        $paginatedItems = $mergedItems->slice($offset, $perPage)->values();
+
+        return new LengthAwarePaginator(
+            $paginatedItems,
+            $mergedItems->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+    }
+
+    protected function normalizeAdminUserFilters(Request $request): array
+    {
+        $keyword = trim((string) ($request->input('keyword', $request->input('Keyword', ''))));
+        $role = trim((string) $request->input('role', ''));
+        $branchId = trim((string) $request->input('branch_id', ''));
+        $speciality = trim((string) $request->input('speciality', ''));
+        $status = $request->input('status', '');
+        $sort = trim((string) $request->input('sort', 'name'));
+        $direction = strtolower((string) $request->input('direction', 'asc'));
+
+        return [
+            'keyword' => $keyword !== '' ? $keyword : null,
+            'role' => $role !== '' ? $role : null,
+            'branch_id' => $branchId !== '' ? $branchId : null,
+            'speciality' => $speciality !== '' ? $speciality : null,
+            'status' => $status === '' ? null : filter_var($status, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
+            'sort' => in_array($sort, ['name', 'email', 'branch_name', 'role_name', 'is_active', 'created_at'], true) ? $sort : 'name',
+            'direction' => $direction === 'desc' ? 'desc' : 'asc',
+        ];
+    }
+
+    protected function transformAdminUserRecord(User $user): array
+    {
+        $doctor = $user->doctor;
+        $branch = $doctor?->hospital ?? ($user->hospital_id ? Hospital::query()->select('id', 'name', 'main_branch_id')->find($user->hospital_id) : null);
+        $specialities = $doctor?->specialities?->pluck('name')->filter()->values() ?? collect();
+        $roles = $user->roles
+            ->filter(fn ($role) => in_array($role->name, ['Doctor', 'Virtual Assistant', 'Biller'], true))
+            ->values();
+
+        return [
+            ...$user->toArray(),
+            'table' => 'users',
+            'entity_type' => 'user',
+            'display_name' => $doctor?->name ?: $user->name,
+            'branch_id' => $branch?->id,
+            'branch_name' => $branch?->name,
+            'branch_type' => $branch ? ($branch->main_branch_id ? 'Sub Branch' : 'Main Branch') : null,
+            'role_name' => $roles->pluck('name')->implode(', '),
+            'primary_role' => $roles->first()?->name ?? 'Doctor',
+            'speciality_names' => $specialities->all(),
+            'speciality_label' => $specialities->implode(', '),
+            'created_label' => dateFormat($user->created_at),
+            'status_label' => $user->is_active ? 'Active' : 'Inactive',
+            'profile_photo_url' => $user->profile_photo_url ?: $doctor?->profile_photo_url,
+        ];
+    }
+
+    protected function transformAdminDoctorRecord(Doctor $doctor): array
+    {
+        $branch = $doctor->hospital;
+        $specialities = $doctor->specialities?->pluck('name')->filter()->values() ?? collect();
+        $doctorArray = $doctor->toArray();
+
+        return array_merge($doctorArray, [
+            'table' => 'doctors',
+            'entity_type' => 'doctor',
+            'display_name' => $doctor->name,
+            'email' => $doctor->email ?? null,
+            'mobile' => $doctor->mobile ?? null,
+            'roles' => [
+                ['name' => 'Doctor'],
+            ],
+            'doctor' => $doctorArray,
+            'address' => $doctor->user?->address?->toArray(),
+            'branch_id' => $branch?->id,
+            'branch_name' => $branch?->name,
+            'branch_type' => $branch ? ($branch->main_branch_id ? 'Sub Branch' : 'Main Branch') : null,
+            'role_name' => 'Doctor',
+            'primary_role' => 'Doctor',
+            'speciality_names' => $specialities->all(),
+            'speciality_label' => $specialities->implode(', '),
+            'created_label' => dateFormat($doctor->created_at),
+            'status_label' => $doctor->is_active ? 'Active' : 'Inactive',
+            'profile_photo_url' => $doctor->profile_photo_url,
+        ]);
+    }
+
+    protected function normalizeAdminUserSortValue($value)
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->getTimestamp();
+        }
+
+        $dateValue = strtotime((string) $value);
+        if ($dateValue !== false && preg_match('/\d{4}-\d{2}-\d{2}|\w{3}\s+\d{1,2},\s+\d{4}/', (string) $value)) {
+            return $dateValue;
+        }
+
+        return strtolower((string) $value);
+    }
+
     /*
     * Upsert a user record
     */
@@ -102,6 +320,7 @@ class UserService extends BaseService
         $isUpdate = ! empty($data['user_id'] ?? $data['id'] ?? null);
         $userId = $data['user_id'] ?? $data['id'] ?? null;
         $oldUser = $isUpdate ? User::find($userId) : null;
+        $oldRoleNames = $oldUser?->roles()->pluck('name')->values()->all() ?? [];
 
         $user = DB::transaction(function () use ($data) {
             $input = is_array($data) ? $data : [];
@@ -241,7 +460,7 @@ class UserService extends BaseService
                 'token' => $token,
             ]);
             try {
-                $this->queueMailable(new UserVerificationMail(['token' => $token]), $user->email);
+                app(EmailNotificationService::class)->queueVerificationEmail($user, $token);
             } catch (\Throwable $e) {
                 \Log::error('Failed to send user verification email: '.$e->getMessage());
             }
@@ -258,19 +477,76 @@ class UserService extends BaseService
             }
         }
 
-        // if ($user && !empty($data['password'])) {
-        //      \Log::info($data['password']);
-        //     $mailData = [
-        //         'name' => $user->name,
-        //         'email' => $user->email,
-        //         'password' => $data['password'], // Send plain password
-        //     ];
-        //     try {
-        //         $this->sendMailable(new UserCredentialsMail($mailData), $user->email);
-        //      } catch (\Throwable $e) {
-        //         \Log::error('Failed to send user credentials email: ' . $e->getMessage());
-        //     }
-        // }
+        if ($user && ! $isUpdate) {
+            $hospitalId = $user->hospital_id
+                ?: $user->doctor?->hospital_id
+                ?: Hospital::where('user_id', $user->id)->value('id')
+                ?: (auth()->user()?->hospital?->id ?? auth()->user()?->doctor?->hospital_id);
+
+            app(EmailNotificationService::class)->queueUserAddedAdminAlert(
+                $user->fresh('roles', 'doctor'),
+                $hospitalId,
+                is_array($this->role) ? implode(', ', $this->role) : (string) $this->role
+            );
+        }
+
+        if ($user) {
+            $notificationService = app(InAppNotificationService::class);
+            $newRoleNames = $user->roles()->pluck('name')->values()->all();
+            $roleLabel = implode(', ', $newRoleNames ?: ['User']);
+
+            if (! $isUpdate) {
+                $notificationService->notifySuperAdmins(
+                    $notificationService->buildPayload(
+                        'New user registered',
+                        "{$user->name} registered on the platform as {$roleLabel}.",
+                        'platform_user_registered',
+                        [
+                            'related_model_type' => User::class,
+                            'related_model_id' => $user->id,
+                            'meta' => [
+                                'email' => $user->email,
+                                'roles' => $newRoleNames,
+                            ],
+                        ]
+                    )
+                );
+
+                if (in_array('SuperAdmin', $newRoleNames, true)) {
+                    $notificationService->notifySuperAdmins(
+                        $notificationService->buildPayload(
+                            'Super Admin created',
+                            "{$user->name} was created with Super Admin access.",
+                            'superadmin_created',
+                            [
+                                'related_model_type' => User::class,
+                                'related_model_id' => $user->id,
+                            ]
+                        )
+                    );
+                }
+            } elseif ($oldRoleNames !== $newRoleNames && (
+                array_intersect($oldRoleNames, ['Admin', 'SuperAdmin']) ||
+                array_intersect($newRoleNames, ['Admin', 'SuperAdmin'])
+            )) {
+                $notificationService->notifySuperAdmins(
+                    $notificationService->buildPayload(
+                        'Privileged role updated',
+                        "{$user->name}'s privileged roles changed from ".(implode(', ', $oldRoleNames ?: ['None'])).' to '.(implode(', ', $newRoleNames ?: ['None'])).'.',
+                        'privileged_role_changed',
+                        [
+                            'related_model_type' => User::class,
+                            'related_model_id' => $user->id,
+                            'meta' => [
+                                'old_roles' => $oldRoleNames,
+                                'new_roles' => $newRoleNames,
+                            ],
+                        ]
+                    )
+                );
+            }
+        }
+
         return $user;
     }
 

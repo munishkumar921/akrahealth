@@ -19,21 +19,66 @@ class DAllergyController extends Controller
      */
     public function index(Request $request)
     {
-        $allergies = Allergy::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null);
+        $selectedPatientId = auth()->user()->doctor->selected_patient_id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = trim((string) $request->input('status', ''));
+        $severity = trim((string) $request->input('severity', ''));
 
-        if ($request->has('search')) {
+        $allergies = Allergy::where('patient_id', $selectedPatientId);
 
-            $keyword = $request->get('search');
-            $allergies = $allergies->where('allergies_medicine', 'Like', '%'.$keyword.'%');
+        if ($keyword !== '') {
+            $allergies = $allergies->where(function ($query) use ($keyword) {
+                $query->where('allergies_medicine', 'like', '%'.$keyword.'%')
+                    ->orWhere('allergies_reaction', 'like', '%'.$keyword.'%')
+                    ->orWhere('allergies_severity', 'like', '%'.$keyword.'%')
+                    ->orWhere('notes', 'like', '%'.$keyword.'%')
+                    ->orWhere('rcopia_sync', 'like', '%'.$keyword.'%')
+                    ->orWhere('medicine_ndcid', 'like', '%'.$keyword.'%');
+            });
         }
-        $allergies = $allergies->paginate(request('per_page', paginateLimit()))->withQueryString();
-        $encounters = Encounter::where('patient_id', auth()->user()->doctor->selected_patient_id ?? null)->latest()->first();
+
+        if ($status === 'active') {
+            $allergies->whereNull('date_inactive');
+        }
+
+        if ($status === 'inactive') {
+            $allergies->whereNotNull('date_inactive');
+        }
+
+        if ($severity !== '') {
+            $allergies->where('allergies_severity', $severity);
+        }
+
+        $allergies = $allergies
+            ->orderByDesc('id')
+            ->paginate(request('per_page', paginateLimit()))
+            ->withQueryString();
+
+        $allergies->through(function (Allergy $allergy) {
+            return array_merge($allergy->toArray(), [
+                'status_label' => $allergy->date_inactive ? 'Inactive' : 'Active',
+                'active_date_label' => $allergy->date_active ?: '-',
+            ]);
+        });
+
+        $encounters = Encounter::where('patient_id', $selectedPatientId)->latest()->first();
+        $severityOptions = Allergy::where('patient_id', $selectedPatientId)
+            ->whereNotNull('allergies_severity')
+            ->where('allergies_severity', '!=', '')
+            ->distinct()
+            ->orderBy('allergies_severity')
+            ->pluck('allergies_severity')
+            ->values();
 
         return Inertia::render('Doctors/Patient/Allergies', [
             'allergies' => $allergies,
             'encounters' => $encounters,
-            'keyword' => $request->get('search'),
-            'route' => config('route'),
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+                'severity' => $severity,
+            ],
+            'severityOptions' => $severityOptions,
         ]);
     }
 

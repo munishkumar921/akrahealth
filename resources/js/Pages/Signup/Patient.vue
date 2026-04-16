@@ -16,7 +16,8 @@ import 'swiper/css/bundle';
 const page = usePage();
 const props = defineProps({
     questions: Object,
-    patient:Object
+    patient:Object,
+    token:String,
  });
 
 const form = useForm({
@@ -40,7 +41,7 @@ const form = useForm({
     terms: false,
     profile_photo: '',
     is_active: props.patient?.is_active ?? 0,
-    referral_code: props.patient?.registration_code ?? '',
+    referral_code: props.token ?? '',
 
 });
 const genders=['Male','Female','Other'];
@@ -179,7 +180,7 @@ watch(() => form.country, (newCountry) => {
                                         <div class="row">
                                             <div class="form-group col-md-6">
                                                 <InputLabel for="email" value="Email" class="required-field" />
-                                                <TextInput id="email" v-model="form.email" type="email" class="mt-1 " readonly
+                                                <TextInput id="email" v-model="form.email" type="email" class="mt-1 "
                                                     placeholder="Email" required autocomplete="email" />
                                                 <InputError class="mt-2" :message="form.errors.email" />
                                             </div>

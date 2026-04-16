@@ -8,10 +8,10 @@ import { ref } from 'vue';
 const props = defineProps({
     keyword: String,
     forms: Array,
-    completdForms: Object,
+    completedForms: Object,
     formatterForm: Object,
 });
- 
+
 const form = useForm({
     keyword: '',
 });
@@ -44,7 +44,7 @@ const tabs = [
 ]
 </script>
 <template>
-<AuthLayout title="Forms" description="View and manage patient forms" heading="Forms">
+    <AuthLayout title="Forms" description="View and manage patient forms" heading="Forms">
         <div class="row">
             <div class="col-lg-3">
                 <div class="iq-card">
@@ -84,15 +84,16 @@ const tabs = [
                                 <template v-for="(formRecord, key) in formatterForm" :key="key">
                                     <tr>
                                         <td class="text-justify text-capitalize">
-                                            {{ formRecord?.forms_title?.replace("\n", "") }}
+                                            {{ formRecord?.forms_title }}
+                                            <!-- {{ formRecord?.forms_title?.replace(/\n/g, '') }} -->
                                         </td>
                                         <td>
                                             <div class="d-flex gap-1 justify-content-end">
-                                                <Link  v-if="forms?.id && formRecord?.forms_title"
+                                                <Link v-if="forms?.id && formRecord?.forms_title"
                                                     :href="route('doctor.form.show', [forms?.id, formRecord?.forms_title])"
                                                     class="btn btn-primary" data-toggle="tooltip" data-placement="top"
                                                     title="View">
-                                                <i class="fa-regular fa-eye"></i>
+                                                    <i class="fa-regular fa-eye"></i>
                                                 </Link>
                                             </div>
                                         </td>
@@ -101,20 +102,19 @@ const tabs = [
                             </tbody>
 
                             <tbody>
-                                 <tr v-if="currentTab === 'Completed Forms'" v-for="form in completdForms"
+                                <tr v-if="currentTab === 'Completed Forms'" v-for="form in completedForms"
                                     :key="form.id">
 
-                                      <td class="text-justify text-capitalize">
+                                    <td class="text-justify text-capitalize">
                                         <span class="font-weight-bold">{{ form?.date }} - </span>{{ form?.title }}
                                     </td>
                                     <td>
                                         <div class="d-flex gap-1 justify-content-end">
-                                            <Link  :href="route('doctor.form.completeform', form?.id)" 
+                                            <Link :href="route('doctor.form.completeform', form?.id)"
                                                 class="btn btn-primary" data-toggle="tooltip" data-placement="top"
                                                 title="View Completed Form">
-                                            <i class="fa-regular fa-eye"></i>
+                                                <i class="fa-regular fa-eye"></i>
                                             </Link>
-
                                         </div>
                                     </td>
                                 </tr>
@@ -124,72 +124,16 @@ const tabs = [
                 </div>
             </div>
         </div>
-        <Modal :isOpen="isAddFormModalOpen" title="Add Result" @close="closeAddAddModal" size="lg">
+        <Modal :isOpen="isAddFormModalOpen" title="Add Result" @close="closeAddAddModal" size="xl">
             <formsModal ref='childComponentRef' :route="route" @close="closeAddAddModal" />
         </Modal>
-</AuthLayout>
+    </AuthLayout>
 </template>
 
 <style scoped>
-.finance-menu {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.menu-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    background: #fff;
-    border: 1px solid #eef0f4;
-    border-radius: 12px;
-    padding: 12px 14px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, .04);
-    cursor: pointer;
-    transition: .2s;
-}
-
-.menu-item:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 18px rgba(0, 0, 0, .06);
-}
-
-.menu-item.active {
-    border-color: #6f42c1;
-    box-shadow: 0 10px 20px rgba(111, 66, 193, .15);
-}
-
 .icon {
     height: 10px;
     width: 10px;
     border-radius: 50%;
-}
-
-.icon-success {
-    color: #28a745;
-}
-
-.icon-warning {
-    color: #ffc107;
-}
-
-.icon-secondary {
-    color: #ff7b29;
-}
-
-.icon-primary {
-    color: #0d6efd;
-}
-
-.icon-dark {
-    color: #2e2138;
-}
-
-.label {
-    font-size: 14px;
-    color: #2b2b2b;
-    font-weight: 600;
 }
 </style>

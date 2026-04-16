@@ -45,7 +45,6 @@ class InvoiceController extends Controller
 
         $invoices = $query->paginate('per_page', 5)->withQueryString();
 
-        // Transform for frontend
         $invoices->getCollection()->transform(function ($invoice) {
             return $this->transformInvoice($invoice);
         });

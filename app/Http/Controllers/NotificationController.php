@@ -9,6 +9,39 @@ use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
+    private function transformNotification($notification): array
+    {
+        $data = is_string($notification->data)
+            ? json_decode($notification->data, true)
+            : ($notification->data ?? []);
+
+        if (! is_array($data)) {
+            $data = [];
+        }
+
+        return [
+            'id' => $notification->id,
+            'type' => $notification->type,
+            'data' => $data,
+            'title' => $data['title'] ?? 'Notification',
+            'message' => $data['message'] ?? null,
+            'action_url' => $data['action_url'] ?? null,
+            'appointment_id' => $data['appointment_id'] ?? null,
+            'order_id' => $data['order_id'] ?? null,
+            'invoice_id' => $data['invoice_id'] ?? null,
+            'encounter_id' => $data['encounter_id'] ?? null,
+            'status' => $data['status'] ?? null,
+            'notification_type' => $data['type'] ?? null,
+            'channel' => $data['channel'] ?? 'in_app',
+            'is_read' => filled($notification->read_at),
+            'read_at' => $notification->read_at?->toISOString(),
+            'created_at' => $notification->created_at->toISOString(),
+            'created_at_human' => $notification->created_at->diffForHumans(),
+            'notifiable_type' => $notification->notifiable_type,
+            'notifiable_id' => $notification->notifiable_id,
+        ];
+    }
+
     /**
      * Fetch the unread notifications for the authenticated user.
      *
@@ -30,41 +63,8 @@ class NotificationController extends Controller
         }
 
         // Fetch notifications
-        $notifications = $query->paginate(paginateLimit(20))->through(function ($notification) {
-            // Normalize data array
-            $data = is_string($notification->data)
-                ? json_decode($notification->data, true)
-                : ($notification->data ?? []);
-
-            if (! is_array($data)) {
-                $data = [];
-            }
-
-            return [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'data' => $data,
-
-                // Extract custom message safely
-                'message' => $data['message'] ?? null,
-
-                // Useful shortcuts for frontend
-                'appointment_id' => $data['appointment_id'] ?? null,
-                'status' => $data['status'] ?? null,
-
-                // Read status
-                'is_read' => filled($notification->read_at),
-                'read_at' => $notification->read_at?->toISOString(),
-
-                // Timestamps
-                'created_at' => $notification->created_at->toISOString(),
-                'created_at_human' => $notification->created_at->diffForHumans(),
-
-                // Polymorphic information
-                'notifiable_type' => $notification->notifiable_type,
-                'notifiable_id' => $notification->notifiable_id,
-            ];
-        });
+        $notifications = $query->paginate(paginateLimit(20))
+            ->through(fn ($notification) => $this->transformNotification($notification));
 
         return Inertia::render('Common/Notifications', [
             'filters' => $request->only(['read_status']),
@@ -94,43 +94,8 @@ class NotificationController extends Controller
         }
 
         // Fetch notifications
-        $notifications = $query->take($limit)->get()->map(function ($notification) {
-
-            // Normalize data array
-            $data = is_string($notification->data)
-                ? json_decode($notification->data, true)
-                : ($notification->data ?? []);
-
-            if (! is_array($data)) {
-                $data = [];
-            }
-
-            return [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'data' => $data,
-
-                // Extract custom message safely
-                'message' => $data['message'] ?? null,
-
-                // Useful shortcuts for frontend
-                'appointment_id' => $data['appointment_id'] ?? null,
-                'order_id' => $data['order_id'] ?? null,
-                'status' => $data['status'] ?? null,
-
-                // Read status
-                'is_read' => filled($notification->read_at),
-                'read_at' => $notification->read_at?->toISOString(),
-
-                // Timestamps
-                'created_at' => $notification->created_at->toISOString(),
-                'created_at_human' => $notification->created_at->diffForHumans(),
-
-                // Polymorphic information
-                'notifiable_type' => $notification->notifiable_type,
-                'notifiable_id' => $notification->notifiable_id,
-            ];
-        });
+        $notifications = $query->take($limit)->get()
+            ->map(fn ($notification) => $this->transformNotification($notification));
 
         return response()->json([
             'notifications' => $notifications,

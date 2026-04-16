@@ -4,15 +4,35 @@
     </IfModule>
 
     RewriteEngine On
-
+    
+    RewriteCond %{HTTP_HOST} ^mobileiv\.akrahealth\.com$ [NC]
+    RewriteRule ^(.*)$ https://mobile-iv.akrahealth.com/$1 [L,R=301]
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-
+    
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
+
+     # 301 Redirects
+    RewriteRule ^medication-administration-records/?$ https://mar.akrahealth.com/ [L,R=301]
+    RewriteRule ^training/?$ https://www.atlearn.in/ [L,R=301]
+    
+    RewriteRule ^nurses-on-call/?$ https://mobile-iv.akrahealth.com/ [L,R=301]
+    RewriteRule ^prescription/?$ https://prescription.akrahealth.com/ [L,R=301]
+    RewriteRule ^doctor-on-call/?$ https://practice.akrahealth.com/ [L,R=301]
+    RewriteRule ^patient-management/?$ https://akrahealth.com/emr [L,R=301]
+
+
+    # /ai → homepage
+    RewriteRule ^ai/?$ https://www.akrahealth.com/ [L,R=301]
+    
+    # /mobile-iv → mobile-iv subdomain
+    RewriteRule ^mobile-iv/?$ https://mobile-iv.akrahealth.com/ [L,R=301]
+    
+    
 
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d

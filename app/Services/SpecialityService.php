@@ -4,31 +4,41 @@ namespace App\Services;
 
 use App\Models\Speciality;
 use App\Traits\UploadFileTrait;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Storage;
 
 class SpecialityService
 {
     use UploadFileTrait;
 
-    public function list($request)
+    public function list(Request $request): LengthAwarePaginator
     {
+        $filters = [
+            'keyword' => trim((string) $request->input('keyword', $request->input('search', ''))),
+            'status' => $request->input('status', ''),
+        ];
 
-        $specialities = Speciality::where('hospital_id', auth()->user()->hospital->id)->orwhereNull('hospital_id')
-            ->when(
-                $request->search,
-                fn ($q) => $q->where('name', 'like', "%{$request->search}%")
-                    ->orWhere('description', 'like', "%{$request->search}%")
-            )
+        $specialities = Speciality::where('hospital_id', auth()->user()->hospital->id)
+            ->when($filters['keyword'] !== '', function ($q) use ($filters) {
+                $q->where(function ($inner) use ($filters) {
+                    $inner->where('name', 'like', "%{$filters['keyword']}%")
+                        ->orWhere('description', 'like', "%{$filters['keyword']}%");
+                });
+            })
+            ->when($filters['status'] !== '', function ($q) use ($filters) {
+                $q->where('is_active', filter_var($filters['status'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE));
+            })
             ->orderBy('created_at', 'desc')
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
+            ->paginate($request->integer('per_page', paginateLimit()))
+            ->withQueryString();
 
-        // Ensure every banner has a full URL or default
         $specialities->getCollection()->transform(function ($s) {
-            if ($s->banner) {
-                $s->banner = Storage::url($s->banner);
-            } else {
-                $s->banner = asset('images/avatar.webp'); // fallback avatar
-            }
+            $s->banner_url = $s->banner
+                ? (str_starts_with($s->banner, 'http') ? $s->banner : Storage::url($s->banner))
+                : asset('images/avatar.webp');
+            $s->created_label = optional($s->created_at)?->format('F d, Y');
+            $s->status_label = $s->is_active ? 'Active' : 'Inactive';
 
             return $s;
         });

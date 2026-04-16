@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, onMounted } from "vue";
+import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { Link } from "@inertiajs/vue3";
 import { getNavItemsByRole } from "../../Data/MenuItems";
 import Logo from "../Logo.vue";
@@ -14,6 +14,9 @@ const props = defineProps({
 const role = usePage().props?.switched_role || usePage().props?.auth?.user?.roles?.[0]?.name;
 const navItems = computed(() => getNavItemsByRole(role));
 const expandedSections = ref({});
+const menuListRef = ref(null);
+const menuWidth = ref(0);
+let menuResizeObserver = null;
 
 watch(navItems, (newItems) => {
     newItems.forEach((item) => {
@@ -79,6 +82,30 @@ onMounted(() => {
         );
     }
 });
+
+const updateMenuWidth = () => {
+    menuWidth.value = menuListRef.value?.offsetWidth || 0;
+};
+
+const isCompactMenu = computed(() => menuWidth.value > 0 && menuWidth.value < 160);
+
+onMounted(() => {
+    updateMenuWidth();
+
+    if (typeof ResizeObserver !== "undefined" && menuListRef.value) {
+        menuResizeObserver = new ResizeObserver(() => {
+            updateMenuWidth();
+        });
+        menuResizeObserver.observe(menuListRef.value);
+    }
+});
+
+onBeforeUnmount(() => {
+    if (menuResizeObserver) {
+        menuResizeObserver.disconnect();
+    }
+});
+
 </script>
 
 <template>
@@ -99,14 +126,17 @@ onMounted(() => {
         </div>
         <div id="sidebar-scrollbar">
             <nav class="iq-sidebar-menu">
-                <ul id="iq-sidebar-toggle" class="iq-menu">
+                <ul id="iq-sidebar-toggle" ref="menuListRef" class="iq-menu">
                     <div class="col-md-12 patient-info mb-3 iq-card bg-color-white-lilac p-2 align-items-center"
+                        :class="{ 'patient-info--compact': isCompactMenu }"
                         v-if="role === 'Patient' || $page?.props?.selected_patient">
                         <Link :href="$page?.props?.selected_patient
                             ? route('doctor.patient.history')
                             : route('patient.history')" class="iq-waves-effect text-center align-items-center"
                             data-tooltip="Patient History" data-tooltip-location="bottom">
-                            <div>
+
+
+                            <div v-if="!isCompactMenu" id="summery-detail">
                                 <h6 class="mb-1 text-dark" data-tooltip="Patient Summary">
                                     <b>
                                         {{
@@ -229,3 +259,14 @@ onMounted(() => {
         </div>
     </div>
 </template>
+
+<style scoped>
+.patient-info--compact {
+    padding: 0 !important;
+    min-height: 0;
+    margin-bottom: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+}
+</style>

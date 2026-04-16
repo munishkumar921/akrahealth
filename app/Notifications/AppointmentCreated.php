@@ -46,7 +46,7 @@ class AppointmentCreated extends Notification implements ShouldQueue
     public function toMail(object $notifiable)
     {
         return (new \Illuminate\Notifications\Messages\MailMessage)
-            ->subject('Appointment '.ucfirst($this->appointment->status))
+            ->subject($this->mailSubjectFor($notifiable))
             ->greeting('Hello '.$notifiable->name.'!')
             ->line($this->getCustomMessage($notifiable))
             ->line('Appointment Details:')
@@ -67,6 +67,10 @@ class AppointmentCreated extends Notification implements ShouldQueue
     private function getCustomMessage($notifiable): string
     {
         if ($notifiable->id === $this->appointment->patient?->user_id) {
+            if ($this->appointment->created_by === $this->appointment->doctor?->user_id) {
+                return 'Your appointment has been created by the doctor. Please sign in to the portal and make payment.';
+            }
+
             return "Your appointment with Dr. {$this->appointment->doctor->user->name} has been {$this->appointment->status}.";
         }
 
@@ -75,5 +79,15 @@ class AppointmentCreated extends Notification implements ShouldQueue
         }
 
         return "A new appointment has been created ({$this->appointment->appointment_type}).";
+    }
+
+    private function mailSubjectFor($notifiable): string
+    {
+        if ($notifiable->id === $this->appointment->patient?->user_id
+            && $this->appointment->created_by === $this->appointment->doctor?->user_id) {
+            return 'Appointment created by your doctor';
+        }
+
+        return 'Appointment '.ucfirst($this->appointment->status);
     }
 }

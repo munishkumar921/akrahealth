@@ -60,7 +60,7 @@ class DOrdersController extends Controller
             ->latest()
             ->value('id');
         if (! $encounterId) {
-            return redirect()->route('doctor.encounters.create')->with('error', 'Creating an encounter first to add a prescription.');
+            return redirect()->route('doctor.encounters.create')->with('warning', 'Creating an encounter first to add a prescription.');
         }
         $insurances = Insurance::orderBy('insurance_company', 'ASC')->where('patient_id', $patientId)->get();
         $labCategory = LabTestCategory::select('id', 'name')->orderBy('name', 'ASC')->get();
@@ -155,14 +155,6 @@ class DOrdersController extends Controller
         }
 
         return redirect()->back()->with('error', 'Something went wrong');
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
     }
 
     /**

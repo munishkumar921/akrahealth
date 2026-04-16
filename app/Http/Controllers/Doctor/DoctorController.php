@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Doctor;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DoctorProfileUpdateRequest;
 use App\Models\Appointment;
 use App\Models\Doctor;
 use App\Models\DoctorAssistant;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Services\DoctorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class DoctorController extends Controller
@@ -34,7 +36,7 @@ class DoctorController extends Controller
         if ($request->has('keyword')) {
 
             $keyword = $request->get('keyword');
-            $doctors = $doctors->where('name', 'Like', '%'.$keyword.'%');
+            $doctors = $doctors->where('name', 'Like', '%' . $keyword . '%');
         }
         $doctors = $doctors->orderBy('id', 'DESC')->paginate($this->paginate);
         $results = [];
@@ -118,7 +120,7 @@ class DoctorController extends Controller
                     return [
                         'id' => $item->id,
                         'title' => 'Encounter',
-                        'description' => 'Encounter with '.($item->patient->user->name ?? 'Patient'),
+                        'description' => 'Encounter with ' . ($item->patient->user->name ?? 'Patient'),
                         'date' => $item->created_at,
                         'type' => 'encounter',
                         'icon' => 'ri-file-list-line',
@@ -135,7 +137,7 @@ class DoctorController extends Controller
                     return [
                         'id' => $item->id,
                         'title' => 'Appointment',
-                        'description' => 'Appointment with '.($item->patient->user->name ?? 'Patient'),
+                        'description' => 'Appointment with ' . ($item->patient->user->name ?? 'Patient'),
                         'date' => $item->created_at,
                         'type' => 'appointment',
                         'icon' => 'ri-calendar-line',
@@ -152,7 +154,7 @@ class DoctorController extends Controller
                     return [
                         'id' => $item->id,
                         'title' => 'Prescription',
-                        'description' => 'Prescribed '.$item->medication.' for '.($item->patient->user->name ?? 'Patient'),
+                        'description' => 'Prescribed ' . $item->medication . ' for ' . ($item->patient->user->name ?? 'Patient'),
                         'date' => $item->created_at,
                         'type' => 'prescription',
                         'icon' => 'ri-capsule-line',
@@ -179,7 +181,7 @@ class DoctorController extends Controller
      * @param  mixed  $request
      * @param  mixed  $obj
      */
-    public function store(Request $request, DoctorService $obj): RedirectResponse
+    public function store(DoctorProfileUpdateRequest $request, DoctorService $obj): RedirectResponse
     {
         $obj->profileUpdate($request->all(), $request);
 
@@ -341,10 +343,10 @@ class DoctorController extends Controller
                 $query->where('is_active', true);
                 if ($search) {
                     $query->where(function ($q) use ($search) {
-                        $q->where('first_name', 'like', '%'.$search.'%')
-                            ->orWhere('last_name', 'like', '%'.$search.'%')
-                            ->orWhere('email', 'like', '%'.$search.'%')
-                            ->orWhere('mobile', 'like', '%'.$search.'%');
+                        $q->where('first_name', 'like', '%' . $search . '%')
+                            ->orWhere('last_name', 'like', '%' . $search . '%')
+                            ->orWhere('email', 'like', '%' . $search . '%')
+                            ->orWhere('mobile', 'like', '%' . $search . '%');
                     });
                 }
             })
@@ -360,7 +362,7 @@ class DoctorController extends Controller
 
                 return [
                     'id' => $item->patient_id,
-                    'name' => trim($patient->first_name ?? $patient->user->first_name.' '.$patient->last_name ?? $patient->user->last_name),
+                    'name' => trim($patient->first_name ?? $patient->user->first_name . ' ' . $patient->last_name ?? $patient->user->last_name),
                     'email' => $user->email ?? $patient->email ?? null,
                     'mobile' => $user->mobile ?? $patient->mobile ?? null,
                 ];
@@ -386,8 +388,8 @@ class DoctorController extends Controller
         $labs = \App\Models\User::whereHas('lab')
             ->where(function ($q) use ($search) {
                 if ($search) {
-                    $q->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%');
+                    $q->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
                 }
             })
             ->select('id', 'name', 'email')
@@ -408,8 +410,8 @@ class DoctorController extends Controller
         $pharmacies = \App\Models\User::whereHas('pharmacy')
             ->where(function ($q) use ($search) {
                 if ($search) {
-                    $q->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%');
+                    $q->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
                 }
             })
             ->select('id', 'name', 'email')
@@ -432,8 +434,8 @@ class DoctorController extends Controller
         $doctors = $doctorsQuery
             ->where(function ($q) use ($search) {
                 if ($search) {
-                    $q->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%');
+                    $q->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
                 }
             })
             ->select('id', 'name', 'email')
@@ -453,8 +455,8 @@ class DoctorController extends Controller
         $assistants = \App\Models\User::whereHas('DoctorAssistant')
             ->where(function ($q) use ($search) {
                 if ($search) {
-                    $q->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%');
+                    $q->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
                 }
             })
             ->select('id', 'name', 'email')
@@ -476,8 +478,8 @@ class DoctorController extends Controller
         })
             ->where(function ($q) use ($search) {
                 if ($search) {
-                    $q->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('email', 'like', '%'.$search.'%');
+                    $q->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
                 }
             })
             ->select('id', 'name', 'email')
@@ -578,13 +580,33 @@ class DoctorController extends Controller
      */
     public function search(Request $request)
     {
-        $query = $request->get('query');
+        $search = $request->get('query');
 
-        return User::whereHas('doctor')
-            ->where('name', 'LIKE', "%{$query}%")
+        $doctorIds = [];
+
+        if (auth()->check() && auth()->user()->hasRole('Patient')) {
+            $doctorIds = Appointment::where('patient_id', auth()->user()->patient->id)
+                ->pluck('doctor_id')
+                ->toArray();
+        }
+
+        $query = User::whereHas('doctor');
+
+        if (!empty($doctorIds)) {
+            $query->whereHas('doctor', function ($q) use ($doctorIds) {
+                $q->whereIn('id', $doctorIds);
+            });
+        }
+
+        $users = $query
+            ->when($search, function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            })
             ->select('id', 'name', 'email', 'mobile')
             ->limit(10)
             ->get();
+
+        return $users;
     }
 
     /**

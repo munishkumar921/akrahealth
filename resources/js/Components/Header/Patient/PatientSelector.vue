@@ -84,12 +84,12 @@ watch(
             </div>
         </div>
     </div>
-    <div v-else class="d-flex gap-3 align-items-center rounded p-2 nav-card bg-primary text-white shadow-lg w-auto position-relative">
-        <div class="nav-card-content justify-content-start">
-            <p class="px-4 rounded h6 col-10 text-white">
-                  {{ $page.props.selected_patient?.name }}
+    <div v-else class="patient-selector-card nav-card bg-primary text-white shadow-lg position-relative">
+        <div class="patient-selector-content">
+            <p class="patient-selector-name mb-0 text-white">
+                {{ $page.props.selected_patient?.name }}
             </p>
-            <Link :href="route('doctor.select.patient', 'empty')" class="col-2">
+            <Link :href="route('doctor.select.patient', 'empty')" class="patient-selector-close">
                 <CloseButton />
             </Link>
         </div>
@@ -103,6 +103,44 @@ watch(
 <style scoped>
 .position-absolute {
     z-index: 3;
+}
+
+.patient-selector-card {
+    width: min(100%, 420px);
+    border-radius: 14px;
+    padding: 0.55rem 0.75rem 0.55rem 1rem;
+    display: flex;
+    align-items: center;
+}
+
+.patient-selector-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 42px;
+}
+
+.patient-selector-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.patient-selector-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .expanded-view {

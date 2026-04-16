@@ -1,6 +1,6 @@
 <script setup>
 import axios from "axios";
-import { ref, reactive, defineEmits, onMounted, onBeforeUnmount } from "vue";
+import { ref, reactive, onMounted, onBeforeUnmount } from "vue";
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
 import Canvas from "@/Components/Common/Canvas.vue";
 import { useForm } from "@inertiajs/vue3";

@@ -71,6 +71,7 @@ class AuditMiddleware
             $auditService->create([
                 'module' => $module,
                 'action' => $action,
+                'hospital_id' => auth()->user()?->hospital?->id ?? auth()->user()?->hospital_id,
                 'description' => "{$action} on {$module}",
                 'new_values' => $request->except(['password', 'token', '_token']),
                 'query' => http_build_query($request->query()),

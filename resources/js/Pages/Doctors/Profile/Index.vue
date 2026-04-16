@@ -1,12 +1,10 @@
 <script setup>
-import { ref, nextTick, computed } from "vue";
-import DoctorProfileEdit from "../../Modals/DoctorProfileEdit.vue";
+import { computed, nextTick, ref } from "vue";
 import AuthLayout from "../../../Layouts/AuthLayout.vue";
-import Notifications from "./Partials/Notifications.vue";
+import DoctorProfileEdit from "../../Modals/DoctorProfileEdit.vue";
 import Modal from "../../../Components/Common/Modal.vue";
 
 const props = defineProps({
-    DoctorDetail: String,
     doctor: Object,
     specialties: Object,
     activities: Array,
@@ -14,6 +12,7 @@ const props = defineProps({
 
 const childComponentRef = ref();
 const showProfileEditModal = ref(false);
+const activePanel = ref("overview");
 
 const closeProfileEditModal = () => {
     showProfileEditModal.value = false;
@@ -26,6 +25,10 @@ const edit = async (doctor) => {
         childComponentRef.value.update(doctor);
     }
 };
+
+const textOrFallback = (value, fallback = "Not provided") =>
+    value !== null && value !== undefined && String(value).trim() !== "" ? value : fallback;
+
 const formatAddress = (address) =>
     [
         address?.address_1,
@@ -33,327 +36,649 @@ const formatAddress = (address) =>
         address?.city,
         address?.state,
         address?.country,
-        address?.zip
-    ].filter(Boolean).join(', ');
+        address?.zip,
+    ]
+        .filter(Boolean)
+        .join(", ");
 
 const formatTime = (time) => {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
+    if (!time) return "";
+    const [hours, minutes] = time.split(":");
     const date = new Date();
-    date.setHours(hours);
-    date.setMinutes(minutes);
-    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    date.setHours(Number(hours));
+    date.setMinutes(Number(minutes));
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
 };
+
+const formatActivityDate = (value) => {
+    if (!value) return "";
+    return new Date(value).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+};
+
+const doctorName = computed(() =>
+    [props.doctor?.first_name, props.doctor?.last_name].filter(Boolean).join(" ") || "Doctor Profile"
+);
+
+const doctorAvatar = computed(() => {
+    if (props.doctor?.profile_photo_url) {
+        return props.doctor.profile_photo_url;
+    }
+
+    if (props.doctor?.sex === "Female") {
+        return "/images/doctor_f_avtar.svg";
+    }
+
+    return "/images/doctor_m_avtar.svg";
+});
+
+const doctorAddress = computed(() => formatAddress(props.doctor?.user?.address));
 
 const hospitalTimings = computed(() => {
     const timings = props.doctor?.hospital?.timings || props.doctor?.timings;
     return Array.isArray(timings) ? timings : [];
 });
+
+const statCards = computed(() => [
+    {
+        label: "Experience",
+        value: props.doctor?.experience ? `${props.doctor.experience} years` : "Not added",
+    },
+    {
+        label: "Specialities",
+        value: props.doctor?.specialities?.length ? props.doctor.specialities.length : "0",
+    },
+    {
+        label: "Gender",
+        value: textOrFallback(props.doctor?.sex || props.doctor?.user?.sex, "Unspecified"),
+    },
+    {
+        label: "Hospital",
+        value: textOrFallback(props.doctor?.hospital?.name, "Not linked"),
+    },
+]);
+
+const overviewDetails = computed(() => [
+    { label: "Email", value: textOrFallback(props.doctor?.user?.email) },
+    { label: "Mobile", value: textOrFallback(props.doctor?.user?.mobile) },
+    { label: "Certification", value: textOrFallback(props.doctor?.certification) },
+    { label: "Address", value: textOrFallback(doctorAddress.value) },
+]);
 </script>
 
 <template>
-<AuthLayout title="Doctor Profile" description="View and manage your doctor profile" heading="Doctor Profile">
-        <div id="content-page bg-color-white-lilac">
-            <div class="row">
-                <div class="col-sm-12">
-                    <div class="iq-card">
-                        <div class="iq-card-body profile-page p-0">
-                            <div class="profile-header">
-                                <div class="cover-container overlay">
-                                    
-                                </div>
-                                <ul class="header-nav d-flex flex-wrap justify-end p-0 m-0">
-                                    <li>
-                                        <div class="profile-edit cursor-pointer" @click="edit(props.doctor)"><i
-                                                class="ri-pencil-line"></i>
-                                        </div>
-                                    </li>
-                                </ul>
-                                <div class="profile-info p-4">
-                                    <div class="row">
-                                        <div class="col-sm-12 col-md-6">
-                                            <div class="user-detail pl-5">
-                                                <div class="d-flex flex-wrap align-items-center">
-                                                    <div class="profile-img relative">
-                                                        <div v-if="doctor?.profile_photo_url">
-                                                            <img :src="doctor.profile_photo_url"
-                                                                class="avatar-130 img-fluid rounded-circle" align="left"
-                                                                alt="profile photo" />
-                                                        </div>
-                                                        <div v-else class="bg-light-gradient rounded-circle">
-                                                            <!-- Fixed conditions - use === for strict comparison -->
-                                                            <img v-if="doctor?.sex === 'Male'"
-                                                                src="/images/doctor_m_avtar.svg"
-                                                                alt="male doctor avatar" class="avatar-130 img-fluid" />
-                                                            <img v-else-if="doctor?.sex === 'Female'"
-                                                                src="/images/doctor_f_avtar.svg"
-                                                                alt="female doctor avatar"
-                                                                class="avatar-130 img-fluid" />
-                                                            <img v-else src="/images/doctor_m_avtar.svg"
-                                                                alt="default doctor avatar"
-                                                                class="avatar-130 img-fluid" />
-                                                        </div>
-                                                    </div>
-                                                    <div class="profile-detail d-flex text-align-center pl-4">
-                                                        <h3>
-                                                            {{ doctor?.first_name || '' }} {{ doctor?.last_name || '' }}
-                                                            
-                                                        </h3>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col-sm-12 col-md-6">
-                                            <ul id="pills-tab"
-                                                class="profile-feed-items d-flex justify-content-end nav nav-pills">
-                                                <li class="nav-item">
-                                                    <a id="pills-profile-tab" data-toggle="tab" href="#profile-profile"
-                                                        role="tab" aria-controls="pills-contact"
-                                                        class="nav-link active">
-                                                        Profile
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a id="pills-activity-tab" data-toggle="tab"
-                                                        href="#profile-activity" role="tab"
-                                                        aria-controls="pills-profile" class="nav-link">
-                                                        Activity
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+    <AuthLayout title="Doctor Profile" description="View and manage your doctor profile" heading="Doctor Profile">
+        <div class="doctor-profile-page">
+            <section class="doctor-hero">
+                <div class="doctor-hero__main">
+                    <div class="doctor-hero__avatar-shell">
+                        <img :src="doctorAvatar" :alt="doctorName" class="doctor-hero__avatar" />
+                    </div>
+
+                    <div class="doctor-hero__copy">
+                        <span class="doctor-hero__eyebrow">Doctor Profile</span>
+                        <h1 class="doctor-hero__title">{{ doctorName }}</h1>
+                        <p class="doctor-hero__subtitle">
+                            {{ textOrFallback(doctor?.hospital?.name, "No hospital assigned yet") }}
+                        </p>
+
+                        <div class="doctor-hero__chips">
+                            <span
+                                v-for="speciality in doctor?.specialities || []"
+                                :key="speciality?.id || speciality?.name"
+                                class="doctor-chip"
+                            >
+                                {{ speciality?.name }}
+                            </span>
+                            <span v-if="!(doctor?.specialities || []).length" class="doctor-chip doctor-chip--muted">
+                                No speciality added
+                            </span>
                         </div>
                     </div>
                 </div>
-                <div class="col-sm-12">
-                    <div class="row">
-                        <div class="col-lg-3 profile-left">
-                            <div class="iq-card">
-                                <div class="iq-card-header d-flex justify-content-between">
-                                    <div class="iq-header-title">
-                                        <h4 class="card-title d-flex align-items-center"><i class="ri-contacts-book-2-fill text-primary mr-2"></i>Contact</h4>
-                                    </div>
-                                    <div class="iq-card-header-toolbar d-flex align-items-center"></div>
-                                </div>
-                                <div class="iq-card-body">
-                                    <ul class="m-0 p-0">
-                                        <li class="d-flex mb-2">
-                                            <p class="news-detail mb-0 text-md-nowrap text-wrap">
-                                                <i class="ri-mail-fill"></i>
-                                                {{ doctor?.user?.email }}
-                                            </p>
-                                        </li>
-                                        <li class="d-flex">
-                                            <p class="mb-0 text-md-nowrap text-wrap">
-                                                <i class="ri-smartphone-fill"></i>
-                                                {{ doctor?.user?.mobile }}
-                                            </p>
 
-                                        </li>
-                                    </ul>
-                                </div>
-                                <!---->
-                            </div>
-                            <div class="iq-card">
-                                <div class="iq-card-header d-flex justify-content-between">
-                                    <div class="iq-header-title d-flex">
-                                        <h4 class="card-title d-flex align-items-center"><i class="ri-map-pin-user-fill text-primary mr-2"></i>Location</h4>
-                                    </div>
-                                </div>
-                                <div class="iq-card-body">
-                                    <ul class="m-0 p-0">
-                                        <li class="d-flex mb-2">
-                                            <div class="news-icon">
-                                                <i class="fas fa-map-marker-alt text-info"></i>
-                                            </div>
-                                            {{ formatAddress(doctor?.user?.address) }}
-                                        </li>
-                                        <iframe class="w-100"
-                                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3902543.2003194243!2d-118.04220880485131!3d36.56083290513502!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x80be29b9f4abb783%3A0x4757dc6be1305318!2sInyo%20National%20Forest!5e0!3m2!1sen!2sin!4v1576668158879!5m2!1sen!2sin"
-                                            height="200" allowfullscreen=""></iframe>
-                                    </ul>
-                                </div>
-                            </div>
+                <div class="doctor-hero__aside">
+                    <button class="btn doctor-hero__edit" @click="edit(doctor)">
+                        <i class="ri-pencil-line mr-2"></i>
+                        Edit Profile
+                    </button>
 
-                        </div>
-                        <div class="col-lg-6 profile-center">
-                            <div class="tab-content">
-                                <div class="tab-pane fade active show" id="profile-profile" role="tabpanel">
-                                    <div class="iq-card">
-                                        <div class="iq-card-header d-flex justify-content-between">
-                                            <div class="iq-header-title d-flex">
-                                                <h4 class="card-title d-flex align-items-center"><i class="ri-user-3-fill text-primary mr-2"></i>About Me</h4>
-
-                                            </div>
-                                        </div>
-                                        <div class="iq-card-header d-flex justify-content-between">
-                                            <div class="m-0 p-0 w-100">
-                                                <div class="row mb-2">
-                                                    <div class="col-6">
-                                                        <h6>Gender: <span class="text-muted font-weight-normal">{{ doctor?.sex || doctor?.user?.sex || '-' }}</span></h6>
-                                                    </div>
-                                                    <div class="col-6">
-                                                        <h6>Experience: <span class="text-muted font-weight-normal">{{ doctor?.experience ? doctor.experience + ' Years' : '-' }}</span></h6>
-                                                    </div>
-                                                </div>
-                                                <div class="row">
-                                                     <div class="user-bio col-12">
-                                                        <h6>About</h6>
-                                                        <p v-if="doctor?.about">
-                                                          <span class="text-muted font-weight-normal">{{ doctor?.about }}</span>
-                                                        </p>
-                                                        <p v-else>
-                                                            No description
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="iq-card">
-                                        <div class="iq-card-header d-flex justify-content-between">
-                                            <div class="iq-header-title">
-                                                <h4 class="card-title d-flex align-items-center"><i class="ri-calendar-event-fill text-primary mr-2"></i>Schedule</h4>
-                                            </div>
-                                        </div>
-                                        <div class="iq-card-body">
-                                            <ul class="list-unstyled m-0 p-0">
-                                                 <template v-if="hospitalTimings.length > 0">
-                                                     <li v-for="timing in hospitalTimings" :key="timing?.id" class="d-flex justify-content-between mb-2 border-bottom pb-1">
-                                                         <span class="text-capitalize font-weight-bold">{{ timing?.day_of_week }}</span>
-                                                        <span v-if="!timing?.is_closed && timing?.open_time" class="text-primary">
-                                                            {{timing?.open_time }} - {{timing?.close_time}}
-                                                        </span>
-                                                        <span v-else class="text-danger">Closed</span>
-                                                     </li>
-                                                </template>
-                                                <li v-else class="text-center text-muted">
-                                                    No schedule available
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="tab-pane fade show" id="profile-activity" role="tabpanel">
-                                    <div class="iq-card">
-                                        <div class="iq-card-header d-flex justify-content-between">
-                                            <div class="iq-header-title">
-                                                <h4 class="card-title d-flex align-items-center"><i class="ri-time-line text-primary mr-2"></i>Activity timeline</h4>
-                                            </div>
-                                            <div class="iq-card-header-toolbar d-flex align-items-center">
-                                                <!-- Dropdown can be implemented later if needed -->
-                                            </div>
-                                        </div>
-                                        <div class="iq-card-body">
-                                            <ul class="iq-timeline">
-                                                <li v-if="!activities || activities.length === 0">
-                                                    <div class="timeline-dots"></div>
-                                                    <div class="d-inline-block w-100">
-                                                        <p>No activities to display.</p>
-                                                    </div>
-                                                </li>
-                                                <li v-for="activity in activities"
-                                                    :key="activity.id + '-' + activity.type">
-                                                    <div :class="`timeline-dots border-${activity.color}`"></div>
-                                                    <h6 class="float-left mb-1">{{ activity.title }}</h6>
-                                                    <small class="float-right mt-1">{{
-                                                        activity.date
-                                                    }}</small>
-                                                    <div class="d-inline-block w-100">
-                                                        <p>{{ activity.description }}</p>
-                                                    </div>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-3 profile-right">
-                            <div class="iq-card">
-                                <div class="iq-card-header d-flex justify-content-between">
-                                    <div class="iq-header-title d-flex">
-                                        <h4 class="card-title d-flex align-items-center"><i class="ri-award-fill text-primary mr-2"></i>Speciality</h4>
-                                    </div>
-                                </div>
-                                <div class="iq-card-body">
-                                    <ul class="media-story m-0 p-0">
-                                        <li class="col-d-12">
-                                            <div class="stories-data">
-                                                <div class="badge font-size-14 m-1"
-                                                    v-for="speciality in doctor?.specialities" :key="specialty">
-                                                    {{ speciality?.name }}
-                                                </div>
-                                            </div>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <!-- <Notifications /> -->
+                    <div class="doctor-hero__stats">
+                        <div v-for="stat in statCards" :key="stat.label" class="doctor-stat">
+                            <span class="doctor-stat__label">{{ stat.label }}</span>
+                            <strong class="doctor-stat__value">{{ stat.value }}</strong>
                         </div>
                     </div>
                 </div>
+            </section>
+
+            <section class="doctor-tabs">
+                <button
+                    type="button"
+                    class="doctor-tab"
+                    :class="{ 'doctor-tab--active': activePanel === 'overview' }"
+                    @click="activePanel = 'overview'"
+                >
+                    Profile
+                </button>
+                <button
+                    type="button"
+                    class="doctor-tab"
+                    :class="{ 'doctor-tab--active': activePanel === 'activity' }"
+                    @click="activePanel = 'activity'"
+                >
+                    Activity
+                </button>
+            </section>
+
+            <div v-if="activePanel === 'overview'" class="doctor-grid">
+                <section class="doctor-card doctor-card--primary">
+                    <div class="doctor-card__header">
+                        <div>
+                            <span class="doctor-card__eyebrow">Professional Summary</span>
+                            <h2 class="doctor-card__title">About Me</h2>
+                        </div>
+                    </div>
+
+                    <div class="doctor-detail-grid">
+                        <div v-for="item in overviewDetails" :key="item.label" class="doctor-detail">
+                            <span class="doctor-detail__label">{{ item.label }}</span>
+                            <strong class="doctor-detail__value">{{ item.value }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="doctor-about">
+                        <span class="doctor-detail__label">About</span>
+                        <p class="doctor-about__text">{{ textOrFallback(doctor?.about, "No description added yet.") }}</p>
+                    </div>
+                </section>
+
+                <section class="doctor-card">
+                    <div class="doctor-card__header">
+                        <div>
+                            <span class="doctor-card__eyebrow">Contact</span>
+                            <h2 class="doctor-card__title">Reachability</h2>
+                        </div>
+                    </div>
+
+                    <div class="doctor-stack">
+                        <div class="doctor-contact-row">
+                            <i class="ri-mail-fill"></i>
+                            <span>{{ textOrFallback(doctor?.user?.email) }}</span>
+                        </div>
+                        <div class="doctor-contact-row">
+                            <i class="ri-smartphone-fill"></i>
+                            <span>{{ textOrFallback(doctor?.user?.mobile) }}</span>
+                        </div>
+                        <div class="doctor-contact-row">
+                            <i class="ri-map-pin-2-fill"></i>
+                            <span>{{ textOrFallback(doctorAddress, "No address available") }}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="doctor-card">
+                    <div class="doctor-card__header">
+                        <div>
+                            <span class="doctor-card__eyebrow">Availability</span>
+                            <h2 class="doctor-card__title">Schedule</h2>
+                        </div>
+                    </div>
+
+                    <div class="doctor-stack">
+                        <div
+                            v-for="timing in hospitalTimings"
+                            :key="timing?.id || `${timing?.day_of_week}-${timing?.open_time}`"
+                            class="doctor-schedule-row"
+                        >
+                            <span class="doctor-schedule-row__day text-capitalize">{{ timing?.day_of_week }}</span>
+                            <span v-if="!timing?.is_closed && timing?.open_time" class="doctor-schedule-row__time">
+                                {{ formatTime(timing?.open_time) }} - {{ formatTime(timing?.close_time) }}
+                            </span>
+                            <span v-else class="doctor-schedule-row__closed">Closed</span>
+                        </div>
+                        <div v-if="!hospitalTimings.length" class="doctor-empty">No schedule available</div>
+                    </div>
+                </section>
+
+                <section class="doctor-card">
+                    <div class="doctor-card__header">
+                        <div>
+                            <span class="doctor-card__eyebrow">Expertise</span>
+                            <h2 class="doctor-card__title">Specialities</h2>
+                        </div>
+                    </div>
+
+                    <div class="doctor-hero__chips">
+                        <span
+                            v-for="speciality in doctor?.specialities || []"
+                            :key="speciality?.id || speciality?.name"
+                            class="doctor-chip"
+                        >
+                            {{ speciality?.name }}
+                        </span>
+                        <div v-if="!(doctor?.specialities || []).length" class="doctor-empty">No specialities added</div>
+                    </div>
+                </section>
             </div>
+
+            <section v-else class="doctor-card">
+                <div class="doctor-card__header">
+                    <div>
+                        <span class="doctor-card__eyebrow">Recent activity</span>
+                        <h2 class="doctor-card__title">Activity Timeline</h2>
+                    </div>
+                </div>
+
+                <div class="doctor-timeline">
+                    <div v-for="activity in activities || []" :key="`${activity.id}-${activity.type}`" class="doctor-timeline__item">
+                        <div class="doctor-timeline__icon" :class="`doctor-timeline__icon--${activity.color || 'primary'}`">
+                            <i :class="activity.icon || 'ri-time-line'"></i>
+                        </div>
+                        <div class="doctor-timeline__content">
+                            <div class="doctor-timeline__head">
+                                <h3>{{ activity.title }}</h3>
+                                <span>{{ formatActivityDate(activity.date) }}</span>
+                            </div>
+                            <p>{{ activity.description }}</p>
+                        </div>
+                    </div>
+
+                    <div v-if="!(activities || []).length" class="doctor-empty">No activities to display.</div>
+                </div>
+            </section>
         </div>
+
         <Modal :isOpen="showProfileEditModal" title="Edit Profile" @close="closeProfileEditModal" size="xl">
-            <DoctorProfileEdit :slug="doctor.slug" :doctor="doctor" :specialties="specialties"
-                @close="closeProfileEditModal" :doctorSpecialty="doctorSpecialty" :language="language"
-                ref="childComponentRef" />
+            <DoctorProfileEdit
+                ref="childComponentRef"
+                :doctor="doctor"
+                :specialties="specialties"
+                @close="closeProfileEditModal"
+            />
         </Modal>
     </AuthLayout>
 </template>
+
 <style scoped>
-.header-nav {
-    position: absolute;
-    top: 20px;
-    right: 20px;
+.doctor-profile-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
-.news-icon {
-    font-size: 20px;
-    margin-right: 5px !important;
+.doctor-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 360px);
+    gap: 1.5rem;
+    padding: 2rem;
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 42%),
+        linear-gradient(135deg, #fbfdff 0%, #edf7ff 45%, #f8fbff 100%);
+    border: 1px solid #dbe8f5;
+    box-shadow: 0 22px 44px rgba(15, 23, 42, 0.07);
 }
 
-.header-nav li {
-    list-style: none;
-    margin-left: 10px;
+.doctor-hero__main {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
 }
 
-.header-nav div {
-    background: rgba(255, 255, 255, 0.9);
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+.doctor-hero__avatar-shell {
+    flex-shrink: 0;
+    width: 132px;
+    height: 132px;
+    padding: 0.45rem;
+    border-radius: 32px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #dbe8f5;
+    box-shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
+}
+
+.doctor-hero__avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 26px;
+}
+
+.doctor-hero__copy {
+    min-width: 0;
+}
+
+.doctor-hero__eyebrow,
+.doctor-card__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.12);
+    color: #0369a1;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.doctor-hero__title {
+    margin: 0.95rem 0 0.45rem;
+    color: #0f172a;
+    font-size: clamp(2rem, 3vw, 3rem);
+    line-height: 1.05;
+}
+
+.doctor-hero__subtitle {
+    margin: 0;
+    color: #475569;
+    font-size: 1rem;
+}
+
+.doctor-hero__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.2rem;
+}
+
+.doctor-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid #dbe8f5;
+    color: #334155;
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.doctor-chip--muted {
+    color: #64748b;
+}
+
+.doctor-hero__aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.doctor-hero__edit {
+    align-self: flex-end;
+    padding: 0.85rem 1.2rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    color: #ffffff;
+    font-weight: 700;
+    box-shadow: 0 14px 30px rgba(2, 132, 199, 0.22);
+}
+
+.doctor-hero__edit:hover {
+    color: #ffffff;
+}
+
+.doctor-hero__stats {
+    display: grid;
+    gap: 1rem;
+}
+
+.doctor-stat,
+.doctor-card,
+.doctor-detail,
+.doctor-timeline__content {
+    background: #ffffff;
+    border: 1px solid #e6edf5;
+    box-shadow: 0 18px 35px rgba(15, 23, 42, 0.05);
+}
+
+.doctor-stat {
+    padding: 1.1rem 1.2rem;
+    border-radius: 20px;
+}
+
+.doctor-stat__label,
+.doctor-detail__label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.doctor-stat__value,
+.doctor-detail__value {
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.doctor-tabs {
+    display: flex;
+    gap: 1rem;
+}
+
+.doctor-tab {
+    padding: 0.85rem 1.25rem;
+    border-radius: 16px;
+    border: 1px solid #dbe8f5;
+    background: #ffffff;
+    color: #475569;
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+
+.doctor-tab--active {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+    border-color: transparent;
+    box-shadow: 0 16px 30px rgba(2, 132, 199, 0.24);
+    color: #ffffff;
+}
+
+.doctor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: 1.5rem;
+}
+
+.doctor-card {
+    padding: 1.35rem;
+    border-radius: 24px;
+}
+
+.doctor-card--primary {
+    grid-row: span 2;
+}
+
+.doctor-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+
+.doctor-card__title {
+    margin: 0.7rem 0 0;
+    color: #0f172a;
+    font-size: 1.55rem;
+    font-weight: 700;
+}
+
+.doctor-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.doctor-detail {
+    padding: 1rem 1.05rem;
+    border-radius: 18px;
+}
+
+.doctor-about {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e6edf5;
+}
+
+.doctor-about__text {
+    margin: 0;
+    color: #475569;
+    line-height: 1.8;
+}
+
+.doctor-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.doctor-contact-row,
+.doctor-schedule-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.9rem;
+    padding: 0.95rem 1rem;
+    border-radius: 16px;
+    background: #f8fbff;
+    border: 1px solid #e6edf5;
+    color: #334155;
+}
+
+.doctor-contact-row i {
+    margin-top: 0.1rem;
+    color: #0284c7;
+}
+
+.doctor-contact-row span {
+    flex: 1;
+}
+
+.doctor-schedule-row__day {
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.doctor-schedule-row__time {
+    color: #0284c7;
+    font-weight: 700;
+}
+
+.doctor-schedule-row__closed {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.doctor-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.doctor-timeline__item {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.doctor-timeline__icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #333;
-    text-decoration: none;
-    transition: all 0.3s ease;
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    color: #ffffff;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
 }
 
-.header-nav div:hover {
-    background: #fff;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.doctor-timeline__icon--primary {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
 }
-.iq-card .iq-card-header{
-    padding: 1rem 0.5rem!important;
+
+.doctor-timeline__icon--success {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
 }
-.cover-container {
-    background: #09acff2b;
-    height: 250px;
+
+.doctor-timeline__icon--warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
 }
-.overlay:after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background:#09acff2b;
+
+.doctor-timeline__content {
+    padding: 1rem 1.1rem;
+    border-radius: 18px;
+}
+
+.doctor-timeline__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.35rem;
+}
+
+.doctor-timeline__head h3 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.doctor-timeline__head span,
+.doctor-timeline__content p,
+.doctor-empty {
+    color: #64748b;
+}
+
+.doctor-timeline__content p {
+    margin: 0;
+    line-height: 1.7;
+}
+
+.doctor-empty {
+    padding: 1rem 0;
+}
+
+@media (max-width: 1199.98px) {
+    .doctor-hero,
+    .doctor-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .doctor-hero,
+    .doctor-card {
+        padding: 1.15rem;
+    }
+
+    .doctor-hero__main,
+    .doctor-detail-grid,
+    .doctor-tabs,
+    .doctor-timeline__item {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+    }
+
+    .doctor-hero__edit {
+        align-self: stretch;
+    }
+
+    .doctor-contact-row,
+    .doctor-schedule-row,
+    .doctor-timeline__head {
+        flex-direction: column;
+    }
 }
 </style>

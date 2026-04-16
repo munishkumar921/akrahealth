@@ -26,7 +26,6 @@ class AUserController extends Controller
     {
         // hasAccess('manage doctors');
         $this->userService = $userService;
-
     }
 
     /**
@@ -38,8 +37,6 @@ class AUserController extends Controller
     public function index(Request $request)
     {
         $authUser = auth()->user();
-
-        // Hospital directly linked to user
         $hospital = Hospital::where('user_id', $authUser->id)->firstOrFail();
 
         // Resolve MAIN hospital
@@ -47,76 +44,22 @@ class AUserController extends Controller
         $hospitalIds = Hospital::where('id', $mainHospitalId)
             ->orWhere('main_branch_id', $mainHospitalId)
             ->pluck('id');
-
-        // Get users with roles (Doctor, VA, Biller)
-        $usersQuery = User::with(['roles', 'doctor.hospital', 'doctor.specialities:name', 'address', 'userSkills', 'hospital'])
-            ->whereHas('roles', function ($query) {
-                $query->whereIn('name', [
-                    'Doctor',
-                    'Virtual Assistant',
-                    'Biller',
-                ]);
-            })
-            ->where(function ($q) use ($hospitalIds) {
-                // Doctors with linked user account
-                $q->whereHas('doctor', function ($d) use ($hospitalIds) {
-                    $d->whereNotNull('user_id')->whereIn('hospital_id', $hospitalIds);
-                })
-                // OR Other staff (VA, Biller) directly linked to hospital
-                    ->orWhereIn('hospital_id', $hospitalIds);
-            })
-            // 🔍 Search
-            ->when($request->filled('Keyword'), function ($query) use ($request) {
-                $s = trim($request->Keyword);
-                $query->where(function ($q) use ($s) {
-                    $q->where('name', 'like', "%{$s}%")
-                        ->orWhere('email', 'like', "%{$s}%")
-                        ->orWhere('mobile', 'like', "%{$s}%");
-                });
-            });
-
-        // Get doctors without user relation but linked to hospital
-        $doctorsQuery = Doctor::with(['hospital', 'specialities'])
-            ->whereNull('user_id')
-            ->whereIn('hospital_id', $hospitalIds)
-            ->when($request->filled('Keyword'), function ($query) use ($request) {
-                $s = trim($request->Keyword);
-                $query->where(function ($q) use ($s) {
-                    $q->where('name', 'like', "%{$s}%")
-                        ->orWhere('first_name', 'like', "%{$s}%")
-                        ->orWhere('last_name', 'like', "%{$s}%");
-                });
-            });
-
-        // Get all results and merge
-        $users = $usersQuery->orderBy('name', 'ASC')->get();
-        $doctors = $doctorsQuery->orderBy('name', 'ASC')->get();
-        // Combine collections
-        $mergedItems = $users->merge($doctors);
-
-        // Paginate merged results
-        $perPage = request('per_page', paginateLimit());
-        $page = request('page', 1);
-        $offset = ($page - 1) * $perPage;
-
-        $paginatedItems = $mergedItems->slice($offset, $perPage)->values();
-
-        $mergedCollection = new \Illuminate\Pagination\LengthAwarePaginator(
-            $paginatedItems,
-            $mergedItems->count(),
-            $perPage,
-            $page,
-            ['path' => request()->url(), 'query' => request()->query()]
-        );
+        $users = $this->userService->listAdminUsers($request, $hospitalIds);
 
         // 🔹 Get all branches under main hospital
         $branches = Hospital::where('main_branch_id', $mainHospitalId)->orWhere('id', $mainHospitalId)->get();
 
         return Inertia::render('Admin/Users/Index', [
             'hospitalId' => $mainHospitalId,
-            'users' => $mergedCollection,
+            'users' => $users,
             'branches' => $branches,
-            'Keyword' => $request->Keyword,
+            'filters' => [
+                'keyword' => trim((string) $request->input('keyword', $request->input('Keyword', ''))),
+                'role' => (string) $request->input('role', ''),
+                'status' => $request->input('status', ''),
+                'branch_id' => (string) $request->input('branch_id', ''),
+                'speciality' => (string) $request->input('speciality', ''),
+            ],
             'specialities' => \App\Models\Speciality::select('name')
                 ->distinct()
                 ->orderBy('name')
@@ -157,6 +100,36 @@ class AUserController extends Controller
      */
     public function store(UserRequest $request)
     {
+        /* Check User limit per plan start */
+        $plan = strtolower(auth()->user()->userSubscription->subscriptionPlan->title);
+        $hospital_id = auth()->user()->hospital->id;
+        if ($plan == 'starter') {
+
+            $assistantCount = User::where('hospital_id', $hospital_id)->role('Virtual Assistant')->count();
+            if ($assistantCount >= 2) {
+                return redirect()->route('admin.users.index')->with('error', 'You have reached the limit of 2 assistants for this plan. Upgrade to add more.');
+            }
+
+            if ($request->role != 'Virtual Assistant') {
+                return redirect()->route('admin.users.index')->with('error', 'You can only create 2 assistants under this plan.');
+            }
+        }
+
+        if ($plan == 'growth') {
+
+            $doctorCount = Doctor::where('hospital_id', $hospital_id)->count();
+            if ($doctorCount >= 5) {
+                return redirect()->route('admin.users.index')->with('error', 'You have reached the limit of 2 doctors for this plan. Upgrade to add more.');
+            }
+
+            $count = User::where('hospital_id', $hospital_id)->role($request->role)->count();
+
+            if ($count >= 1) {
+                return redirect()->route('admin.users.index')->with('error', "Only 1 {$request->role} is allowed under this plan.");
+            }
+        }
+        /* Check User limit per plan end */
+
         $this->userService->role = request()->input('role');
         if ($request->id && is_string(request()->input('role')) && str_contains(request()->input('role'), ',')) {
             $roles = array_map('trim', explode(',', request()->input('role')));

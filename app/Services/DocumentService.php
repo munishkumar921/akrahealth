@@ -10,6 +10,7 @@ use Barryvdh\DomPDF\Facade\Pdf as PDF;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -210,8 +211,8 @@ class DocumentService
         if ($type && $type !== 'All') {
             $query->where('type', $type);
         }
-
-        return $query->get();
+        $data = $query->get();
+        return $data;
     }
 
     /**
@@ -219,6 +220,7 @@ class DocumentService
      */
     public function storeLetter(Request $request)
     {
+        $notificationService = app(InAppNotificationService::class);
         $validated = $request->validate([
             'letterType' => 'required|string',
             'subject' => 'required|string|max:255',
@@ -304,6 +306,26 @@ class DocumentService
             'subject' => $validated['subject'],
         ]);
 
+        if ($patientId) {
+            $notificationService->notifyPatient(
+                $patientId,
+                $notificationService->buildPayload(
+                    'Documents updated',
+                    'A new letter has been added to your chart.',
+                    'document_uploaded',
+                    [
+                        'recipient_role' => 'Patient',
+                        'document_id' => $document->id,
+                        'patient_id' => $patientId,
+                        'doctor_id' => $doctor?->id,
+                        'action_url' => route('patient.documents'),
+                        'related_model_type' => Document::class,
+                        'related_model_id' => $document->id,
+                    ]
+                )
+            );
+        }
+
         return $document;
     }
 
@@ -349,8 +371,9 @@ class DocumentService
      */
     public function store(Request $request)
     {
+        $notificationService = app(InAppNotificationService::class);
         $validated = $request->validate([
-            // 'file' => 'required|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,webp|max:10240', // 10MB max
+            'file' => 'required|file|mimes:pdf,doc,docx,jpg,jpeg,png,gif,webp|max:20500',
             'type' => 'nullable|string|max:100',
             'description' => 'nullable|string|max:500',
             'date' => 'nullable|date',
@@ -405,6 +428,65 @@ class DocumentService
                 'from' => $request->input('from') ?? $user->name ?? 'Doctor',
             ]
         );
+
+        $role = $user?->getRoleNames()?->first();
+        $basePayload = [
+            'document_id' => $document->id,
+            'patient_id' => $patientId,
+            'doctor_id' => $doctor?->id,
+            'action_url' => $patientId ? route('patient.documents') : null,
+            'related_model_type' => Document::class,
+            'related_model_id' => $document->id,
+        ];
+
+        if ($patientId) {
+            $notificationService->notifyPatient(
+                $patientId,
+                $notificationService->buildPayload(
+                    'Documents updated',
+                    'A new document has been uploaded to your chart.',
+                    'document_uploaded',
+                    array_merge($basePayload, ['recipient_role' => 'Patient'])
+                )
+            );
+        }
+
+        if ($doctor?->user && $role !== 'Doctor') {
+            $attachmentPath = public_path($publicUrl);
+
+            $notificationService->notifyUser(
+                $doctor->user,
+                $notificationService->buildPayload(
+                    $role === 'Lab' ? 'Document uploaded by lab' : 'Documents uploaded',
+                    $role === 'Lab'
+                        ? 'A lab document has been uploaded for your patient.'
+                        : 'A new document has been uploaded for your patient.',
+                    'document_uploaded',
+                    array_merge($basePayload, [
+                        'recipient_role' => 'Doctor',
+                        'action_url' => route('doctor.documents.index'),
+                    ])
+                )
+            );
+
+            app(EmailNotificationService::class)->queueDoctorOrderWorkflowEmail(
+                $doctor->user,
+                $role === 'Lab' ? 'Document uploaded by lab' : 'Patient document uploaded',
+                $role === 'Lab'
+                    ? 'A lab document has been uploaded for your patient.'
+                    : 'A new document has been uploaded for your patient.',
+                [
+                    'Patient: '.($document->patient?->user?->name ?? $document->patient?->name ?? 'N/A'),
+                    'Document: '.($document->description ?? $document->type ?? 'N/A'),
+                    'Uploaded by: '.($user->name ?? 'N/A'),
+                ],
+                route('doctor.documents.index'),
+                is_file($attachmentPath) ? [
+                    'attachment_path' => $attachmentPath,
+                    'attachment_name' => basename($attachmentPath),
+                ] : null
+            );
+        }
 
         return $document;
     }

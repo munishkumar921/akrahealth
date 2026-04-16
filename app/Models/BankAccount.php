@@ -24,6 +24,7 @@ class BankAccount extends Model
         'account_type',
         'is_primary',
         'is_active',
+        'hospital_id',
     ];
 
     /**

@@ -23,13 +23,22 @@ class ALabTestController extends Controller
     public function index()
     {
         $tests = $this->labTestService->list(request());
-        $request = request();
-        $keyword = $request->get('keyword') ?? '';
         $categories = LabTestCategory::select(
             ['id', 'name']
         )->orderBy('name', 'asc')->get();
+        $sampleTypes = $this->labTestService->getSampleTypes();
 
-        return inertia('Admin/Labs/LabTestsList', compact('tests', 'request', 'keyword', 'categories'));
+        return inertia('Admin/Labs/LabTestsList', [
+            'tests' => $tests,
+            'categories' => $categories,
+            'sampleTypes' => $sampleTypes,
+            'filters' => [
+                'keyword' => request()->string('keyword')->toString() ?: request()->string('search')->toString(),
+                'status' => request()->input('status', ''),
+                'category_id' => request()->input('category_id', ''),
+                'sample_type' => request()->input('sample_type', ''),
+            ],
+        ]);
     }
 
     /**
@@ -50,8 +59,23 @@ class ALabTestController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'hospital_id' => ['nullable'],
+            'lab_test_category_id' => ['required'],
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string', 'max:5000'],
+            'sample_type' => ['nullable', 'string'],
+            'fasting_required' => ['nullable'],
+            'report_time' => ['nullable'],
+            "instructions" => ['required', 'string', 'max:5000'],
+            "price" => ['nullable', 'numeric'],
+            "discount" => ['nullable', 'numeric'],
+            "final_price" => ['nullable', 'numeric'],
+            "currency" => ['nullable', 'string', 'max:3'],
+            "is_home_collection_available" => ['nullable'],
+            "is_active" => ['nullable'],
+        ]);
         $this->labTestService->upsert($request->all());
-
         return redirect()->route('admin.lab-tests.index')->with('success', 'Lab test saved successfully.');
     }
 

@@ -23,12 +23,14 @@ class InsuranceRequest extends FormRequest
     {
         return [
             'facility' => 'required|string|max:255',
-            'phone' => 'nullable|string|max:20',
+            'phone' => ['nullable', 'regex:/^[0-9+\-\s()]{10,20}$/'],
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:255',
+            'country' => 'nullable|string|max:255',
             'state' => 'nullable|string|max:255',
-            'pincode' => 'nullable|string|max:10',
+            'pincode' => ['nullable', 'regex:/^[0-9][0-9\\-\\s]{2,19}$/'],
+            'comments' => 'nullable|string|max:1000',
         ];
     }
 }

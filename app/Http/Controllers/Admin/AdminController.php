@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UserRequest;
 use App\Models\Appointment;
 use App\Models\BankAccount;
 use App\Models\Doctor;
@@ -30,6 +31,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class AdminController extends Controller
@@ -90,7 +93,7 @@ class AdminController extends Controller
      * @param  mixed  $request
      * @return void
      */
-    public function store(Request $request)
+    public function store(UserRequest $request)
     {
         $this->userService->upsert($request->all());
 
@@ -119,7 +122,7 @@ class AdminController extends Controller
      * @param  mixed  $id
      * @return void
      */
-    public function update(Request $request, $id)
+    public function update(UserRequest $request, $id)
     {
         $data = $request->all();
         $data['id'] = $id;
@@ -361,7 +364,7 @@ class AdminController extends Controller
             'name' => ['required', 'string'],
         ]);
 
-        $patients = User::where('role_id', 4)->where('name', 'LIKE', '%'.$request->name.'%')->limit(20)->get();
+        $patients = User::where('role_id', 4)->where('name', 'LIKE', '%' . $request->name . '%')->limit(20)->get();
 
         return response()->json($patients);
     }
@@ -421,22 +424,16 @@ class AdminController extends Controller
         return Inertia::render('Admin/PrescriptionList');
     }
 
-    public function transactionlist(Request $request)
+    public function transactionList(Request $request)
     {
-        $keyword = $request->keyword;
-        $type = $request->type;
-        $status = $request->status;
+        $keyword = trim((string) $request->input('keyword', ''));
+        $type = $request->input('type', 'all');
+        $status = $request->input('status', '');
 
         $subscriptions = UserSubscription::with(['user', 'subscriptionPlan'])
             ->where('user_id', auth()->id())
             ->whereNotNull('razorpay_order_id')
-            ->when($keyword, function ($q) use ($keyword) {
-                $q->whereHas('user', function ($uq) use ($keyword) {
-                    $uq->where('name', 'like', "%{$keyword}%")
-                        ->orWhere('email', 'like', "%{$keyword}%");
-                });
-            })
-            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($status, fn($q) => $q->where('status', $status))
             ->orderByDesc('created_at')
             ->get()
             ->map(function ($sub) {
@@ -454,6 +451,7 @@ class AdminController extends Controller
                     'amount' => $sub->amount ?? 0,
                     'currency' => $sub->currency ?? 'INR',
                     'status' => $sub->status ?? 'pending',
+                    'payment_status' => $sub->payment_status ?? 'pending',
                     'gateway' => 'Razorpay',
                     'created_at' => optional($sub->created_at)->format('Y-m-d H:i:s'),
                 ];
@@ -461,33 +459,22 @@ class AdminController extends Controller
 
         $transactions = Transaction::with(['user', 'labOrder', 'pharmacyOrder', 'invoice'])
             ->where('payment_type', 'razorpay')
-            ->when($keyword, function ($q) use ($keyword) {
-                $q->where(function ($query) use ($keyword) {
-                    $query->where('transaction_id', 'like', "%{$keyword}%")
-                        ->orWhere('razorpay_payment_id', 'like', "%{$keyword}%")
-                        ->orWhere('razorpay_order_id', 'like', "%{$keyword}%")
-                        ->orWhereHas('user', function ($uq) use ($keyword) {
-                            $uq->where('name', 'like', "%{$keyword}%")
-                                ->orWhere('email', 'like', "%{$keyword}%");
-                        });
-                });
-            })
-            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($status, fn($q) => $q->where('status', $status))
             ->orderByDesc('created_at')
             ->get()
             ->map(function ($trans) {
                 if ($trans->labOrder) {
                     $type = 'lab_order';
                     $label = 'Lab Order';
-                    $desc = 'Lab Order #'.$trans->labOrder->id;
+                    $desc = 'Lab Order #' . $trans->labOrder->id;
                 } elseif ($trans->pharmacyOrder) {
                     $type = 'pharmacy_order';
                     $label = 'Pharmacy Order';
-                    $desc = 'Pharmacy Order #'.$trans->pharmacyOrder->id;
+                    $desc = 'Pharmacy Order #' . $trans->pharmacyOrder->id;
                 } elseif ($trans->invoice) {
                     $type = 'invoice';
                     $label = 'Invoice';
-                    $desc = 'Invoice #'.($trans->invoice->invoice_number ?? $trans->invoice->id);
+                    $desc = 'Invoice #' . ($trans->invoice->invoice_number ?? $trans->invoice->id);
                 } elseif ($trans->order) {
                     $type = 'order';
                     $label = 'Order';
@@ -523,7 +510,33 @@ class AdminController extends Controller
             $allTransactions = $allTransactions->where('type', $type);
         }
 
-        $perPage = $this->paginate;
+        if ($keyword !== '') {
+            $searchNeedle = Str::lower($keyword);
+
+            $allTransactions = $allTransactions->filter(function ($transaction) use ($searchNeedle) {
+                $haystack = collect([
+                    $transaction['order_id'] ?? null,
+                    $transaction['payment_id'] ?? null,
+                    $transaction['type_label'] ?? null,
+                    $transaction['user'] ?? null,
+                    $transaction['user_email'] ?? null,
+                    $transaction['description'] ?? null,
+                    $transaction['amount'] ?? null,
+                    $transaction['currency'] ?? null,
+                    $transaction['status'] ?? null,
+                    $transaction['created_at'] ?? null,
+                ])
+                    ->filter(fn($value) => $value !== null && $value !== '')
+                    ->map(fn($value) => Str::lower((string) $value))
+                    ->implode(' ');
+
+                return Str::contains($haystack, $searchNeedle);
+            })->values();
+        }
+
+        $allTransactions = $allTransactions->sortByDesc('created_at')->values();
+
+        $perPage = (int) $request->input('per_page', $this->paginate);
         $currentPage = $request->integer('page', 1);
 
         $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
@@ -536,10 +549,10 @@ class AdminController extends Controller
 
         return Inertia::render('Admin/TransactionList', [
             'transactions' => $paginated,
-            'keyword' => $keyword,
             'filters' => [
-                'type' => $type ?? 'all',
-                'status' => $status ?? '',
+                'keyword' => $keyword,
+                'type' => $type ?: 'all',
+                'status' => $status ?: '',
             ],
         ]);
     }
@@ -556,7 +569,8 @@ class AdminController extends Controller
 
     public function invoicesList(Request $request)
     {
-        $search = $request->input('search');
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $status = $request->input('status', '');
         $sort = request('sort', 'created_at');
         $direction = request('direction', 'desc') === 'asc' ? 'asc' : 'desc';
 
@@ -571,7 +585,7 @@ class AdminController extends Controller
             ])->where('hospital_id', auth()->user()->hospital->id);
 
         /* search */
-        $query->when($search, function ($q, $search) {
+        $query->when($keyword, function ($q, $search) {
 
             $q->where(function ($sub) use ($search) {
 
@@ -585,6 +599,10 @@ class AdminController extends Controller
                         $qq->where('name', 'like', "%{$search}%");
                     });
             });
+        });
+
+        $query->when($status, function ($q) use ($status) {
+            $q->where('invoices.status', $status);
         });
 
         /* sorting */
@@ -611,11 +629,27 @@ class AdminController extends Controller
             $query->orderBy('invoices.created_at', 'desc');
         }
 
-        $invoices = $query->paginate($this->paginate)->withQueryString();
+        $invoices = $query
+            ->paginate((int) $request->input('per_page', $this->paginate))
+            ->withQueryString();
+
+        $invoices->getCollection()->transform(function ($invoice) {
+            $invoice->patient_name = $invoice->patient?->user?->name
+                ?? $invoice->user?->name
+                ?? 'N/A';
+            $invoice->status_label = $invoice->formatted_status ?? ucfirst($invoice->status ?? 'N/A');
+            $invoice->created_label = optional($invoice->created_at)?->format('Y-m-d H:i:s');
+            $invoice->amount_label = $invoice->formatted_total_amount ?? null;
+
+            return $invoice;
+        });
 
         return Inertia::render('Admin/InvoiceList', [
             'invoices' => $invoices,
-            'search' => $search,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+            ],
         ]);
     }
 
@@ -650,6 +684,10 @@ class AdminController extends Controller
     {
         $user = auth()->user();
         $doctor = $user->doctor;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
+        $selectedDoctorId = trim((string) $request->input('doctor_id', ''));
+        $selectedStatus = $request->input('status', '');
+        $selectedMode = trim((string) $request->input('mode', ''));
 
         // Get hospital_id from doctor or from session for admin viewing doctor mode
         $hospitalId = null;
@@ -665,9 +703,7 @@ class AdminController extends Controller
         $doctorsQuery = Doctor::with(['user', 'specialities', 'hospital'])
             ->when($hospitalId, function ($q) use ($hospitalId) {
                 $q->where('hospital_id', $hospitalId);
-            })
-            ->where('is_active', true)
-            ->where('is_verified', true);
+            });
 
         $doctors = $doctorsQuery->get();
 
@@ -675,7 +711,7 @@ class AdminController extends Controller
         $doctorsList = $doctors->map(function ($doc) {
             return [
                 'id' => $doc->id,
-                'name' => $doc->user->name ?? $doc->user->first_name.' '.$doc->user->last_name,
+                'name' => $doc->user->name ?? $doc->user->first_name . ' ' . $doc->user->last_name,
                 'speciality' => $doc->specialities->first()->name ?? 'General',
                 'hospital' => $doc->hospital->name ?? 'N/A',
                 'photo' => $doc->user->profile_photo_path ?? null,
@@ -693,22 +729,67 @@ class AdminController extends Controller
             ->select('appointments.*', 'created_by_user.name as created_by_name')
             ->orderBy('appointments.created_at', 'desc');
 
-        // Apply doctor filter if selected
-        if ($request->has('doctor_id') && $request->doctor_id) {
-            $appointmentsQuery->where('doctor_id', $request->doctor_id);
-        }
+        $appointmentsQuery->when($selectedDoctorId !== '', function ($query) use ($selectedDoctorId) {
+            $query->where('appointments.doctor_id', $selectedDoctorId);
+        });
 
-        // Apply status filter if selected
-        if ($request->has('status') && $request->status) {
-            $appointmentsQuery->where('status', $request->status);
-        }
+        $appointmentsQuery->when($selectedMode !== '', function ($query) use ($selectedMode) {
+            $query->where('appointments.appointment_mode', $selectedMode);
+        });
 
-        // Apply upcoming filter if tab is upcoming
-        if ($request->has('tab') && $request->tab === 'upcoming') {
-            $appointmentsQuery->where('appointment_date', '>=', now()->toDateString());
-        }
+        $appointmentsQuery->when($keyword !== '', function ($query) use ($keyword) {
+            $query->where(function ($inner) use ($keyword) {
+                $inner->where('appointments.appointment_type', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.appointment_mode', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.status', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.reason', 'like', "%{$keyword}%")
+                    ->orWhere('created_by_user.name', 'like', "%{$keyword}%")
+                    ->orWhereHas('patient', function ($patientQuery) use ($keyword) {
+                        $patientQuery->where('name', 'like', "%{$keyword}%")
+                            ->orWhere('email', 'like', "%{$keyword}%")
+                            ->orWhere('mobile', 'like', "%{$keyword}%")
+                            ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                                $userQuery->where('name', 'like', "%{$keyword}%")
+                                    ->orWhere('email', 'like', "%{$keyword}%")
+                                    ->orWhere('mobile', 'like', "%{$keyword}%");
+                            });
+                    })
+                    ->orWhereHas('doctor.user', function ($doctorUserQuery) use ($keyword) {
+                        $doctorUserQuery->where('name', 'like', "%{$keyword}%")
+                            ->orWhere('email', 'like', "%{$keyword}%");
+                    });
+            });
+        });
 
-        $appointments = $appointmentsQuery->paginate($this->paginate)->withQueryString();
+        $appointmentsQuery->when($selectedStatus !== '', function ($query) use ($selectedStatus) {
+            if ($selectedStatus === 'upcoming') {
+                $query->whereDate('appointments.appointment_date', '>=', now()->toDateString())
+                    ->whereNotIn('appointments.status', ['completed', 'cancelled']);
+
+                return;
+            }
+
+            $query->where('appointments.status', $selectedStatus);
+        });
+
+        $appointments = $appointmentsQuery
+            ->paginate((int) $request->input('per_page', $this->paginate))
+            ->withQueryString();
+
+        $appointments->getCollection()->transform(function ($appointment) {
+            $appointment->patient_name = $appointment->patient?->user?->name ?? $appointment->patient?->name ?? 'Unknown patient';
+            $appointment->patient_avatar_url = $appointment->patient?->user?->profile_photo_url ?? asset('images/avatar.webp');
+            $appointment->doctor_name = $appointment->doctor?->user?->name ?? 'Unknown doctor';
+            $appointment->doctor_speciality = $appointment->doctor?->specialities?->first()?->name;
+            $appointment->appointment_type_label = $appointment->appointment_type ?: 'N/A';
+            $appointment->appointment_mode_label = $appointment->appointment_mode ?: 'N/A';
+            $appointment->payment_status_label = ucfirst($appointment->payment_status ?: 'pending');
+            $appointment->status_label = ucfirst($appointment->status ?: 'pending');
+            $appointment->created_by_label = $appointment->created_by_name ?: 'N/A';
+            $appointment->scheduled_at_label = trim(($appointment->appointment_date ?: '') . ' ' . ($appointment->appointment_time ?: ''));
+
+            return $appointment;
+        });
 
         // Get calendar events using a fresh query (clone the base query before pagination)
         $calendarQuery = Appointment::with(['patient.user', 'doctor.user', 'doctor.specialities'])
@@ -721,16 +802,31 @@ class AdminController extends Controller
             ->select('appointments.*', 'created_by_user.name as created_by_name')
             ->orderBy('appointments.created_at', 'desc');
 
-        // Apply same filters to calendar query
-        if ($request->has('doctor_id') && $request->doctor_id) {
-            $calendarQuery->where('doctor_id', $request->doctor_id);
-        }
-        if ($request->has('status') && $request->status) {
-            $calendarQuery->where('status', $request->status);
-        }
-        if ($request->has('tab') && $request->tab === 'upcoming') {
-            $calendarQuery->where('appointment_date', '>=', now()->toDateString());
-        }
+        $calendarQuery->when($selectedDoctorId !== '', function ($query) use ($selectedDoctorId) {
+            $query->where('appointments.doctor_id', $selectedDoctorId);
+        });
+        $calendarQuery->when($selectedMode !== '', function ($query) use ($selectedMode) {
+            $query->where('appointments.appointment_mode', $selectedMode);
+        });
+        $calendarQuery->when($keyword !== '', function ($query) use ($keyword) {
+            $query->where(function ($inner) use ($keyword) {
+                $inner->where('appointments.appointment_type', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.appointment_mode', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.status', 'like', "%{$keyword}%")
+                    ->orWhere('appointments.reason', 'like', "%{$keyword}%")
+                    ->orWhere('created_by_user.name', 'like', "%{$keyword}%");
+            });
+        });
+        $calendarQuery->when($selectedStatus !== '', function ($query) use ($selectedStatus) {
+            if ($selectedStatus === 'upcoming') {
+                $query->whereDate('appointments.appointment_date', '>=', now()->toDateString())
+                    ->whereNotIn('appointments.status', ['completed', 'cancelled']);
+
+                return;
+            }
+
+            $query->where('appointments.status', $selectedStatus);
+        });
 
         $calendarEvents = $calendarQuery->get()->map(function ($apt) {
             $doctorName = $apt->doctor->user->name ?? 'Dr. Unknown';
@@ -751,7 +847,7 @@ class AdminController extends Controller
             return [
                 'id' => $apt->id,
                 'title' => "{$patientName} - {$doctorName}",
-                'start' => $apt->getOriginal('appointment_date').' '.$rawTime,
+                'start' => $apt->getOriginal('appointment_date') . ' ' . $rawTime,
                 'status' => ucfirst($apt->status),
                 'backgroundColor' => $backgroundColor,
                 'borderColor' => $backgroundColor,
@@ -766,15 +862,28 @@ class AdminController extends Controller
             ];
         });
 
+
         return Inertia::render('Admin/AllAppointments', [
             'doctors' => $doctorsList,
             'appointments' => $appointments,
             'calendarEvents' => $calendarEvents,
             'filters' => [
-                'doctor_id' => $request->doctor_id ?? null,
-                'status' => $request->status ?? null,
-                'tab' => $request->tab ?? null,
+                'keyword' => $keyword,
+                'doctor_id' => $selectedDoctorId,
+                'status' => $selectedStatus,
+                'mode' => $selectedMode,
             ],
+            'modeOptions' => Appointment::query()
+                ->when($hospitalId, function ($q) use ($hospitalId) {
+                    $q->whereHas('doctor', function ($query) use ($hospitalId) {
+                        $query->where('hospital_id', $hospitalId);
+                    });
+                })
+                ->whereNotNull('appointment_mode')
+                ->distinct()
+                ->orderBy('appointment_mode')
+                ->pluck('appointment_mode')
+                ->values(),
         ]);
     }
 
@@ -804,7 +913,7 @@ class AdminController extends Controller
             $query = Roles::query();
 
             if ($keyword) {
-                $query->where('name', 'LIKE', '%'.$keyword.'%');
+                $query->where('name', 'LIKE', '%' . $keyword . '%');
             }
 
             $roles = $query->orderBy('created_at', 'desc')->get();
@@ -816,7 +925,7 @@ class AdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch roles: '.$e->getMessage(),
+                'message' => 'Failed to fetch roles: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -830,7 +939,7 @@ class AdminController extends Controller
     {
         try {
             $request->validate([
-                'name' => 'required|string|max:255|unique:roles,name,'.$request->id,
+                'name' => 'required|string|max:255|unique:roles,name,' . $request->id,
                 'guard_name' => 'nullable|string|max:255',
             ]);
 
@@ -845,7 +954,7 @@ class AdminController extends Controller
 
             return back()->with('success', __('Role created successfully.'));
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to create role: '.$e->getMessage());
+            return back()->with('error', 'Failed to create role: ' . $e->getMessage());
         }
     }
 
@@ -863,7 +972,7 @@ class AdminController extends Controller
 
             return back()->with('success', __('Role deleted successfully.'));
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to delete role: '.$e->getMessage());
+            return back()->with('error', 'Failed to delete role: ' . $e->getMessage());
         }
     }
 
@@ -895,13 +1004,25 @@ class AdminController extends Controller
     {
         $keyword = $request->get('keyword', '');
         $status = $request->get('status', '');
+        $accountType = $request->get('account_type', '');
+       /* $hospitalId = auth()->user()->doctor?->hospital_id ?? auth()->user()->hospital?->id;
+        $hasHospitalColumn = Schema::hasColumn('bank_accounts', 'hospital_id');
 
         $query = BankAccount::query()
+            ->when($hasHospitalColumn, function ($q) use ($hospitalId) {
+                $q->where('hospital_id', $hospitalId);
+            }, function ($q) {
+                $q->where('user_id', auth()->id());
+            })
             ->when($keyword, function ($q) use ($keyword) {
-                $q->where('account_holder_name', 'LIKE', '%'.$keyword.'%')
-                    ->orWhere('bank_name', 'LIKE', '%'.$keyword.'%')
-                    ->orWhere('account_number', 'LIKE', '%'.$keyword.'%')
-                    ->orWhere('ifsc_code', 'LIKE', '%'.$keyword.'%');
+                $q->where(function ($subQuery) use ($keyword) {
+                    $subQuery->where('account_holder_name', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('bank_name', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('account_number', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('ifsc_code', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('branch_address', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('account_type', 'LIKE', '%' . $keyword . '%');
+                });
             })
             ->when($status === 'active', function ($q) {
                 $q->where('is_active', true);
@@ -912,12 +1033,14 @@ class AdminController extends Controller
             ->when($status === 'primary', function ($q) {
                 $q->where('is_primary', true);
             })
+            ->when($accountType, function ($q) use ($accountType) {
+                $q->where('account_type', $accountType);
+            })
             ->orderBy('is_primary', 'desc')
             ->orderBy('created_at', 'desc');
 
-        $bankAccounts = $query->paginate($this->paginate)->withQueryString();
+        $bankAccounts = $query->paginate((int) $request->input('per_page', paginateLimit()))->withQueryString();
 
-        // Transform for frontend
         $bankAccounts->getCollection()->transform(function ($account) {
             return [
                 'id' => $account->id,
@@ -933,13 +1056,14 @@ class AdminController extends Controller
                 'created_at' => $account->created_at?->format('Y-m-d H:i:s') ?? 'N/A',
                 'updated_at' => $account->updated_at?->format('Y-m-d H:i:s') ?? 'N/A',
             ];
-        });
+        });*/
 
         return Inertia::render('Admin/Epayment', [
-            'bankAccounts' => $bankAccounts,
-            'keyword' => $keyword,
+            'bankAccounts' => [],
             'filters' => [
+                'keyword' => $keyword,
                 'status' => $status,
+                'account_type' => $accountType,
             ],
         ]);
     }
@@ -961,15 +1085,21 @@ class AdminController extends Controller
             'is_primary' => 'nullable|boolean',
             'is_active' => 'nullable|boolean',
         ]);
+        $hospitalId = auth()->user()->doctor?->hospital_id ?? auth()->user()->hospital?->id;
+        $hasHospitalColumn = Schema::hasColumn('bank_accounts', 'hospital_id');
 
         // If setting as primary, unset other primary accounts
         if ($request->boolean('is_primary')) {
-            BankAccount::where('user_id', auth()->id())
-                ->orWhereNull('user_id')
+            BankAccount::query()
+                ->when($hasHospitalColumn, function ($q) use ($hospitalId) {
+                    $q->where('hospital_id', $hospitalId);
+                }, function ($q) {
+                    $q->where('user_id', auth()->id());
+                })
                 ->update(['is_primary' => false]);
         }
 
-        $bankAccount = BankAccount::create([
+        $payload = [
             'user_id' => auth()->id(),
             'account_holder_name' => $validated['account_holder_name'],
             'bank_name' => $validated['bank_name'],
@@ -979,10 +1109,16 @@ class AdminController extends Controller
             'account_type' => $validated['account_type'],
             'is_primary' => $request->boolean('is_primary'),
             'is_active' => $request->boolean('is_active', true),
-        ]);
+        ];
+
+        if ($hasHospitalColumn) {
+            $payload['hospital_id'] = $hospitalId;
+        }
+
+        $bankAccount = BankAccount::create($payload);
 
         // Create audit log for bank account creation
-        $this->auditService->logCreate('bank_accounts', $bankAccount, __('Bank account created for').' '.$validated['bank_name']);
+        $this->auditService->logCreate('bank_accounts', $bankAccount, __('Bank account created for') . ' ' . $validated['bank_name']);
 
         return redirect()->route('admin.bank-accounts')->with('success', __('Bank account added successfully.'));
     }
@@ -995,7 +1131,15 @@ class AdminController extends Controller
      */
     public function updateBankAccount(Request $request, $id)
     {
-        $bankAccount = BankAccount::findOrFail($id);
+        $hospitalId = auth()->user()->doctor?->hospital_id ?? auth()->user()->hospital?->id;
+        $hasHospitalColumn = Schema::hasColumn('bank_accounts', 'hospital_id');
+        $bankAccount = BankAccount::query()
+            ->when($hasHospitalColumn, function ($q) use ($hospitalId) {
+                $q->where('hospital_id', $hospitalId);
+            }, function ($q) {
+                $q->where('user_id', auth()->id());
+            })
+            ->findOrFail($id);
 
         $validated = $request->validate([
             'account_holder_name' => 'required|string|max:255',
@@ -1010,9 +1154,18 @@ class AdminController extends Controller
 
         // If setting as primary, unset other primary accounts
         if ($request->boolean('is_primary') && ! $bankAccount->is_primary) {
-            BankAccount::where('user_id', auth()->id())
+            BankAccount::query()
+                ->when($hasHospitalColumn, function ($q) use ($hospitalId) {
+                    $q->where('hospital_id', $hospitalId);
+                }, function ($q) {
+                    $q->where('user_id', auth()->id());
+                })
                 ->where('id', '!=', $id)
                 ->update(['is_primary' => false]);
+        }
+
+        if (strlen($validated['account_number']) == 4) {
+            $validated['account_number'] = $bankAccount->account_number;
         }
 
         $bankAccount->update([
@@ -1037,7 +1190,15 @@ class AdminController extends Controller
      */
     public function destroyBankAccount($id)
     {
-        $bankAccount = BankAccount::findOrFail($id);
+        $hospitalId = auth()->user()->doctor?->hospital_id ?? auth()->user()->hospital?->id;
+        $hasHospitalColumn = Schema::hasColumn('bank_accounts', 'hospital_id');
+        $bankAccount = BankAccount::query()
+            ->when($hasHospitalColumn, function ($q) use ($hospitalId) {
+                $q->where('hospital_id', $hospitalId);
+            }, function ($q) {
+                $q->where('user_id', auth()->id());
+            })
+            ->findOrFail($id);
         $bankAccount->delete();
 
         return redirect()->route('admin.bank-accounts')->with('success', __('Bank account deleted successfully.'));
@@ -1051,11 +1212,23 @@ class AdminController extends Controller
      */
     public function setPrimaryBankAccount($id)
     {
-        $bankAccount = BankAccount::findOrFail($id);
+        $hospitalId = auth()->user()->doctor?->hospital_id ?? auth()->user()->hospital?->id;
+        $hasHospitalColumn = Schema::hasColumn('bank_accounts', 'hospital_id');
+        $bankAccount = BankAccount::query()
+            ->when($hasHospitalColumn, function ($q) use ($hospitalId) {
+                $q->where('hospital_id', $hospitalId);
+            }, function ($q) {
+                $q->where('user_id', auth()->id());
+            })
+            ->findOrFail($id);
 
         // Unset primary from all other accounts
-        BankAccount::where('user_id', auth()->id())
-            ->orWhereNull('user_id')
+        BankAccount::query()
+            ->when($hasHospitalColumn, function ($q) use ($hospitalId) {
+                $q->where('hospital_id', $hospitalId);
+            }, function ($q) {
+                $q->where('user_id', auth()->id());
+            })
             ->where('id', '!=', $id)
             ->update(['is_primary' => false]);
 
@@ -1116,69 +1289,66 @@ class AdminController extends Controller
 
     public function notification(Request $request)
     {
-        $keyword = $request->get('keyword');
-        $type = $request->get('type');
-        $status = $request->get('status');
+        $keyword = $request->get('keyword', '');
+        $type = $request->get('type', '');
+        $status = $request->get('status', '');
 
-        // 🔹 Get hospital safely
-        $hospital = Hospital::where('user_id', auth()->user()->id)->firstOrFail();
-
-        // 🔹 Get doctor IDs for hospital
-        $doctorIds = Doctor::where('hospital_id', $hospital->id)
-            ->pluck('id')
-            ->toArray();
-
-        // 🔹 Notifications query
-        $query = \App\Models\Notification::whereIn('doctor_id', $doctorIds)
-            ->when($keyword, function ($q) use ($keyword) {
-                $q->where('data', 'like', "%{$keyword}%");
+        $query = auth()->user()->notifications()
+            ->when($keyword !== '', function ($q) use ($keyword) {
+                $q->where(function ($query) use ($keyword) {
+                    $query->where('data->title', 'like', '%'.$keyword.'%')
+                        ->orWhere('data->message', 'like', '%'.$keyword.'%')
+                        ->orWhere('data->type', 'like', '%'.$keyword.'%')
+                        ->orWhere('data->channel', 'like', '%'.$keyword.'%');
+                });
             })
-            ->when($type, function ($q) use ($type) {
-                $q->where('type', $type);
-            })
-            ->when($status === 'read', function ($q) {
-                $q->whereNotNull('read_at');
-            })
-            ->when($status === 'unread', function ($q) {
-                $q->whereNull('read_at');
-            })
-            ->orderByDesc('created_at');
+            ->when($type !== '', fn ($q) => $q->where('data->type', $type))
+            ->when($status === 'read', fn ($q) => $q->whereNotNull('read_at'))
+            ->when($status === 'unread', fn ($q) => $q->whereNull('read_at'))
+            ->latest();
 
         $notifications = $query
-            ->paginate($this->paginate)
+            ->paginate((int) $request->input('per_page', paginateLimit()))
             ->withQueryString();
 
-        // 🔹 Transform for frontend
         $notifications->getCollection()->transform(function ($notification) {
             $data = is_array($notification->data)
                 ? $notification->data
                 : json_decode($notification->data ?? '{}', true);
 
+            if (! is_array($data)) {
+                $data = [];
+            }
+
             return [
                 'id' => $notification->id,
                 'title' => $data['title'] ?? 'Notification',
                 'notification' => $data['message'] ?? $data['notification'] ?? 'No message',
-                'type' => $notification->type ?? 'General',
+                'type' => $data['type'] ?? 'General',
                 'channel' => $data['channel'] ?? 'System',
                 'status' => $notification->read_at ? 'Read' : 'Unread',
                 'sent_at' => $notification->created_at?->format('d M, Y h:i A'),
                 'read_at' => $notification->read_at?->format('d M, Y h:i A'),
+                'action_url' => $data['action_url'] ?? null,
             ];
         });
 
-        // 🔹 Notification types for filter
-        $types = \App\Models\Notification::whereIn('doctor_id', $doctorIds)
+        $types = auth()->user()->notifications()
+            ->select('data->type')
+            ->whereNotNull('data->type')
             ->distinct()
-            ->pluck('type')
+            ->pluck('data->type')
             ->filter()
             ->values();
 
         return Inertia::render('Admin/Notification', [
             'notifications' => $notifications,
-            'keyword' => $keyword,
-            'type' => $type,
-            'status' => $status,
             'types' => $types,
+            'filters' => [
+                'keyword' => $keyword,
+                'type' => $type,
+                'status' => $status,
+            ],
         ]);
     }
 
@@ -1187,41 +1357,92 @@ class AdminController extends Controller
         $keyword = $request->get('keyword', '');
         $status = $request->get('status', '');
 
-        $orders = Order::with('patient.user', 'doctor.user', 'encounter', 'lab')->where('doctor_id', auth()->user()->doctor->id)
+        $orders = Order::with('patient.user', 'doctor.user', 'encounter', 'lab')
+            ->where('doctor_id', auth()->user()->doctor->id)
+            ->when($keyword, function ($query) use ($keyword) {
+                $query->where(function ($inner) use ($keyword) {
+                    $inner->where('notes', 'like', "%{$keyword}%")
+                        ->orWhereHas('patient.user', function ($patientQuery) use ($keyword) {
+                            $patientQuery->where('name', 'like', "%{$keyword}%")
+                                ->orWhere('email', 'like', "%{$keyword}%");
+                        })
+                        ->orWhereHas('doctor.user', function ($doctorQuery) use ($keyword) {
+                            $doctorQuery->where('name', 'like', "%{$keyword}%");
+                        })
+                        ->orWhereHas('lab', function ($labQuery) use ($keyword) {
+                            $labQuery->where('name', 'like', "%{$keyword}%");
+                        });
+                });
+            })
             ->orderBy('created_at', 'desc')
-            ->paginate(request('per_page', paginateLimit()))->withQueryString();
-        $orders->through(function ($order) {
+            ->get()
+            ->map(function ($order) {
 
-            $lab = $order->lab ?? $order->encounterProvider;
+                $lab = $order->lab ?? $order->encounterProvider;
+                $derivedStatus = $order->is_completed ? 'completed' : 'pending';
 
-            return [
-                'id' => $order->id,
-                'lab_name' => $lab?->name ?? '-',
+                return [
+                    'id' => $order->id,
+                    'lab_name' => $lab?->name ?? '-',
 
-                'order_type' => match (true) {
-                    ! empty($order->labs) => 'labs',
-                    ! empty($order->radiology) => 'radiology',
-                    ! empty($order->cp) => 'cp',
-                    default => '-',
-                },
+                    'order_type' => match (true) {
+                        ! empty($order->labs) => 'labs',
+                        ! empty($order->radiology) => 'radiology',
+                        ! empty($order->cp) => 'cp',
+                        default => '-',
+                    },
 
-                // pending date
-                'pending_date' => $order->pending_date
-                    ?? $order->created_at?->format('Y-m-d'),
+                    'pending_date' => $order->pending_date
+                        ? \Carbon\Carbon::parse($order->pending_date)->format('d M, Y')
+                        : $order->created_at?->format('d M, Y'),
 
-                'notes' => $order->notes ?? '',
+                    'notes' => $order->notes ?? '',
+                    'patient' => $order->patient?->user?->name,
+                    'doctor' => $order->doctor?->user?->name,
+                    'status' => $derivedStatus,
+                    'status_label' => ucfirst($derivedStatus),
+                    'created_label' => $order->created_at?->format('Y-m-d'),
+                ];
+            });
 
-                // optional extras
-                'patient' => $order->patient?->user?->name,
-                'doctor' => $order->doctor?->user?->name,
-                'status' => $order->status,
-            ];
-        });
+        if ($status) {
+            $orders = $orders->filter(fn($order) => $order['status'] === $status)->values();
+        }
+
+        if ($keyword) {
+            $needle = \Illuminate\Support\Str::lower($keyword);
+            $orders = $orders->filter(function ($order) use ($needle) {
+                $haystack = \Illuminate\Support\Str::lower(implode(' ', array_filter([
+                    $order['lab_name'] ?? null,
+                    $order['order_type'] ?? null,
+                    $order['pending_date'] ?? null,
+                    $order['notes'] ?? null,
+                    $order['patient'] ?? null,
+                    $order['doctor'] ?? null,
+                    $order['status'] ?? null,
+                    $order['status_label'] ?? null,
+                ])));
+
+                return \Illuminate\Support\Str::contains($haystack, $needle);
+            })->values();
+        }
+
+        $perPage = (int) $request->input('per_page', paginateLimit());
+        $currentPage = $request->integer('page', 1);
+        $orders = new \Illuminate\Pagination\LengthAwarePaginator(
+            $orders->forPage($currentPage, $perPage)->values(),
+            $orders->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return Inertia::render('Admin/Labs/LabOrdersList', [
             'labOrders' => $orders,
-            'keyword' => $keyword,
-
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+            ],
         ]);
     }
 
@@ -1229,29 +1450,95 @@ class AdminController extends Controller
     {
         $keyword = $request->get('keyword', '');
         $status = $request->get('status', '');
-        $paymentStatus = $request->get('payment_status', '');
 
-        $pharmacyOrders = [];
+        $pharmacyOrders = collect();
         if (isset(auth()->user()->doctor->hospital_id)) {
-
             $doctorIds = Doctor::where('hospital_id', auth()->user()->doctor->hospital_id)->pluck('id')->toArray();
-            $pharmacyOrders = Prescription::with(['doctor', 'patient', 'pharmacy'])
+            $pharmacyOrders = Prescription::with(['doctor.user', 'patient.user', 'pharmacy'])
                 ->whereIn('doctor_id', $doctorIds)
-                ->when($keyword, function ($q) use ($keyword) {
-                    $q->whereHas('pharmacy', function ($pharmacyQuery) use ($keyword) {
-                        $pharmacyQuery->where('name', 'LIKE', '%'.$keyword.'%');
+                ->when($keyword, function ($query) use ($keyword) {
+                    $query->where(function ($searchQuery) use ($keyword) {
+                        $searchQuery->where('prescription', 'like', "%{$keyword}%")
+                            ->orWhere('medication', 'like', "%{$keyword}%")
+                            ->orWhere('route', 'like', "%{$keyword}%")
+                            ->orWhere('reason', 'like', "%{$keyword}%")
+                            ->orWhere('instructions', 'like', "%{$keyword}%")
+                            ->orWhereHas('pharmacy', function ($pharmacyQuery) use ($keyword) {
+                                $pharmacyQuery->where('name', 'like', "%{$keyword}%");
+                            })
+                            ->orWhereHas('patient.user', function ($patientQuery) use ($keyword) {
+                                $patientQuery->where('name', 'like', "%{$keyword}%")
+                                    ->orWhere('email', 'like', "%{$keyword}%");
+                            })
+                            ->orWhereHas('doctor.user', function ($doctorQuery) use ($keyword) {
+                                $doctorQuery->where('name', 'like', "%{$keyword}%")
+                                    ->orWhere('email', 'like', "%{$keyword}%");
+                            });
                     });
                 })
-                ->orderBy('created_at', 'desc')
-                ->paginate(request('per_page', paginateLimit()))->withQueryString();
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(function ($prescription) {
+                    $derivedStatus = blank($prescription->getRawOriginal('date_inactive')) ? 'active' : 'inactive';
+
+                    return [
+                        'id' => $prescription->id,
+                        'pharmacy_name' => $prescription->pharmacy?->name ?? '-',
+                        'patient_name' => $prescription->patient?->user?->name ?? '-',
+                        'doctor_name' => $prescription->doctor?->user?->name ?? '-',
+                        'active_date' => $prescription->date_active ?? '-',
+                        'inactive_date' => $prescription->date_inactive?->format('d M, Y') ?? '-',
+                        'due_date' => $prescription->due_date?->format('d M, Y') ?? '-',
+                        'medication_name' => $prescription->medication ?: ($prescription->prescription ?: '-'),
+                        'prescription_notes' => $prescription->instructions ?: ($prescription->reason ?: ''),
+                        'status' => $derivedStatus,
+                        'status_label' => Str::title(str_replace('_', ' ', $derivedStatus)),
+                        'created_label' => $prescription->created_at?->format('Y-m-d'),
+                    ];
+                });
         }
+
+        if ($status) {
+            $pharmacyOrders = $pharmacyOrders
+                ->filter(fn($order) => $order['status'] === $status)
+                ->values();
+        }
+
+        if ($keyword) {
+            $needle = Str::lower($keyword);
+            $pharmacyOrders = $pharmacyOrders->filter(function ($order) use ($needle) {
+                $haystack = Str::lower(implode(' ', array_filter([
+                    $order['pharmacy_name'] ?? null,
+                    $order['patient_name'] ?? null,
+                    $order['doctor_name'] ?? null,
+                    $order['medication_name'] ?? null,
+                    $order['active_date'] ?? null,
+                    $order['inactive_date'] ?? null,
+                    $order['due_date'] ?? null,
+                    $order['prescription_notes'] ?? null,
+                    $order['status'] ?? null,
+                    $order['status_label'] ?? null,
+                ])));
+
+                return Str::contains($haystack, $needle);
+            })->values();
+        }
+
+        $perPage = (int) $request->input('per_page', paginateLimit());
+        $currentPage = $request->integer('page', 1);
+        $pharmacyOrders = new \Illuminate\Pagination\LengthAwarePaginator(
+            $pharmacyOrders->forPage($currentPage, $perPage)->values(),
+            $pharmacyOrders->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return Inertia::render('Admin/PharmacyOrdersList', [
             'pharmacyOrders' => $pharmacyOrders,
-            'keyword' => $keyword,
             'filters' => [
+                'keyword' => $keyword,
                 'status' => $status,
-                'payment_status' => $paymentStatus,
             ],
         ]);
     }
@@ -1264,17 +1551,19 @@ class AdminController extends Controller
 
         $query = PharmacyOrder::with(['pharmacy', 'appointment.patient.user', 'doctor.user'])
             ->when($keyword, function ($q) use ($keyword) {
-                $q->whereHas('pharmacy', function ($pharmacyQuery) use ($keyword) {
-                    $pharmacyQuery->where('name', 'LIKE', '%'.$keyword.'%');
-                })
-                    ->orWhereHas('appointment.patient.user', function ($patientQuery) use ($keyword) {
-                        $patientQuery->where('name', 'LIKE', '%'.$keyword.'%')
-                            ->orWhere('email', 'LIKE', '%'.$keyword.'%');
+                $q->where(function ($searchQuery) use ($keyword) {
+                    $searchQuery->whereHas('pharmacy', function ($pharmacyQuery) use ($keyword) {
+                        $pharmacyQuery->where('name', 'LIKE', '%' . $keyword . '%');
                     })
-                    ->orWhereHas('doctor.user', function ($doctorQuery) use ($keyword) {
-                        $doctorQuery->where('name', 'LIKE', '%'.$keyword.'%');
-                    })
-                    ->orWhere('id', 'LIKE', '%'.$keyword.'%');
+                        ->orWhereHas('appointment.patient.user', function ($patientQuery) use ($keyword) {
+                            $patientQuery->where('name', 'LIKE', '%' . $keyword . '%')
+                                ->orWhere('email', 'LIKE', '%' . $keyword . '%');
+                        })
+                        ->orWhereHas('doctor.user', function ($doctorQuery) use ($keyword) {
+                            $doctorQuery->where('name', 'LIKE', '%' . $keyword . '%');
+                        })
+                        ->orWhere('id', 'LIKE', '%' . $keyword . '%');
+                });
             })
             ->when($status, function ($q) use ($status) {
                 $q->where('status', $status);
@@ -1284,7 +1573,7 @@ class AdminController extends Controller
             });
 
         $pharmacyReports = $query->orderBy('created_at', 'desc')
-            ->paginate($this->paginate)
+            ->paginate((int) $request->input('per_page', paginateLimit()))
             ->withQueryString();
 
         // Transform the data for frontend
@@ -1304,13 +1593,13 @@ class AdminController extends Controller
                 } else {
                     $firstName = $order->doctor->first_name ?? '';
                     $lastName = $order->doctor->last_name ?? '';
-                    $doctorName = trim($firstName.' '.$lastName) ?: 'Dr. Unknown';
+                    $doctorName = trim($firstName . ' ' . $lastName) ?: 'Dr. Unknown';
                 }
             }
 
             return [
                 'id' => $order->id,
-                'order_id' => 'ORD-'.substr($order->id, 0, 8),
+                'order_id' => 'ORD-' . substr($order->id, 0, 8),
                 'pharmacy' => $order->pharmacy->name ?? 'N/A',
                 'pharmacy_id' => $order->pharmacy_id,
                 'doctor' => $doctorName,
@@ -1328,8 +1617,8 @@ class AdminController extends Controller
 
         return Inertia::render('Admin/PharmacyReportsList', [
             'pharmacyReports' => $pharmacyReports,
-            'keyword' => $keyword,
             'filters' => [
+                'keyword' => $keyword,
                 'status' => $status,
                 'payment_status' => $paymentStatus,
             ],
@@ -1344,19 +1633,21 @@ class AdminController extends Controller
         $dateFrom = $request->get('date_from', '');
         $dateTo = $request->get('date_to', '');
 
-        $query = LabOrder::with(['lab', 'appointment.patient.user', 'doctor.user'])
+        $query = LabOrder::with(['lab', 'appointment.patient.user', 'appointment.doctor.user'])
             ->when($keyword, function ($q) use ($keyword) {
-                $q->whereHas('lab', function ($labQuery) use ($keyword) {
-                    $labQuery->where('name', 'LIKE', '%'.$keyword.'%');
-                })
-                    ->orWhereHas('appointment.patient.user', function ($patientQuery) use ($keyword) {
-                        $patientQuery->where('name', 'LIKE', '%'.$keyword.'%')
-                            ->orWhere('email', 'LIKE', '%'.$keyword.'%');
+                $q->where(function ($searchQuery) use ($keyword) {
+                    $searchQuery->whereHas('lab', function ($labQuery) use ($keyword) {
+                        $labQuery->where('name', 'LIKE', '%' . $keyword . '%');
                     })
-                    ->orWhereHas('doctor.user', function ($doctorQuery) use ($keyword) {
-                        $doctorQuery->where('name', 'LIKE', '%'.$keyword.'%');
-                    })
-                    ->orWhere('id', 'LIKE', '%'.$keyword.'%');
+                        ->orWhereHas('appointment.patient.user', function ($patientQuery) use ($keyword) {
+                            $patientQuery->where('name', 'LIKE', '%' . $keyword . '%')
+                                ->orWhere('email', 'LIKE', '%' . $keyword . '%');
+                        })
+                        ->orWhereHas('appointment.doctor.user', function ($doctorQuery) use ($keyword) {
+                            $doctorQuery->where('name', 'LIKE', '%' . $keyword . '%');
+                        })
+                        ->orWhere('id', 'LIKE', '%' . $keyword . '%');
+                });
             })
             ->when($status, function ($q) use ($status) {
                 $q->where('status', $status);
@@ -1372,7 +1663,7 @@ class AdminController extends Controller
             });
 
         $labReports = $query->orderBy('created_at', 'desc')
-            ->paginate($this->paginate)
+            ->paginate((int) $request->input('per_page', paginateLimit()))
             ->withQueryString();
 
         // Transform the data for frontend
@@ -1389,14 +1680,14 @@ class AdminController extends Controller
             // Get doctor name
             $doctorName = 'N/A';
             $doctorId = null;
-            if ($order->doctor) {
-                $doctorId = $order->doctor->id;
-                if ($order->doctor->user) {
-                    $doctorName = $order->doctor->user->name;
+            if ($order->appointment?->doctor) {
+                $doctorId = $order->appointment->doctor->id;
+                if ($order->appointment->doctor->user) {
+                    $doctorName = $order->appointment->doctor->user->name;
                 } else {
-                    $firstName = $order->doctor->first_name ?? '';
-                    $lastName = $order->doctor->last_name ?? '';
-                    $doctorName = trim($firstName.' '.$lastName) ?: 'Dr. Unknown';
+                    $firstName = $order->appointment->doctor->first_name ?? '';
+                    $lastName = $order->appointment->doctor->last_name ?? '';
+                    $doctorName = trim($firstName . ' ' . $lastName) ?: 'Dr. Unknown';
                 }
             }
 
@@ -1405,7 +1696,7 @@ class AdminController extends Controller
 
             return [
                 'id' => $order->id,
-                'order_id' => '#LAB-'.str_pad($order->id, 3, '0', STR_PAD_LEFT),
+                'order_id' => '#LAB-' . str_pad($order->id, 3, '0', STR_PAD_LEFT),
                 'lab' => $labName,
                 'lab_id' => $order->lab_id,
                 'doctor' => $doctorName,
@@ -1429,8 +1720,8 @@ class AdminController extends Controller
 
         return Inertia::render('Admin/Labs/LabReportsList', [
             'labReports' => $labReports,
-            'keyword' => $keyword,
             'filters' => [
+                'keyword' => $keyword,
                 'status' => $status,
                 'payment_status' => $paymentStatus,
                 'date_from' => $dateFrom,
@@ -1439,9 +1730,79 @@ class AdminController extends Controller
         ]);
     }
 
-    public function CCDAReports()
+    public function CCDAReports(Request $request)
     {
-        return Inertia::render('Admin/CCDAReportsList');
+        $ccdaReports = $this->documentReportsByType($request, ['ccdas', 'ccda']);
+
+        return Inertia::render('Admin/CCDAReportsList', [
+            'ccdaReports' => $ccdaReports,
+            'filters' => [
+                'keyword' => trim((string) $request->get('keyword', '')),
+            ],
+        ]);
+    }
+
+    public function CCRReports(Request $request)
+    {
+        $ccrReports = $this->documentReportsByType($request, ['ccrs', 'ccr']);
+
+        return Inertia::render('Admin/CCRReportsList', [
+            'ccrReports' => $ccrReports,
+            'filters' => [
+                'keyword' => trim((string) $request->get('keyword', '')),
+            ],
+        ]);
+    }
+
+    private function documentReportsByType(Request $request, array $types)
+    {
+        $hospitalId = auth()->user()->hospital->id ?? null;
+        $keyword = trim((string) $request->get('keyword', ''));
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 10;
+        $normalizedTypes = array_map('strtolower', $types);
+
+        $query = Document::with(['patient.user', 'doctor.user'])
+            ->where('hospital_id', $hospitalId)
+            ->whereIn(DB::raw('LOWER(type)'), $normalizedTypes)
+            ->when($keyword !== '', function ($documentQuery) use ($keyword) {
+                $documentQuery->where(function ($searchQuery) use ($keyword) {
+                    $searchQuery->where('description', 'like', "%{$keyword}%")
+                        ->orWhere('from', 'like', "%{$keyword}%")
+                        ->orWhere('date', 'like', "%{$keyword}%")
+                        ->orWhereHas('patient.user', function ($patientQuery) use ($keyword) {
+                            $patientQuery->where('name', 'like', "%{$keyword}%");
+                        })
+                        ->orWhereHas('doctor.user', function ($doctorQuery) use ($keyword) {
+                            $doctorQuery->where('name', 'like', "%{$keyword}%");
+                        });
+                });
+            })
+            ->orderByDesc('created_at');
+
+        $reports = $query->paginate($perPage)->withQueryString();
+
+        $reports->getCollection()->transform(function ($document) {
+            $patientName = $document->patient?->user?->name ?? 'N/A';
+            $doctorName = $document->doctor?->user?->name
+                ?? $document->doctor?->name
+                ?? 'N/A';
+
+            return [
+                'id' => $document->id,
+                'patient_name' => $patientName,
+                'doctor_name' => $doctorName,
+                'from' => $document->from ?: '-',
+                'description' => $document->description ?: '-',
+                'type' => $document->type ?: 'Document',
+                'date' => $document->date ?: '-',
+                'created_at' => $document->created_at?->format('M d, Y') ?? '-',
+                'url' => $document->url,
+                'file_name' => basename((string) $document->url) ?: 'Document',
+            ];
+        });
+
+        return $reports;
     }
 
     public function chartReports()
@@ -1451,13 +1812,14 @@ class AdminController extends Controller
 
     public function messages(Request $request)
     {
-        $messages = Message::where('hospital_id', auth()->user()->hospital->id)->with(['patient', 'doctor.user'])
-            ->when($request->patient_id, fn ($q, $pid) => $q->where('patient_id', $pid))
-            ->when($request->search, fn ($q, $keyword) => $q->where(
-                fn ($q2) => $q2
+        $messages = Message::where('hospital_id', auth()->user()->hospital->id)
+            ->with(['patient', 'doctor.user'])
+            ->when($request->patient_id, fn($q, $pid) => $q->where('patient_id', $pid))
+            ->when($request->search, fn($q, $keyword) => $q->where(
+                fn($q2) => $q2
                     ->where('subject', 'like', "%{$keyword}%")
                     ->orWhere('message', 'like', "%{$keyword}%")
-                    ->orWhereHas('patient.user', fn ($q3) => $q3->where('name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('patient.user', fn($q3) => $q3->where('name', 'like', "%{$keyword}%"))
             ))
             ->orderByDesc('date')
             ->orderByDesc('created_at')
@@ -1502,7 +1864,7 @@ class AdminController extends Controller
                     'lab_id' => $labOrder->lab_id,
                     'doctor' => $labOrder->doctor && $labOrder->doctor->user
                         ? $labOrder->doctor->user->name
-                        : ($labOrder->doctor ? 'Dr. '.$labOrder->doctor->first_name.' '.$labOrder->doctor->last_name : 'N/A'),
+                        : ($labOrder->doctor ? 'Dr. ' . $labOrder->doctor->first_name . ' ' . $labOrder->doctor->last_name : 'N/A'),
                     'patient' => $labOrder->appointment && $labOrder->appointment->patient
                         ? ($labOrder->appointment->patient->name ?? 'Patient')
                         : 'N/A',
@@ -1510,7 +1872,7 @@ class AdminController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error assigning lab order: '.$e->getMessage(), [
+            \Log::error('Error assigning lab order: ' . $e->getMessage(), [
                 'order_id' => $id,
                 'lab_id' => $request->lab_id ?? null,
                 'exception' => $e,
@@ -1518,7 +1880,7 @@ class AdminController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to assign lab order: '.$e->getMessage(),
+                'message' => 'Failed to assign lab order: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -1562,7 +1924,7 @@ class AdminController extends Controller
                 } else {
                     $firstName = $pharmacyOrder->doctor->first_name ?? '';
                     $lastName = $pharmacyOrder->doctor->last_name ?? '';
-                    $doctorName = trim($firstName.' '.$lastName) ?: 'Dr. Unknown';
+                    $doctorName = trim($firstName . ' ' . $lastName) ?: 'Dr. Unknown';
                 }
             }
 
@@ -1571,7 +1933,7 @@ class AdminController extends Controller
                 'message' => 'Pharmacy order assigned successfully.',
                 'order' => [
                     'id' => $pharmacyOrder->id,
-                    'order_id' => 'ORD-'.substr($pharmacyOrder->id, 0, 8),
+                    'order_id' => 'ORD-' . substr($pharmacyOrder->id, 0, 8),
                     'pharmacy' => $pharmacyOrder->pharmacy->name ?? 'N/A',
                     'pharmacy_id' => $pharmacyOrder->pharmacy_id,
                     'doctor' => $doctorName,
@@ -1580,7 +1942,7 @@ class AdminController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error assigning pharmacy order: '.$e->getMessage(), [
+            \Log::error('Error assigning pharmacy order: ' . $e->getMessage(), [
                 'order_id' => $id,
                 'pharmacy_id' => $request->pharmacy_id ?? null,
                 'exception' => $e,
@@ -1588,7 +1950,7 @@ class AdminController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to assign pharmacy order: '.$e->getMessage(),
+                'message' => 'Failed to assign pharmacy order: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -1625,7 +1987,7 @@ class AdminController extends Controller
         foreach ($data as $key => $value) {
             // Quote the value if it contains special characters
             if (str_contains($value, ' ') || str_contains($value, '=') || str_contains($value, '"')) {
-                $value = '"'.addslashes($value).'"';
+                $value = '"' . addslashes($value) . '"';
             }
 
             // Check if the key already exists in .env
@@ -1701,7 +2063,7 @@ class AdminController extends Controller
                 'todayCount' => $formattedAppointments->where('appointment_date', $today)->count(),
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error fetching quick appointments: '.$e->getMessage(), [
+            \Log::error('Error fetching quick appointments: ' . $e->getMessage(), [
                 'exception' => $e,
             ]);
 

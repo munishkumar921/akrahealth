@@ -15,12 +15,12 @@ class DocumentController extends Controller
      */
     public function index(Request $request)
     {
-
         $patientId = auth()->user()->patient->id ?? null;
+        $keyword = trim((string) $request->input('keyword', $request->input('search', '')));
 
         $documentsQuery = Document::with('doctor')->where('patient_id', $patientId)
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $q->where('type', 'like', '%'.$request->search.'%');
+            ->when($keyword !== '', function ($q) use ($keyword) {
+                $q->where('type', 'like', '%'.$keyword.'%');
             });
 
         $documents = $documentsQuery->get();
@@ -54,47 +54,9 @@ class DocumentController extends Controller
 
         return Inertia::render('Patients/Documents', [
             'documents' => $documentsByType,
-            'keyword' => $request->search,
+            'filters' => [
+                'keyword' => $keyword,
+            ],
         ]);
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
     }
 }

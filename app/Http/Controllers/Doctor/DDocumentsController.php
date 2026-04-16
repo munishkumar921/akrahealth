@@ -17,9 +17,7 @@ class DDocumentsController extends Controller
      */
     public function index()
     {
-        return Inertia::render('Doctors/Patient/Documents/index', [
-
-        ]);
+        return Inertia::render('Doctors/Patient/Documents/index', []);
     }
 
     /**
@@ -41,9 +39,18 @@ class DDocumentsController extends Controller
                 ], 400);
             }
 
+            if ($type == 'ccdas') {
+                // $type = 'ccda'; this method call from this route: documents.byCategory
+            } else if ($type == 'ccrs') {
+                // $type = 'ccr'; this method call from this route: documents.byCategory
+            } else if ($type == 'other forms') {
+                $type = 'Other Forms';
+            } else if ($type == 'past_records') {
+                $type = 'Past Records';
+            }
+
             $documents = $documentService->getDocumentsByPatient($patientId, $type);
 
-            // Transform documents for frontend
             $formattedDocuments = $documents->map(function ($doc) {
                 return [
                     'id' => $doc->id,
@@ -62,21 +69,12 @@ class DDocumentsController extends Controller
                 'data' => $formattedDocuments,
                 'total' => $formattedDocuments->count(),
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch documents: '.$e->getMessage(),
+                'message' => 'Failed to fetch documents: ' . $e->getMessage(),
             ], 500);
         }
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
     }
 
     /**
@@ -112,7 +110,7 @@ class DDocumentsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch templates: '.$e->getMessage(),
+                'message' => 'Failed to fetch templates: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -149,7 +147,7 @@ class DDocumentsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch patient info: '.$e->getMessage(),
+                'message' => 'Failed to fetch patient info: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -171,7 +169,7 @@ class DDocumentsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch doctor info: '.$e->getMessage(),
+                'message' => 'Failed to fetch doctor info: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -212,7 +210,7 @@ class DDocumentsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch encounter info: '.$e->getMessage(),
+                'message' => 'Failed to fetch encounter info: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -244,7 +242,7 @@ class DDocumentsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to generate preview: '.$e->getMessage(),
+                'message' => 'Failed to generate preview: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -270,15 +268,15 @@ class DDocumentsController extends Controller
 
             $pdfContent = $documentService->generatePdfContent($validated, $templateType);
 
-            $fileName = 'letter_'.time().'_'.preg_replace('/\s+/', '_', $validated['subject']).'.pdf';
+            $fileName = 'letter_' . time() . '_' . preg_replace('/\s+/', '_', $validated['subject']) . '.pdf';
 
             return response($pdfContent, 200)
                 ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', 'attachment; filename="'.$fileName.'"');
+                ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"');
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to generate PDF: '.$e->getMessage(),
+                'message' => 'Failed to generate PDF: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -357,7 +355,7 @@ class DDocumentsController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete document: '.$e->getMessage(),
+                'message' => 'Failed to delete document: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -369,7 +367,7 @@ class DDocumentsController extends Controller
      */
     public function serveLetter(Request $request, string $filename)
     {
-        $filePath = storage_path('app/public/letters/'.$filename);
+        $filePath = storage_path('app/public/letters/' . $filename);
 
         if (! file_exists($filePath)) {
             abort(404, 'Letter file not found');
@@ -377,7 +375,7 @@ class DDocumentsController extends Controller
 
         return response()->file($filePath, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
         ]);
     }
 }

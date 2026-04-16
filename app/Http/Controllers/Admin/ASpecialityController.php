@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SpecialityRequest;
 use App\Models\Speciality;
 use App\Services\SpecialityService;
-use Illuminate\Http\Request;
 
 class ASpecialityController extends Controller
 {
@@ -23,10 +23,14 @@ class ASpecialityController extends Controller
     public function index()
     {
         $specialities = $this->SpecialityService->list(request());
-        $request = request();
-        $keyword = $request->get('search') ?? '';
 
-        return inertia('Admin/Manage/SpecialityList', compact('specialities', 'request', 'keyword'));
+        return inertia('Admin/Manage/SpecialityList', [
+            'specialities' => $specialities,
+            'filters' => [
+                'keyword' => request()->string('keyword')->toString() ?: request()->string('search')->toString(),
+                'status' => request()->input('status', ''),
+            ],
+        ]);
     }
 
     /**
@@ -42,7 +46,7 @@ class ASpecialityController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(SpecialityRequest $request)
     {
         $this->SpecialityService->upsert($request->all());
 

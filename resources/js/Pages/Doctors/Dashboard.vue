@@ -2,14 +2,14 @@
 import AuthLayout from '@/Layouts/AuthLayout.vue';
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import axios from 'axios';
-import { useForm,router } from '@inertiajs/vue3';
+import { useForm, router } from '@inertiajs/vue3';
 import DatePicker from '@/Components/Common/Input/BaseDatePicker.vue';
 
 import Table from "@/Components/Table/Table.vue";
 import { Link } from '@inertiajs/vue3';
 import Modal from '@/Components/Common/Modal.vue'; // Assuming Modal component is available
 import AppointmentDetailModal from '../Modals/AppointmentDetailModal.vue';
-    
+
 import Swal from 'sweetalert2'
 
 const props = defineProps({
@@ -21,7 +21,7 @@ const keyword = ref(''); // Added missing keyword ref
 
 function openAppointmentModal(appointment) {
     selectedAppointment.value = appointment;
-    showPendingAppointmentModal.value = false; 
+    showPendingAppointmentModal.value = false;
     showAppointmentModal.value = true;
 }
 
@@ -125,7 +125,7 @@ const selectedAppointmentForApproval = ref(null);
 const focusedDate = ref(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
 function selectDate(day) {
-     if (day.empty) {
+    if (day.empty) {
         selectedDate.value = null;
         return;
     }
@@ -137,16 +137,16 @@ function selectDate(day) {
 
     const key = `${y}-${m}-${d}`; // Key matches appointmentsByDate
     const events = appointmentsByDate.value?.get(key) || [];
-     if (events.length === 1) {
+    if (events.length === 1) {
 
-        if (events[0].status === 'pending') { 
+        if (events[0].status === 'pending') {
             openPendingAppointmentModal(events[0]);
-        } else { 
+        } else {
 
             openAppointmentModal(events[0]);
         }
     } else if (events.length > 1) {
-       openAppointmentModal(events);
+        openAppointmentModal(events);
     } else {
 
         openCreateAppointmentModal(new Date(y, m, d));
@@ -255,7 +255,7 @@ const columns = [
     { label: "Date", key: "appointment_date" },
     { label: "Reason", key: "reason" },
     { label: "Type", key: "appointment_type" },
-    { label: "Status", key: "status", slot:"status"},
+    { label: "Status", key: "status", slot: "status" },
     { label: "Created By", key: "created_by_name" },
 ];
 
@@ -281,7 +281,7 @@ const badgeClasses = {
     }
 };
 
-const getBadgeClass = (category, value ) => {
+const getBadgeClass = (category, value) => {
     return badgeClasses[category]?.[value?.toLowerCase()] || 'bg-secondary';
 };
 
@@ -291,22 +291,22 @@ const rescheduleAppointment = () => {
 };
 
 const cancelAppointment = async () => {
-    showAppointmentModal.value=false;
-  const result = await Swal.fire(
-    confirmSettings("Are you sure you want to cancel this appointment?")
-  );
-
-  if (result.isConfirmed) {
-    await router.post(
-      route("appointments.updateStatus", { id: selectedAppointment.value.id }), 
-      { status: "cancelled" }, 
-      {
-        preserveScroll: true
-      }
+    showAppointmentModal.value = false;
+    const result = await Swal.fire(
+        confirmSettings("Are you sure you want to cancel this appointment?")
     );
 
-    window.location.reload();
-  }
+    if (result.isConfirmed) {
+        await router.post(
+            route("appointments.updateStatus", { id: selectedAppointment.value.id }),
+            { status: "cancelled" },
+            {
+                preserveScroll: true
+            }
+        );
+
+        window.location.reload();
+    }
 };
 
 
@@ -388,19 +388,19 @@ function selectPatient(patient) {
 function submitNewAppointment() {
     const dateTime = `${newAppointmentForm.appointment_date} ${newAppointmentForm.appointment_time}`;
     newAppointmentForm
-                .transform(data => ({
-                    ...data,
-                    appointment_date: dateTime,
-                }))
-                .post(route('doctor.appointments.store'), { // Ensure this route exists
-                    onSuccess: () => {
-                        closeCreateAppointmentModal();
-                        // Optionally, you can show a success toast message here
-                    },
-                    onError: () => {
-                        // Handle errors, e.g., show a toast message
-                    }
-                });
+        .transform(data => ({
+            ...data,
+            appointment_date: dateTime,
+        }))
+        .post(route('doctor.appointments.store'), { // Ensure this route exists
+            onSuccess: () => {
+                closeCreateAppointmentModal();
+                // Optionally, you can show a success toast message here
+            },
+            onError: () => {
+                // Handle errors, e.g., show a toast message
+            }
+        });
 }
 
 function closeAppointmentModal() {
@@ -408,144 +408,158 @@ function closeAppointmentModal() {
 }
 </script>
 <template>
-<AuthLayout title="Dashboard" description="Doctor dashboard overview and statistics" heading="">
+    <AuthLayout title="Dashboard" description="Doctor dashboard overview and statistics" heading="">
         <div class="row">
 
             <div class="col-md-6 col-lg-3">
-                <Link :href="route('doctor.messages.index')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     <div class="iq-card-body">
+                <Link :href="route('doctor.messages.index')"
+                    class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <div class="iq-card-body">
                         <div class="text-center"><span>Messages</span></div>
                         <div class="d-flex justify-content-between align-items-center m13">
                             <div class="value-box">
                                 <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData.messages }}</span></h2>
-                                
+
                             </div>
                             <div class="iq-iconbox alert-info">
                                 <i class="fa fa-envelope"></i>
                             </div>
                         </div>
-                        
-                 </div>
+
+                    </div>
                 </Link>
             </div>
             <div class="col-md-6 col-lg-3">
-                <Link :href="route('doctor.encounters.index')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     <div class="iq-card-body">
+                <Link :href="route('doctor.encounters.index')"
+                    class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <div class="iq-card-body">
                         <div class="text-center"><span>Encounters to Complete</span></div>
                         <div class="d-flex justify-content-between align-items-center m-1">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData.encounters.total }}</span></h2>
-                                
+                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData.encounters.total }}</span>
+                                </h2>
+
                             </div>
                             <div class="iq-iconbox iq-bg-info">
                                 <i class="fa fa-stethoscope"></i>
                             </div>
                         </div>
-                        
-                 </div>
+
+                    </div>
                 </Link>
             </div>
             <div class="col-md-6 col-lg-3">
                 <Link :href="route('doctor.patients')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     <div class="iq-card-body">
+                    <div class="iq-card-body">
                         <div class="text-center"><span>Patients</span></div>
                         <div class="d-flex justify-content-between align-items-center m-1">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData.patients?.total }}</span></h2>
-                                <div class="small text-muted">Active: {{ dashboardData.patients?.active }} | Inactive: {{ dashboardData.patients?.inactive }}</div>
+                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData.patients?.total }}</span>
+                                </h2>
+                                <div class="small text-muted">Active: {{ dashboardData.patients?.active }} | Inactive:
+                                    {{ dashboardData.patients?.inactive }}</div>
                             </div>
                             <div class="iq-iconbox iq-bg-success">
                                 <i class="fa fa-user"></i>
                             </div>
                         </div>
-                        
-                 </div>
+
+                    </div>
                 </Link>
             </div>
-            
+
             <div class="col-md-6 col-lg-3">
-                <Link :href="route('doctor.schedule.index')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     <div class="iq-card-body">
+                <Link :href="route('doctor.schedule.index')"
+                    class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <div class="iq-card-body">
                         <div class="text-center"><span>Calendar</span></div>
                         <div class="d-flex justify-content-between align-items-center m-1">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData?.calendars?.total??0 }}</span></h2>
-                                 <div class="small text-muted">Pending: {{ dashboardData.calendars?.pending??0 }} | Completed: {{ dashboardData.calendars?.completed??0 }}</div>
+                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData?.calendars?.total ?? 0
+                                }}</span></h2>
+                                <div class="small text-muted">Pending: {{ dashboardData.calendars?.pending ?? 0 }} |
+                                    Completed: {{ dashboardData.calendars?.completed ?? 0 }}</div>
                             </div>
                             <div class="iq-iconbox iq-spring-green ">
                                 <i class="fa fa-calendar"></i>
                             </div>
                         </div>
-                        
-                 </div>
+
+                    </div>
                 </Link>
             </div>
             <div class="col-md-6 col-lg-3">
                 <Link :href="route('doctor.alerts.index')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     <div class="iq-card-body">
+                    <div class="iq-card-body">
                         <div class="text-center"><span>Reminders</span></div>
                         <div class="d-flex justify-content-between align-items-center m-1">
                             <div class="value-box">
                                 <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData?.reminders }}</span></h2>
-                                
+
                             </div>
                             <div class="iq-iconbox iq-pink">
                                 <i class="fa fa-bell"></i>
                             </div>
-                         
+
+                        </div>
                     </div>
-                </div>
                 </Link>
             </div>
             <div class="col-md-6 col-lg-3">
-                <Link :href="route('doctor.documents.index')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     <div class="iq-card-body">
+                <Link :href="route('doctor.documents.index')"
+                    class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <div class="iq-card-body">
                         <div class="text-center"><span>Documents</span></div>
                         <div class="d-flex justify-content-between align-items-center m-1">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData?.documents?.total}}</span></h2>
-                                
+                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData?.documents?.total
+                                        }}</span>
+                                </h2>
+
                             </div>
                             <div class="iq-iconbox iq-warning">
                                 <i class="fa fa-file-o"></i>
                             </div>
                         </div>
-                        
-                 </div>
+
+                    </div>
                 </Link>
             </div>
             <div class="col-md-6 col-lg-3">
-                <Link :href="route('doctor.finance.bills_to_submit')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     
+                <Link :href="route('doctor.finance.bills_to_submit')"
+                    class="iq-card iq-card-block iq-card-stretch iq-card-height">
+
                     <div class="iq-card-body">
                         <div class="text-center"><span>Bills to Process</span></div>
                         <div class="d-flex justify-content-between align-items-center m-1">
                             <div class="value-box">
-                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData?.bills_to_process }}</span>
+                                <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData?.bills_to_process
+                                }}</span>
                                 </h2>
-                               
+
                             </div>
-                           <div class="iq-iconbox iq-purple"><i class="fa fa-money"></i></div>
+                            <div class="iq-iconbox iq-purple"><i class="fa fa-money"></i></div>
                         </div>
-                        
+
                     </div>
-                 </Link>
+                </Link>
             </div>
             <div class="col-md-6 col-lg-3">
-                <Link :href="route('doctor.results.index')" class="iq-card iq-card-block iq-card-stretch iq-card-height">
-                     <div class="iq-card-body">
+                <Link :href="route('doctor.results.index')"
+                    class="iq-card iq-card-block iq-card-stretch iq-card-height">
+                    <div class="iq-card-body">
                         <div class="text-center"><span>Test Results to Review</span></div>
                         <div class="d-flex justify-content-between align-items-center m-1">
                             <div class="value-box">
                                 <h2 class="mb-0"><span class="counter fs-34">{{ dashboardData.test_results_to_review
                                         }}</span></h2>
-                               
+
                             </div>
-                             <div class="iq-iconbox iq-bg-primary"><i class="fa fa-flask"></i></div>
+                            <div class="iq-iconbox iq-bg-primary"><i class="fa fa-flask"></i></div>
                         </div>
-                        
+
                     </div>
-                 </Link>
+                </Link>
             </div>
             <div class="row">
                 <!-- Your dashboard cards remain the same -->
@@ -562,19 +576,17 @@ function closeAppointmentModal() {
                                     <button class="btn btn-sm btn-light" @click="nextMonth">›</button>
                                 </div>
 
-                                <div class="cal-grid mt-2" role="grid" aria-labelledby="cal-title" ref="calendarGrid" @keydown="handleCalendarKeyDown">
+                                <div class="cal-grid mt-2" role="grid" aria-labelledby="cal-title" ref="calendarGrid"
+                                    @keydown="handleCalendarKeyDown">
                                     <div role="row" class="cal-weekday-row">
-                                        <div class="cal-weekday" role="columnheader" v-for="wd in weekDays" :key="wd">{{ wd }}</div>
+                                        <div class="cal-weekday" role="columnheader" v-for="wd in weekDays" :key="wd">{{
+                                            wd }}</div>
                                     </div>
-                                    <div class="cal-cell" v-for="(c, idx) in days" :key="idx"
-                                        role="gridcell"
-                                        :data-day="c.day"
-                                        :aria-selected="isSelected(c)"
-                                        :aria-disabled="c.empty"
-                                        :aria-label="getAriaLabelForDay(c) "
+                                    <div class="cal-cell" v-for="(c, idx) in days" :key="idx" role="gridcell"
+                                        :data-day="c.day" :aria-selected="isSelected(c)" :aria-disabled="c.empty"
+                                        :aria-label="getAriaLabelForDay(c)"
                                         :tabindex="!c.empty && focusedDate.getDate() === c.day && focusedDate.getMonth() === month && focusedDate.getFullYear() === year ? 0 : -1"
-                                        @click="selectDate(c)" 
-                                        :class="{
+                                        @click="selectDate(c)" :class="{
                                             'empty': c.empty,
                                             'today': c.isToday,
                                             'has-event': c.hasEvent,
@@ -599,110 +611,103 @@ function closeAppointmentModal() {
                         </div>
                         <div class="iq-list-card-body">
 
-                        <!-- Desktop Table -->
-                        <div class="d-none d-md-block p-3">
-                            <ul class="list-inline m-0 p-0">
-                                <li v-for="appt in appointments.data?.slice(0, 5)" :key="appt.id" class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                                    <div class="d-flex align-items-center">
-                                        <div class="icon iq-icon-box rounded-circle iq-bg-primary mr-3">
-                                            <i class="ri-user-fill"></i>
+                            <!-- Desktop Table -->
+                            <div class="d-none d-md-block p-3">
+                                <ul class="list-inline m-0 p-0">
+                                    <li v-for="appt in appointments.data?.slice(0, 5)" :key="appt.id"
+                                        class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                                        <div class="d-flex align-items-center">
+                                            <div class="icon iq-icon-box rounded-circle iq-bg-primary mr-3">
+                                                <i class="ri-user-fill"></i>
+                                            </div>
+                                            <div class="media-body">
+                                                <h6 class="mb-0">{{ appt.patient?.name || appt.patient?.user?.name ||
+                                                    '-' }}</h6>
+                                                <p class="mb-0 text-muted font-size-12">
+                                                    <i class="ri-calendar-line mr-1"></i>{{ appt.appointment_date }}
+                                                </p>
+                                                <p class="mb-0 text-muted font-size-12" v-if="appt.reason">
+                                                    <i class="ri-information-line mr-1"></i>{{ appt.reason }}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div class="media-body">
-                                            <h6 class="mb-0">{{ appt.patient?.name || appt.patient?.user?.name || '-' }}</h6>
-                                            <p class="mb-0 text-muted font-size-12">
-                                                <i class="ri-calendar-line mr-1"></i>{{ appt.appointment_date }}
-                                            </p>
-                                            <p class="mb-0 text-muted font-size-12" v-if="appt.reason">
-                                                <i class="ri-information-line mr-1"></i>{{ appt.reason }}
-                                            </p>
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge" :class="getBadgeClass('status', appt.status)">
+                                                {{ appt.status }}
+                                            </span>
                                         </div>
+                                    </li>
+                                    <li v-if="!appointments.data?.length" class="text-center text-muted">
+                                        No appointments found
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Mobile Cards -->
+                            <div class="d-block d-md-none appointment-mobile-list">
+
+                                <div v-for="appt in appointments.data?.slice(0, 5)" :key="appt.id"
+                                    class="appointment-card" @click="openAppointmentModal(appt)">
+
+                                    <div class="mobile-row">
+                                        <span class="label">Patient Name</span>
+                                        <span class="value">{{ appt.patient?.name || appt.patient?.user?.name || '-'
+                                        }}</span>
                                     </div>
-                                    <div class="d-flex align-items-center">
-                                <span
-                                    class="badge"
-                                    :class="getBadgeClass('status', appt.status)"
-                                >
-                                    {{ appt.status }}
-                                </span>
+
+                                    <div class="mobile-row">
+                                        <span class="label">Date</span>
+                                        <span class="value">{{ appt.appointment_date }}</span>
                                     </div>
-                                </li>
-                                <li v-if="!appointments.data?.length" class="text-center text-muted">
+
+                                    <div class="mobile-row">
+                                        <span class="label">Reason</span>
+                                        <span class="value">{{ appt.reason || '-' }}</span>
+                                    </div>
+
+                                    <div class="mobile-row">
+                                        <span class="label">Type</span>
+                                        <span class="value">{{ appt.appointment_type || '-' }}</span>
+                                    </div>
+
+                                    <div class="mobile-row">
+                                        <span class="label">Mode</span>
+                                        <span class="value">{{ appt.appointment_mode || '-' }}</span>
+                                    </div>
+
+                                    <div class="mobile-row">
+                                        <span class="label">Status</span>
+                                        <span class="badge" :class="getBadgeClass('status', appt.status)">
+                                            {{ appt.status }}
+                                        </span>
+                                    </div>
+
+                                    <div class="mobile-row">
+                                        <span class="label">Created By</span>
+                                        <span class="value">{{ appt.created_by_name || '-' }}</span>
+                                    </div>
+
+                                </div>
+
+                                <div v-if="!appointments.data?.length" class="text-center text-muted py-3">
                                     No appointments found
-                                </li>
-                            </ul>
-                        </div>
+                                </div>
 
-                        <!-- Mobile Cards -->
-                      <div class="d-block d-md-none appointment-mobile-list">
-
-                      <div
-                            v-for="appt in appointments.data?.slice(0, 5)"
-                            :key="appt.id"
-                            class="appointment-card"
-                            @click="openAppointmentModal(appt)"
-                        >
-
-                            <div class="mobile-row">
-                                <span class="label">Patient Name</span>
-                                <span class="value">{{ appt.patient?.name ||appt.patient?.user?.name || '-' }}</span>
                             </div>
 
-                            <div class="mobile-row">
-                                <span class="label">Date</span>
-                                <span class="value">{{ appt.appointment_date }}</span>
-                            </div>
-
-                            <div class="mobile-row">
-                                <span class="label">Reason</span>
-                                <span class="value">{{ appt.reason || '-' }}</span>
-                            </div>
-
-                            <div class="mobile-row">
-                                <span class="label">Type</span>
-                                <span class="value">{{ appt.appointment_type || '-' }}</span>
-                            </div>
-
-                            <div class="mobile-row">
-                                <span class="label">Mode</span>
-                                <span class="value">{{ appt.appointment_mode || '-' }}</span>
-                            </div>
-
-                            <div class="mobile-row">
-                                <span class="label">Status</span>
-                                <span
-                                    class="badge"
-                                    :class="getBadgeClass('status', appt.status)"
-                                >
-                                    {{ appt.status }}
-                                </span>
-                            </div>
-
-                            <div class="mobile-row">
-                                <span class="label">Created By</span>
-                                <span class="value">{{ appt.created_by_name || '-' }}</span>
-                            </div>
 
                         </div>
-
-                        <div v-if="!appointments.data?.length" class="text-center text-muted py-3">
-                            No appointments found
-                        </div>
-
-                    </div>
-
-
-                    </div>
 
                     </div>
 
                 </div>
- 
-</div>
+
+            </div>
             <div class="col-12 order-2 order-lg-3">
                 <div class="iq-card iq-card-block iq-card-stretch iq-card-height">
                     <div class="iq-card-header d-flex justify-content-between">
                         <div class="iq-header-title">
-                            <h4 class="card-title fs-22">Open Invoices</h4>
+                            <h4 class="card-title fs-22">Pending Payments</h4>
                         </div>
                         <div class="iq-card-header-toolbar d-flex align-items-center">
                             <div class="dropdown">
@@ -712,7 +717,7 @@ function closeAppointmentModal() {
                                 </span>
                                 <div class="dropdown-menu dropdown-menu-right" aria-labelledby="dropdownMenuButton5">
                                     <Link class="dropdown-item" :href="route('doctor.billing.index')"><i
-                                        class="ri-eye-fill mr-2"></i>View</Link>
+                                            class="ri-eye-fill mr-2"></i>View</Link>
                                 </div>
                             </div>
                         </div>
@@ -747,7 +752,7 @@ function closeAppointmentModal() {
                                         </td>
                                     </tr>
                                     <tr v-if="!invoices.length">
-                                        <td colspan="7" class="text-center text-muted">No open invoices</td>
+                                        <td colspan="7" class="text-center text-muted">No pending payments</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -757,30 +762,18 @@ function closeAppointmentModal() {
             </div>
 
         </div>
-         <!-- Appointment Details Modal -->
+        <!-- Appointment Details Modal -->
         <Modal :isOpen="showAppointmentModal" @close="closeAppointmentModal" size="xl">
-            <AppointmentDetailModal title="Appointment Details"
-                :selected-appointment="selectedAppointment"
-                policy="doctor"
-                @close="closeAppointmentModal"
-                @approve="approveAppointment"
-                @reject="rejectAppointment"
-                @reschedule="rescheduleAppointment"
-                @edit="editAppointment"
-                @cancel="cancelAppointment" />
+            <AppointmentDetailModal title="Appointment Details" :selected-appointment="selectedAppointment"
+                policy="doctor" @close="closeAppointmentModal" @approve="approveAppointment" @reject="rejectAppointment"
+                @reschedule="rescheduleAppointment" @edit="editAppointment" @cancel="cancelAppointment" />
         </Modal>
 
         <!-- Pending Appointment Modal -->
         <Modal :isOpen="showPendingAppointmentModal" @close="closePendingAppointmentModal" size="xl">
-            <AppointmentDetailModal
-                :selected-appointment="selectedPendingAppointment"
-                policy="doctor"
-                @close="closePendingAppointmentModal"
-                @approve="approveAppointment"
-                @reject="rejectAppointment"
-                @reschedule="rescheduleAppointment"
-                @edit="editAppointment"
-                @cancel="cancelAppointment" />
+            <AppointmentDetailModal :selected-appointment="selectedPendingAppointment" policy="doctor"
+                @close="closePendingAppointmentModal" @approve="approveAppointment" @reject="rejectAppointment"
+                @reschedule="rescheduleAppointment" @edit="editAppointment" @cancel="cancelAppointment" />
         </Modal>
         <!-- Create Appointment Modal -->
         <Modal :show="showCreateAppointmentModal" @close="closeCreateAppointmentModal" maxWidth="xl">
@@ -793,26 +786,33 @@ function closeAppointmentModal() {
                     <!-- Patient Search -->
                     <div class="relative">
                         <label for="patient-search" class="form-label">Patient</label>
-                        <input id="patient-search" type="text" class="form-control" v-model="patientSearchQuery" @input="searchPatients" placeholder="Search for a patient..." autocomplete="off">
+                        <input id="patient-search" type="text" class="form-control" v-model="patientSearchQuery"
+                            @input="searchPatients" placeholder="Search for a patient..." autocomplete="off">
                         <div v-if="isSearching" class="p-2">Searching...</div>
-                        <ul v-if="patientSearchResults.length" class="list-group position-absolute w-100" style="z-index: 1000;">
-                            <li v-for="patient in patientSearchResults" :key="patient.id" @click="selectPatient(patient)" class="list-group-item list-group-item-action cursor-pointer">
+                        <ul v-if="patientSearchResults.length" class="list-group position-absolute w-100"
+                            style="z-index: 1000;">
+                            <li v-for="patient in patientSearchResults" :key="patient.id"
+                                @click="selectPatient(patient)"
+                                class="list-group-item list-group-item-action cursor-pointer">
                                 {{ patient.user.name }} (ID: {{ patient.id }})
                             </li>
                         </ul>
-                        <div v-if="newAppointmentForm.errors.patient_id" class="text-danger mt-1">{{ newAppointmentForm.errors.patient_id }}</div>
+                        <div v-if="newAppointmentForm.errors.patient_id" class="text-danger mt-1">{{
+                            newAppointmentForm.errors.patient_id }}</div>
                     </div>
 
                     <!-- Date and Time -->
                     <div class="row">
                         <div class="col-md-6">
                             <label for="appt-date" class="form-label">Date</label>
-                            <DatePicker id="appt-date"   v-model="newAppointmentForm.appointment_date" required/>
-                             <div v-if="newAppointmentForm.errors.appointment_date" class="text-danger mt-1">{{ newAppointmentForm.errors.appointment_date }}</div>
+                            <DatePicker id="appt-date" v-model="newAppointmentForm.appointment_date" required />
+                            <div v-if="newAppointmentForm.errors.appointment_date" class="text-danger mt-1">{{
+                                newAppointmentForm.errors.appointment_date }}</div>
                         </div>
                         <div class="col-md-6">
                             <label for="appt-time" class="form-label">Time</label>
-                            <DatePicker id="appt-time" type="time"  v-model="newAppointmentForm.appointment_time" required/>
+                            <DatePicker id="appt-time" type="time" v-model="newAppointmentForm.appointment_time"
+                                required />
                         </div>
                     </div>
 
@@ -840,8 +840,10 @@ function closeAppointmentModal() {
                     <!-- Reason for Visit -->
                     <div>
                         <label for="reason" class="form-label">Reason for Visit</label>
-                        <textarea id="reason" class="form-control" v-model="newAppointmentForm.reason" rows="3" placeholder="Enter reason for the appointment"></textarea>
-                        <div v-if="newAppointmentForm.errors.reason" class="text-danger mt-1">{{ newAppointmentForm.errors.reason }}</div>
+                        <textarea id="reason" class="form-control" v-model="newAppointmentForm.reason" rows="3"
+                            placeholder="Enter reason for the appointment"></textarea>
+                        <div v-if="newAppointmentForm.errors.reason" class="text-danger mt-1">{{
+                            newAppointmentForm.errors.reason }}</div>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2 mt-4">
@@ -849,21 +851,18 @@ function closeAppointmentModal() {
                             Cancel
                         </button>
                         <button type="submit" class="btn btn-primary" :disabled="newAppointmentForm.processing">
-                            <span v-if="newAppointmentForm.processing" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span v-if="newAppointmentForm.processing" class="spinner-border spinner-border-sm"
+                                role="status" aria-hidden="true"></span>
                             Create Appointment
                         </button>
                     </div>
                 </form>
             </div>
         </Modal>
-     </AuthLayout>
+    </AuthLayout>
 </template>
 
 <style scoped>
-.cursor-pointer {
-    cursor: pointer;
-}
-
 .small-calendar {
     max-width: 100%;
     user-select: none;
@@ -884,8 +883,10 @@ function closeAppointmentModal() {
     gap: 4px;
     margin-top: 6px;
 }
+
 .cal-weekday-row {
-    display: contents; /* Allows children to be direct grid items */
+    display: contents;
+    /* Allows children to be direct grid items */
 }
 
 
@@ -921,7 +922,9 @@ function closeAppointmentModal() {
     color: #fff;
     font-weight: 600;
 }
-.cal-cell:focus, .cal-cell.focused {
+
+.cal-cell:focus,
+.cal-cell.focused {
     outline: 2px solid #1be1b3;
     outline-offset: 2px;
 }
@@ -973,7 +976,8 @@ function closeAppointmentModal() {
 }
 
 .cal-cell.pending-event::after {
-    background-color: #ffc107; /* Yellow for pending */
+    background-color: #ffc107;
+    /* Yellow for pending */
 }
 
 .cal-cell.today.has-event::after {
@@ -1036,6 +1040,7 @@ function closeAppointmentModal() {
     font-weight: 500;
     margin-left: 4px;
 }
+
 .appointment-mobile-list {
     display: flex;
     flex-direction: column;
@@ -1047,7 +1052,7 @@ function closeAppointmentModal() {
     background: #fff;
     border-radius: 12px;
     padding: 14px;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
     border-left: 4px solid #0d6efd;
 }
 
@@ -1079,29 +1084,30 @@ function closeAppointmentModal() {
     border-radius: 12px;
     text-transform: capitalize;
 }
+
 /* 🔥 FIX GRID BREAK ON MOBILE */
 @media (max-width: 768px) {
 
-  .appointment-responsive-layout {
-    margin: 0;
-  }
+    .appointment-responsive-layout {
+        margin: 0;
+    }
 
-  .iq-card {
-    width: 100%;
-    overflow-x: hidden;
-  }
+    .iq-card {
+        width: 100%;
+        overflow-x: hidden;
+    }
 
-  .iq-list-card-body {
-    max-width: 100%;
-    overflow-x: auto;
-  }
+    .iq-list-card-body {
+        max-width: 100%;
+        overflow-x: auto;
+    }
 
-  .appointment-mobile-list {
-    padding: 8px 4px;
-  }
+    .appointment-mobile-list {
+        padding: 8px 4px;
+    }
 
-  .appointment-card {
-    width: 100%;
-  }
+    .appointment-card {
+        width: 100%;
+    }
 }
 </style>

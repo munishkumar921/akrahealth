@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, defineEmits, ref, watch, onMounted, onUnmounted, useSlots, computed } from "vue";
+import { ref, watch, onMounted, onUnmounted, useSlots, computed } from "vue";
 
 const props = defineProps({
     modelValue: [String, Array],

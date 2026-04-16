@@ -78,6 +78,7 @@ class AppointmentController extends Controller
             'visit_type_id' => ['required', 'exists:visit_types,id'],
             'reason' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
+            'createdAt' => ['required']
         ]);
 
         $data = $request->all();

@@ -31,17 +31,17 @@ const tooltipState = ref({
 })
 
 const getFormattedDateTime = () => {
-    const now = new Date();
+  const now = new Date();
 
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
 
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
 
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 const form = useForm({
@@ -466,7 +466,7 @@ const rescheduleAppointment = (appointment) => {
 const checkTwoHours = (dateTimeString) => {
   if (!dateTimeString) return false;
 
-  // Split date and time
+  /* Split date and time */
   const parts = dateTimeString.split(' ');
   if (parts.length !== 3) return false;
 
@@ -475,7 +475,7 @@ const checkTwoHours = (dateTimeString) => {
   const [day, month, year] = datePart.split('-').map(Number);
   let [hour, minute] = timePart.split(':').map(Number);
 
-  // Convert to 24-hour format
+  /* Convert to 24-hour format */
   if (ampm === 'PM' && hour !== 12) hour += 12;
   if (ampm === 'AM' && hour === 12) hour = 0;
 
@@ -485,9 +485,6 @@ const checkTwoHours = (dateTimeString) => {
 
   const now = new Date();
   const twoHoursLater = new Date(appointmentTime.getTime() + 2 * 60 * 60 * 1000);
-
-  console.log('---->', dateTimeString);
-  console.log(appointmentTime, now, twoHoursLater);
   return now >= appointmentTime && now <= twoHoursLater;
 }
 
@@ -577,7 +574,7 @@ const isWithinJoinWindow = (dateTimeString) => {
                     <option value="">Select doctor</option>
                     <option v-for="doctor in doctors" :key="doctor.id" :value="doctor.id">{{
                       doctor?.name || doctor.user?.name
-                      }}
+                    }}
                     </option>
                   </select>
                   <InputError class="mt-2" :message="form.errors.doctor_id" />
@@ -733,7 +730,6 @@ const isWithinJoinWindow = (dateTimeString) => {
     </div>
 
     <div class="modal-footer">
-
       <template v-if="canEditOrCancel && checkTwoHours(appointmentDetail?.extendedProps?.created_at)">
         <button type="button" class="btn btn-danger" @click="cancelAppointment(appointmentDetail)">
           Cancel Appointment

@@ -17,24 +17,23 @@ const form = useForm({
 const closeModal = () => {
     emit("close");
 };
-const emit = defineEmits(["close", "submit"]);
+const emit = defineEmits(["close", "submit", "saved"]);
 
 
 const submit = () => {
     const formData = new FormData();
     formData.append('type', form.type);
-    formData.append('file', form.file); // 👈 must be a File object
-    // Add other fields if needed
-    // formData.append('description', form.description);
+    formData.append('file', form.file);
 
-    axios.post(route('doctor.documents.store'), formData, {
+    form.post(route('doctor.documents.store'), formData, {
         headers: {
             'Content-Type': 'multipart/form-data',
         },
     })
         .then(response => {
-              router.get(route('doctor.documents.uploadCcdaView',{id: response.data.id, type: 'issues'}));
+            router.get(route('doctor.documents.uploadCcdaView', { id: response.data.id, type: 'issues' }));
             closeModal();
+            emit("saved");
         })
         .catch(error => console.error(error));
 }

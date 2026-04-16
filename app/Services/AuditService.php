@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Audit;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Request;
 
 class AuditService
@@ -15,16 +17,10 @@ class AuditService
     {
         $user = auth()->user();
 
-        $adminId = $data['admin_id'] ?? ($user ? $user->id : null);
-
-        // If user is a doctor, use hospital_id as admin_id
-        if ($user && $user->hasRole('doctor') && isset($user->hospital_id)) {
-            $adminId = $user->hospital_id;
-        }
-
         $auditData = [
             'user_id' => $data['user_id'] ?? ($user ? $user->id : null),
-            'admin_id' => $adminId,
+            'admin_id' => $data['admin_id'] ?? ($user ? $user->id : null),
+            'hospital_id' => $data['hospital_id'] ?? $this->resolveHospitalId(),
             'user_type' => $data['user_type'] ?? ($user ? $user->getRoleNames()->first() : null),
             'module' => $data['module'] ?? null,
             'action' => $data['action'] ?? null,
@@ -51,6 +47,70 @@ class AuditService
             'description' => $description ?? __('audit.created', ['model' => class_basename($model)]),
             'new_values' => $model->toArray(),
         ]);
+    }
+
+    /**
+     * Build the common tenant-scoped audit query.
+     */
+    protected function buildScopedQuery(array $filters = []): Builder
+    {
+        $hospitalId = $this->resolveHospitalId();
+
+        $query = Audit::with(['user', 'admin']);
+
+        if (! $hospitalId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query
+            ->where('hospital_id', $hospitalId)
+            ->when(! empty($filters['keyword']), function ($q) use ($filters) {
+                $q->where(function ($subQuery) use ($filters) {
+                    $subQuery->where('description', 'like', '%'.$filters['keyword'].'%')
+                        ->orWhere('module', 'like', '%'.$filters['keyword'].'%')
+                        ->orWhere('action', 'like', '%'.$filters['keyword'].'%')
+                        ->orWhereHas('user', function ($userQuery) use ($filters) {
+                            $userQuery->where('name', 'like', '%'.$filters['keyword'].'%')
+                                ->orWhere('email', 'like', '%'.$filters['keyword'].'%');
+                        })
+                        ->orWhereHas('admin', function ($adminQuery) use ($filters) {
+                            $adminQuery->where('name', 'like', '%'.$filters['keyword'].'%')
+                                ->orWhere('email', 'like', '%'.$filters['keyword'].'%');
+                        });
+                });
+            })
+            ->when(! empty($filters['module']), function ($q) use ($filters) {
+                $q->where('module', $filters['module']);
+            })
+            ->when(! empty($filters['action']), function ($q) use ($filters) {
+                $q->where('action', $filters['action']);
+            })
+            ->when(! empty($filters['user_id']), function ($q) use ($filters) {
+                $q->where('user_id', $filters['user_id']);
+            })
+            ->when(! empty($filters['admin_id']), function ($q) use ($filters) {
+                $q->where('admin_id', $filters['admin_id']);
+            })
+            ->when(! empty($filters['date_from']), function ($q) use ($filters) {
+                $q->whereDate('created_at', '>=', $filters['date_from']);
+            })
+            ->when(! empty($filters['date_to']), function ($q) use ($filters) {
+                $q->whereDate('created_at', '<=', $filters['date_to']);
+            });
+    }
+
+    /**
+     * Resolve the active hospital context for the authenticated user.
+     */
+    protected function resolveHospitalId(): ?string
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return $user->hospital?->id ?? $user->hospital_id ?? null;
     }
 
     /**
@@ -129,43 +189,30 @@ class AuditService
      */
     public function getLogs(array $filters = [], int $perPage = 15)
     {
-        $query = Audit::with(['user', 'admin'])->where('admin_id', auth()->user()->hospital->id)
-            ->when(isset($filters['keyword']), function ($q) use ($filters) {
-                $q->where(function ($subQuery) use ($filters) {
-                    $subQuery->where('description', 'like', '%'.$filters['keyword'].'%')
-                        ->orWhere('module', 'like', '%'.$filters['keyword'].'%')
-                        ->orWhere('action', 'like', '%'.$filters['keyword'].'%')
-                        ->orWhereHas('user', function ($userQuery) use ($filters) {
-                            $userQuery->where('name', 'like', '%'.$filters['keyword'].'%')
-                                ->orWhere('email', 'like', '%'.$filters['keyword'].'%');
-                        })
-                        ->orWhereHas('admin', function ($adminQuery) use ($filters) {
-                            $adminQuery->where('name', 'like', '%'.$filters['keyword'].'%')
-                                ->orWhere('email', 'like', '%'.$filters['keyword'].'%');
-                        });
-                });
-            })
-            ->when(isset($filters['module']) && ! empty($filters['module']), function ($q) use ($filters) {
-                $q->where('module', $filters['module']);
-            })
-            ->when(isset($filters['action']) && ! empty($filters['action']), function ($q) use ($filters) {
-                $q->where('action', $filters['action']);
-            })
-            ->when(isset($filters['user_id']) && ! empty($filters['user_id']), function ($q) use ($filters) {
-                $q->where('user_id', $filters['user_id']);
-            })
-            ->when(isset($filters['admin_id']) && ! empty($filters['admin_id']), function ($q) use ($filters) {
-                $q->where('admin_id', $filters['admin_id']);
-            })
-            ->when(isset($filters['date_from']) && ! empty($filters['date_from']), function ($q) use ($filters) {
-                $q->whereDate('created_at', '>=', $filters['date_from']);
-            })
-            ->when(isset($filters['date_to']) && ! empty($filters['date_to']), function ($q) use ($filters) {
-                $q->whereDate('created_at', '<=', $filters['date_to']);
-            })
-            ->orderBy('created_at', 'desc');
+        return $this->buildScopedQuery($filters)
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->withQueryString();
+    }
 
-        return $query->paginate($perPage)->withQueryString();
+    /**
+     * Get all filtered audit logs for export.
+     */
+    public function getLogsForExport(array $filters = []): Collection
+    {
+        return $this->buildScopedQuery($filters)
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+
+    /**
+     * Find a single scoped audit log.
+     */
+    public function findScopedLog(string $id): Audit
+    {
+        return $this->buildScopedQuery()
+            ->whereKey($id)
+            ->firstOrFail();
     }
 
     /**
@@ -175,7 +222,7 @@ class AuditService
      */
     public function getLogsForModel(string $module, string $modelId)
     {
-        return Audit::with(['user', 'admin'])
+        return $this->buildScopedQuery()
             ->where('module', $module)
             ->where(function ($query) use ($modelId) {
                 $query->where('new_values', 'like', '%"id":"'.$modelId.'"%')
@@ -192,7 +239,13 @@ class AuditService
      */
     public function getModules(): array
     {
-        return Audit::distinct()->pluck('module')->filter()->values()->toArray();
+        return $this->buildScopedQuery()
+            ->select('module')
+            ->distinct()
+            ->pluck('module')
+            ->filter()
+            ->values()
+            ->toArray();
     }
 
     /**
@@ -200,6 +253,12 @@ class AuditService
      */
     public function getActions(): array
     {
-        return Audit::distinct()->pluck('action')->filter()->values()->toArray();
+        return $this->buildScopedQuery()
+            ->select('action')
+            ->distinct()
+            ->pluck('action')
+            ->filter()
+            ->values()
+            ->toArray();
     }
 }

@@ -15,7 +15,8 @@ class CallLogController extends Controller
     public function index(Request $request)
     {
         $appointments = [];
-        $keyword = $request->get('search', '');
+        $keyword = $request->get('keyword', '');
+        $status = $request->get('status', '');
         if (isset(auth()->user()->doctor->hospital_id)) {
 
             $hospitalId = auth()->user()->doctor->hospital_id;
@@ -28,17 +29,9 @@ class CallLogController extends Controller
                 $query->where('hospital_id', $hospitalId);
             });
 
-            $statusFilters = collect(['cancelled', 'completed', 'pending'])
-                ->filter(fn ($status) => $request->boolean($status))
-                ->values()
-                ->toArray();
+            $query->when($status, fn ($q) => $q->where('status', $status));
 
-            $query->when(
-                $statusFilters,
-                fn ($q) => $q->whereIn('status', $statusFilters)
-            );
-
-            if ($request->has('search') && ! empty($keyword)) {
+            if (! empty($keyword)) {
                 $query->where(function ($query) use ($keyword) {
                     $query->whereHas('patient.user', function ($query) use ($keyword) {
                         $query->where('name', 'like', '%'.$keyword.'%');
@@ -100,7 +93,10 @@ class CallLogController extends Controller
 
         return Inertia::render('Admin/Logs/CallLogsList', [
             'appointments' => $appointments,
-            'keyword' => $keyword,
+            'filters' => [
+                'keyword' => $keyword,
+                'status' => $status,
+            ],
         ]);
     }
 }

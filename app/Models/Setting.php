@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Crypt;
 
 class Setting extends Model
 {
@@ -35,6 +36,35 @@ class Setting extends Model
     ];
 
     protected $casts = [
-        'value' => 'encrypted',
+        'is_encrypted' => 'boolean',
+        'is_active' => 'boolean',
     ];
+
+    public function getValueAttribute($value)
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        try {
+            return Crypt::decryptString($value);
+        } catch (\Throwable $exception) {
+            return $value;
+        }
+    }
+
+    public function setValueAttribute($value): void
+    {
+        if ($value === null || $value === '') {
+            $this->attributes['value'] = $value;
+
+            return;
+        }
+
+        $shouldEncrypt = (bool) ($this->attributes['is_encrypted'] ?? $this->is_encrypted ?? false);
+
+        $this->attributes['value'] = $shouldEncrypt
+            ? Crypt::encryptString((string) $value)
+            : $value;
+    }
 }

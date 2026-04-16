@@ -445,7 +445,7 @@ With AkraHealth’s white-label EMR, you can:</p>
                             <img src="/images/svg/payors.svg" alt="emr-online-chart" />
                         </div>
                         <h4 class="title">Payor Management</h4>
-                        <p class="description">Streamline billing and insurance claims with the top EMR software from Akrahealth. Our electronic health records software reduces claims processing time and optimizes revenue cycle management (RCM), enhancing the financial performance of practices of every size.</p>
+                        <p class="description">Empower patients to take control of their healthcare by giving them access to a secure patient portal with medical histories, test results, and appointment reminders - all within a single EMR system that builds transparency and patient trust.</p>
                     </div>
                 </div>
                 <div class="col-md-6 col-lg-3 d-flex align-items-stretch mb-3 mb-lg-0">

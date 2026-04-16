@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\HospitalRequest;
+use App\Http\Requests\HospitalTimingRequest;
 use App\Models\Hospital;
 use App\Models\HospitalTiming;
 use App\Services\HospitalService;
@@ -25,11 +26,11 @@ class AHospitalController extends Controller
         $hospitals = Hospital::orderBy('name', 'asc')->where('user_id', auth()->user()->id);
         if ($request->has('search')) {
             $keyword = $request->get('search');
-            $hospitals = $hospitals->where('name', 'Like', '%'.$keyword.'%')
-                ->orWhere('address', 'Like', '%'.$keyword.'%')
-                ->orWhere('city', 'Like', '%'.$keyword.'%')
-                ->orWhere('state', 'Like', '%'.$keyword.'%')
-                ->orWhere('zip_code', 'Like', '%'.$keyword.'%');
+            $hospitals = $hospitals->where('name', 'Like', '%' . $keyword . '%')
+                ->orWhere('address', 'Like', '%' . $keyword . '%')
+                ->orWhere('city', 'Like', '%' . $keyword . '%')
+                ->orWhere('state', 'Like', '%' . $keyword . '%')
+                ->orWhere('zip_code', 'Like', '%' . $keyword . '%');
         }
         $hospitals = $hospitals->paginate(request('per_page', paginateLimit()))->withQueryString();
 
@@ -108,6 +109,8 @@ class AHospitalController extends Controller
     public function hospitalTiming(Request $request)
     {
         $userId = auth()->id();
+        $keyword = $request->get('keyword', '');
+        $dayOfWeek = $request->get('day_of_week', '');
 
         // Get user's hospital
         $hospital = Hospital::where('user_id', $userId)->first();
@@ -116,33 +119,68 @@ class AHospitalController extends Controller
         if (! $hospital) {
             return Inertia::render('Admin/HospitalTimeing/Index', [
                 'hospitalTime' => ['data' => [], 'current_page' => 1, 'last_page' => 1, 'per_page' => 10, 'total' => 0],
-                'keyword' => '',
+                'filters' => [
+                    'keyword' => '',
+                    'day_of_week' => '',
+                ],
             ]);
         }
 
-        // Initialize keyword with default empty string
-        $keyword = '';
-
-        // Handle GET request - show the page with existing data
-        $hospitalTime = HospitalTiming::with('hospital')->where('hospital_id', $hospital->id);
-        if ($request->has('search')) {
-            $keyword = $request->get('search');
-            $hospitalTime = $hospitalTime->where(function ($query) use ($keyword) {
-                $query->where('day_of_week', 'Like', '%'.$keyword.'%')
-                    ->orWhere('open_time', 'Like', '%'.$keyword.'%')
-                    ->orWhere('close_time', 'Like', '%'.$keyword.'%');
+        $hospitalTime = HospitalTiming::with('hospital')
+            ->where('hospital_id', $hospital->id)
+            ->orderByRaw("FIELD(day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')")
+            ->get()
+            ->map(function ($timing) {
+                return [
+                    'id' => $timing->id,
+                    'day_of_week' => $timing->day_of_week,
+                    'time_zone' => $timing->time_zone,
+                    'open_time' => $timing->open_time,
+                    'close_time' => $timing->close_time,
+                    'weekends' => $timing->weekends,
+                    'weekends_label' => $timing->weekends ? 'Included' : 'Excluded',
+                ];
             });
 
+        if ($dayOfWeek) {
+            $hospitalTime = $hospitalTime->filter(fn ($timing) => $timing['day_of_week'] === $dayOfWeek)->values();
         }
-        $hospitalTime = $hospitalTime->paginate(request('per_page', paginateLimit()))->withQueryString();
+
+        if ($keyword) {
+            $needle = str($keyword)->lower()->value();
+            $hospitalTime = $hospitalTime->filter(function ($timing) use ($needle) {
+                $haystack = str(implode(' ', array_filter([
+                    $timing['day_of_week'] ?? null,
+                    $timing['time_zone'] ?? null,
+                    $timing['open_time'] ?? null,
+                    $timing['close_time'] ?? null,
+                    $timing['weekends_label'] ?? null,
+                ])))->lower()->value();
+
+                return str($haystack)->contains($needle);
+            })->values();
+        }
+
+        $perPage = (int) $request->input('per_page', paginateLimit());
+        $currentPage = $request->integer('page', 1);
+        $hospitalTime = new \Illuminate\Pagination\LengthAwarePaginator(
+            $hospitalTime->forPage($currentPage, $perPage)->values(),
+            $hospitalTime->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return Inertia::render('Admin/HospitalTimeing/Index', [
             'hospitalTime' => $hospitalTime,
-            'keyword' => $keyword,
+            'filters' => [
+                'keyword' => $keyword,
+                'day_of_week' => $dayOfWeek,
+            ],
         ]);
     }
 
-    public function hospitalTimingStore(Request $request)
+    public function hospitalTimingStore(HospitalTimingRequest $request)
     {
 
         $userId = auth()->id();
@@ -154,38 +192,19 @@ class AHospitalController extends Controller
             return back()->with('error', 'Hospital not found.');
         }
 
-        $validated = $request->validate([
-            'weekends' => 'nullable|boolean',
-            'time_zone' => 'nullable|string',
-            'default_open_time' => 'nullable|string',
-            'default_close_time' => 'nullable|string',
-            'day_of_week' => 'required_with:timings|string',
-            'open_time' => 'nullable',
-            'close_time' => 'nullable',
-        ]);
+        $validated = $request->validated();
 
-        // Convert time values to 24-hour format for MySQL TIME column
-        $convertTime = function ($time) {
-            if (empty($time)) {
-                return null;
-            }
-            try {
-                return \Carbon\Carbon::createFromFormat('h:i:s A', $time)->format('H:i:s');
-            } catch (\Exception $e) {
-                return $time; // Return as is if parsing fails
-            }
-        };
         HospitalTiming::updateOrCreate(
-            ['id' => $request->input('id') ?? null],  // Condition
+            ['id' => $request->input('id') ?? null],
             [
                 'hospital_id' => $hospital->id,
                 'weekends' => $validated['weekends'] ?? null,
                 'time_zone' => $validated['time_zone'] ?? null,
-                'default_open_time' => $convertTime($validated['default_open_time']),
-                'default_close_time' => $convertTime($validated['default_close_time']),
+                'default_open_time' => $validated['default_open_time'] ?? $validated['open_time'],
+                'default_close_time' => $validated['default_close_time'] ?? $validated['close_time'],
                 'day_of_week' => $validated['day_of_week'] ?? null,
-                'open_time' => $convertTime($validated['open_time']),
-                'close_time' => $convertTime($validated['close_time']),
+                'open_time' => $validated['open_time'],
+                'close_time' => $validated['close_time'],
             ]
         );
 

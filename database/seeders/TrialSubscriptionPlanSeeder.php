@@ -29,16 +29,33 @@ class TrialSubscriptionPlanSeeder extends Seeder
         $features = '<ul>
             <li>Dashboard</li>
             <li>Patient Demographics / Charting</li>
-            <li>Basic charting & SOAP notes</li>
-            <li>Allergies, conditions, medication history</li>
-            <li>Core Patient portal</li>
-            <li>Basic Scheduling</li>
-            <li>Basic Digital forms</li>
-            <li>Labs / Results(View/Upload)</li>
-            <li>Document Management</li>
-            <li>Basic Messaging (Patient & Staff)</li>
-            <li>Basic Analytics / Reports</li>
-            <li>Email support</li>
+            <li>Streamlined Clinical Workflow</li>
+            <li>SOAP Notes, ICD-10 & CPT (Manual)</li>
+            <li>Prescriptions (Manual)</li>
+            <li>Appointment Scheduling (Manual)</li>
+            <li>Secure Document Management</li>
+            <li>Reporting and Analytics</li>
+            <li>Forms & Templates </li>
+            <li>Flexible Visit Configuration</li>
+            <li>Encrypted Messages </li>
+            <li>Alerts & Notifications</li>
+            <li>Medical records</li>
+            <li>User Roles 1 Doctor + 2 Users(assistant)</li>
+            <li>Reports</li>
+            <li>Audit Logs</li>
+            <li>Secure Patient Portal </li>
+            <li>Patient Charts</li>
+            <li>Patient History</li>
+            <li>Lifestyle & Social History</li>
+            <li>Family History</li>
+            <li>Patient Demographics</li>
+            <li>Medical Conditions</li>
+            <li>Supplements</li>
+            <li>Allergies</li>
+            <li>Immunizations</li>
+            <li>Patient Summary</li>
+            <li>Calender</li>
+            <li>Vaccines</li>
         </ul>';
 
         // Define permissions for the trial plan

@@ -40,16 +40,17 @@ class ALabController extends Controller
     public function index()
     {
         $labs = $this->labService->list(request());
-        $request = request();
-        $keyword = $request->get('keyword') ?? '';
         $labCategory = LabTestCategory::select('id', 'name', 'is_active')->where('is_active', true)->get();
 
         return inertia('Admin/Labs/LabList', [
             'labs' => $labs,
-            'request' => $request,
-            'keyword' => $keyword,
             'labCategory' => $labCategory,
-
+            'filters' => [
+                'keyword' => request()->string('keyword')->toString(),
+                'status' => request()->input('status', ''),
+                'verification' => request()->input('verification', ''),
+                'category' => request()->input('category', ''),
+            ],
         ]);
     }
 

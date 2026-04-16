@@ -1,6 +1,6 @@
 <script setup>
 import BaseInput from "@/Components/Common/Input/BaseInput.vue";
-import { ref, defineEmits } from "vue";
+import { ref } from "vue";
 import axios from "axios";
 
 const props = defineProps({

@@ -9,7 +9,6 @@ import BaseDatePicker from "@/Components/Common/Input/BaseDatePicker.vue";
 import InputError from "@/Components/InputError.vue";
 import Modal from '@/Components/Common/Modal.vue';
 import AddLab from "@/Pages/Modals/AddLab.vue";
-import 'sweetalert2/src/sweetalert2.scss';
 import BaseTagsInput from "@/Components/Common/Input/BaseTagsInput.vue";
 import Template from './template.vue';
 

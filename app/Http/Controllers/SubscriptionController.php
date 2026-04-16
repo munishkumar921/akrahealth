@@ -216,11 +216,18 @@ class SubscriptionController extends Controller
             }
 
             // Activate subscription
+            $oldSubscription = clone $subscription;
             $subscription->update([
                 'status' => 'active',
                 'payment_status' => 'paid',
                 'razorpay_payment_id' => $request->razorpay_payment_id,
             ]);
+            app(\App\Services\AuditService::class)->logUpdate(
+                'Subscription',
+                $oldSubscription,
+                $subscription->fresh(),
+                'Subscription payment verified'
+            );
 
             return response()->json([
                 'success' => true,
@@ -735,11 +742,18 @@ class SubscriptionController extends Controller
             }
 
             // Activate the new subscription
+            $oldSubscription = clone $subscription;
             $subscription->update([
                 'status' => 'active',
                 'payment_status' => 'paid',
                 'razorpay_payment_id' => $request->razorpay_payment_id,
             ]);
+            app(\App\Services\AuditService::class)->logUpdate(
+                'Subscription',
+                $oldSubscription,
+                $subscription->fresh(),
+                'Subscription upgrade payment verified'
+            );
 
             Log::info('Subscription upgrade payment successful', [
                 'user_id' => $user->id,

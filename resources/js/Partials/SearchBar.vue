@@ -2,7 +2,6 @@
 import { useForm } from '@inertiajs/vue3';
 import { Link } from '@inertiajs/vue3';
 import Swal from 'sweetalert2';
-import 'sweetalert2/dist/sweetalert2.min.css';
 
 const props = defineProps({
     type:String,

@@ -8,6 +8,7 @@ use App\Models\Hospital;
 use App\Models\Vaccine;
 use App\Models\VaccineTemperature;
 use App\Services\VaccineService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -74,7 +75,7 @@ class AdminVaccineController extends Controller
             foreach ($vaccines as $vaccine) {
                 $data['message'][] = [
                     'id' => $vaccine->id,
-                    'label' => $vaccine->immunization.' ['.$vaccine->brand.']',
+                    'label' => $vaccine->immunization . ' [' . $vaccine->brand . ']',
                     'value' => $vaccine->immunization,
                     'immunization' => $vaccine->immunization,
                     'brand' => $vaccine->brand,
@@ -97,15 +98,97 @@ class AdminVaccineController extends Controller
      */
     public function index(Request $request)
     {
-        $vaccines = Vaccine::where('hospital_id', auth()->user()->hospital->id)->when($request->search, function ($query, $search) {
-            $query->where('immunization', 'like', "%{$search}%")
-                ->orWhere('manufacturer', 'like', "%{$search}%")
-                ->orWhere('brand', 'like', "%{$search}%");
-        })->orderBy('created_at', 'desc')->paginate(request('per_page', paginateLimit()))->withQueryString();
+        $keyword = $request->get('keyword', '');
+        $stockStatus = $request->get('stock_status', '');
+        $expiryStatus = $request->get('expiry_status', '');
+        $today = Carbon::today();
+        $expiringSoonDate = $today->copy()->addDays(30);
+
+        $vaccines = Vaccine::where('hospital_id', auth()->user()->hospital->id)
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function ($vaccine) use ($today, $expiringSoonDate) {
+                $expirationDate = $vaccine->getRawOriginal('expiration')
+                    ? Carbon::parse($vaccine->getRawOriginal('expiration'))
+                    : null;
+
+                $stockStatus = (int) $vaccine->quantity > 0 ? 'in_stock' : 'out_of_stock';
+                $expiryStatus = 'valid';
+
+                if ($expirationDate && $expirationDate->lt($today)) {
+                    $expiryStatus = 'expired';
+                } elseif ($expirationDate && $expirationDate->between($today, $expiringSoonDate)) {
+                    $expiryStatus = 'expiring_soon';
+                }
+
+                return [
+                    'id' => $vaccine->id,
+                    'date_purchase' => $vaccine->date_purchase,
+                    'immunization' => $vaccine->immunization,
+                    'brand' => $vaccine->brand,
+                    'lot' => $vaccine->lot,
+                    'manufacturer' => $vaccine->manufacturer,
+                    'expiration' => $vaccine->expiration,
+                    'cpt' => $vaccine->cpt,
+                    'code' => $vaccine->code,
+                    'quantity' => $vaccine->quantity,
+                    'stock_status' => $stockStatus,
+                    'stock_status_label' => $stockStatus === 'in_stock' ? 'In Stock' : 'Out of Stock',
+                    'expiry_status' => $expiryStatus,
+                    'expiry_status_label' => match ($expiryStatus) {
+                        'expired' => 'Expired',
+                        'expiring_soon' => 'Expiring Soon',
+                        default => 'Valid',
+                    },
+                ];
+            });
+
+        if ($stockStatus) {
+            $vaccines = $vaccines->filter(fn ($vaccine) => $vaccine['stock_status'] === $stockStatus)->values();
+        }
+
+        if ($expiryStatus) {
+            $vaccines = $vaccines->filter(fn ($vaccine) => $vaccine['expiry_status'] === $expiryStatus)->values();
+        }
+
+        if ($keyword) {
+            $needle = str($keyword)->lower()->value();
+            $vaccines = $vaccines->filter(function ($vaccine) use ($needle) {
+                $haystack = str(implode(' ', array_filter([
+                    $vaccine['date_purchase'] ?? null,
+                    $vaccine['immunization'] ?? null,
+                    $vaccine['brand'] ?? null,
+                    $vaccine['lot'] ?? null,
+                    $vaccine['manufacturer'] ?? null,
+                    $vaccine['expiration'] ?? null,
+                    $vaccine['cpt'] ?? null,
+                    $vaccine['code'] ?? null,
+                    $vaccine['quantity'] ?? null,
+                    $vaccine['stock_status_label'] ?? null,
+                    $vaccine['expiry_status_label'] ?? null,
+                ])))->lower()->value();
+
+                return str($haystack)->contains($needle);
+            })->values();
+        }
+
+        $perPage = (int) $request->input('per_page', paginateLimit());
+        $currentPage = $request->integer('page', 1);
+        $vaccines = new \Illuminate\Pagination\LengthAwarePaginator(
+            $vaccines->forPage($currentPage, $perPage)->values(),
+            $vaccines->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return Inertia::render('Admin/Inventory/Vaccines', [
             'vaccines' => $vaccines,
-            'keyword' => $request->get('keyword') ?? '',
+            'filters' => [
+                'keyword' => $keyword,
+                'stock_status' => $stockStatus,
+                'expiry_status' => $expiryStatus,
+            ],
         ]);
     }
 
@@ -137,18 +220,65 @@ class AdminVaccineController extends Controller
         // Get the authenticated user's hospital
         $hospitalId = auth()->user()->id;
         $hospital = Hospital::where('user_id', $hospitalId)->first();
+        $keyword = $request->get('keyword', '');
+        $action = $request->get('action', '');
+        $baseQuery = VaccineTemperature::where('hospital_id', auth()->user()->hospital->id)
+            ->where('hospital_id', $hospital->id);
 
-        $temperatures = VaccineTemperature::where('hospital_id', auth()->user()->hospital->id)->when($request->search, function ($query, $search) {
-            $query->where('temperature', 'like', "%{$search}%");
-        })
-            ->where('hospital_id', $hospital->id)
-            ->orderBy('created_at', 'desc')
-            ->paginate(request('per_page', paginateLimit()))
-            ->withQueryString();
+        $actionOptions = (clone $baseQuery)
+            ->whereNotNull('action')
+            ->distinct()
+            ->pluck('action')
+            ->filter()
+            ->values();
+
+        $temperatures = (clone $baseQuery)->orderByDesc('created_at')->get()->map(function ($temperature) {
+            return [
+                'id' => $temperature->id,
+                'date' => $temperature->date,
+                'time' => $temperature->time,
+                'temperature' => $temperature->temperature,
+                'action' => $temperature->action,
+            ];
+        });
+
+        if ($action) {
+            $temperatures = $temperatures
+                ->filter(fn ($temperature) => strcasecmp((string) $temperature['action'], (string) $action) === 0)
+                ->values();
+        }
+
+        if ($keyword) {
+            $needle = str($keyword)->lower()->value();
+            $temperatures = $temperatures->filter(function ($temperature) use ($needle) {
+                $haystack = str(implode(' ', array_filter([
+                    $temperature['date'] ?? null,
+                    $temperature['time'] ?? null,
+                    $temperature['temperature'] ?? null,
+                    $temperature['action'] ?? null,
+                ])))->lower()->value();
+
+                return str($haystack)->contains($needle);
+            })->values();
+        }
+
+        $perPage = (int) $request->input('per_page', paginateLimit());
+        $currentPage = $request->integer('page', 1);
+        $temperatures = new \Illuminate\Pagination\LengthAwarePaginator(
+            $temperatures->forPage($currentPage, $perPage)->values(),
+            $temperatures->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return Inertia::render('Admin/Inventory/VaccineTemperatures', [
             'temperatures' => $temperatures,
-            'keyword' => $request->get('keyword') ?? '',
+            'filters' => [
+                'keyword' => $keyword,
+                'action' => $action,
+            ],
+            'actionOptions' => $actionOptions,
         ]);
     }
 
@@ -159,7 +289,7 @@ class AdminVaccineController extends Controller
             'id' => 'nullable',
             'temperature' => 'required|numeric',
             'date' => 'required|date',
-            'time' => 'nullable',
+            'time' => 'required',
             'action' => 'nullable',
         ]);
 

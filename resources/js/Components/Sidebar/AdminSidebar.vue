@@ -18,19 +18,10 @@ const props = defineProps({
             <div class="p-2">
                 <nav class="iq-sidebar-menu">
                     <ul id="iq-sidebar-toggle" class="iq-menu">
-                        <li
-                            :class="`${
-                                route().current(`${nav.route}`) ? 'active' : ''
-                            }`"
-                            v-for="nav in adminNavItems"
-                            :key="nav.label"
-                        >
-                            <Link
-                                :href="route(`${nav.route}`)"
-                                class="iq-waves-effect"
-                            >
-                                <i :class="nav.icon"></i
-                                ><span>{{ nav.label }}</span>
+                        <li :class="`${route().current(`${nav.route}`) ? 'active' : ''
+                            }`" v-for="nav in adminNavItems" :key="nav.label">
+                            <Link :href="route(`${nav.route}`)" class="iq-waves-effect">
+                                <i :class="nav.icon"></i><span>{{ nav.label }}</span>
                             </Link>
                         </li>
                     </ul>

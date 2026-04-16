@@ -18,6 +18,10 @@ class HospitalService
     public function saveHospital(array $input, $user = null): Hospital
     {
         return DB::transaction(function () use ($input, $user) {
+            $existingHospital = null;
+            if (! empty($input['hospitalId']) || ! empty($input['id'])) {
+                $existingHospital = Hospital::find($input['hospitalId'] ?? $input['id']);
+            }
 
             // Handle practice_logo file upload
             $practiceLogoPath = null;
@@ -62,6 +66,7 @@ class HospitalService
 
                     'website' => $input['website'] ?? null,
                     'primary_contact' => $input['primary_contact'] ?? $input['practice_primary_contact'] ?? null,
+                    'timezone' => $input['timezone'] ?? null,
 
                     'practice_logo' => $practiceLogoPath ?? $input['old_practice_logo'] ?? null,
 
@@ -100,7 +105,7 @@ class HospitalService
             }
 
             // ✅ Hospital Timings
-            if (! empty($input['timings']) && is_array($input['timings'])) {
+            if (array_key_exists('timings', $input) && is_array($input['timings'])) {
 
                 // Convert time values to 24-hour format for MySQL TIME column
                 $convertTime = function ($time) {
@@ -122,15 +127,30 @@ class HospitalService
                     }
                 };
 
+                $submittedTimingIds = collect($input['timings'])
+                    ->pluck('id')
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                $existingTimingsQuery = HospitalTiming::where('hospital_id', $hospital->id);
+
+                if (! empty($submittedTimingIds)) {
+                    $existingTimingsQuery->whereNotIn('id', $submittedTimingIds)->delete();
+                } else {
+                    $existingTimingsQuery->delete();
+                }
+
                 foreach ($input['timings'] as $timing) {
                     $isClosed = (bool) ($timing['is_closed'] ?? false);
 
                     HospitalTiming::updateOrCreate(
                         [
-                            'hospital_id' => $hospital->id,
-                            'day_of_week' => $timing['day_of_week'] ?? null,
+                            'id' => $timing['id'] ?? null,
                         ],
                         [
+                            'hospital_id' => $hospital->id,
+                            'day_of_week' => $timing['day_of_week'] ?? null,
                             // `is_closed` is derived from whether open/close times are null.
                             'open_time' => $isClosed ? null : $convertTime($timing['open_time'] ?? null),
                             'close_time' => $isClosed ? null : $convertTime($timing['close_time'] ?? null),
@@ -139,6 +159,38 @@ class HospitalService
                         ]
                     );
                 }
+            }
+
+            if ($existingHospital) {
+                app(AuditService::class)->logUpdate(
+                    'Hospital',
+                    $existingHospital,
+                    $hospital->fresh(),
+                    'Hospital updated'
+                );
+            } else {
+                app(AuditService::class)->logCreate(
+                    'Hospital',
+                    $hospital->fresh(),
+                    'New hospital signup created'
+                );
+
+                app(InAppNotificationService::class)->notifySuperAdmins(
+                    app(InAppNotificationService::class)->buildPayload(
+                        'New hospital onboarded',
+                        ($hospital->name ?? 'A hospital').' has been onboarded on the platform.',
+                        'hospital_onboarded',
+                        [
+                            'related_model_type' => Hospital::class,
+                            'related_model_id' => $hospital->id,
+                            'hospital_id' => $hospital->id,
+                            'meta' => [
+                                'email' => $hospital->email,
+                                'country' => $hospital->country,
+                            ],
+                        ]
+                    )
+                );
             }
 
             return $hospital;

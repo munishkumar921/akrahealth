@@ -7,6 +7,7 @@ use App\Models\Question;
 use App\Models\Skill;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
@@ -65,9 +66,10 @@ class DatabaseSeeder extends Seeder
             ['email' => 'superadmin@gmail.com'],
             [
                 'name' => 'Super Admin',
-                'password' => '$2y$10$fM6kjJ16Fcynthc5JJzsuOTUNXKnGKv1AABshwJ4HI719sFsr8htq', // dev@2000
+                'password' => Hash::make('Dev@2000'),
                 'is_active' => true,
                 'is_email_verified' => true,
+                'email_verified_at' => now(),
             ]
         );
 

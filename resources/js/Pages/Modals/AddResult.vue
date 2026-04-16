@@ -10,7 +10,7 @@ import axios from "axios";
 
 const props = defineProps({
     doctors: Array,
- });
+});
 
 const showModal = ref(false);
 const searchQuery = ref("");
@@ -35,7 +35,6 @@ const form = useForm({
 
 const openModal = () => {
     showModal.value = true;
-    // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
 };
 
@@ -47,7 +46,7 @@ const closeModal = () => {
 const search = async () => {
     loader.value = true;
     try {
-        const response = await axios.get(route("doctor.search.loinc", { search: searchQuery.value }));
+        const response = await axios.post(route("doctor.search.loinc", { search: searchQuery.value }));
         searchResult.value = response.data.message || [];
     } catch (error) {
         console.error("Error in search request:", error);
@@ -65,7 +64,6 @@ const handleClick = (item) => {
 const close = () => {
     searchQuery.value = '';
     searchResult.value = [];
-    // form.reset();
 };
 const isValidated = ref(false);
 
@@ -103,7 +101,6 @@ const submit = () => {
             closeModal();
             form.reset();
             emit("submit");
-            
         },
 
     });
@@ -140,11 +137,7 @@ defineExpose({
 </script>
 <template>
     <div class="mb-4">
-        <!-- Search Input Component -->
-        <Search v-model="searchQuery" :searchResult="searchResult" :loader="loader" @input="search"
-            placeholder="Search Loinc tests" />
 
-        <!-- Search Results -->
         <div v-if="Array.isArray(searchResult) && searchResult.length" class="p-3">
             <div class="search-result-list">
                 <div v-for="(item, index) in searchResult" :key="index" class="search-result-item">
@@ -157,7 +150,6 @@ defineExpose({
             </div>
         </div>
 
-        <!-- Empty State or Message -->
         <div v-else-if="searchResult && searchResult.message" class="ml-3">
             <p>{{ searchResult.message }}</p>
         </div>
@@ -175,7 +167,10 @@ defineExpose({
                 </BaseSelect>
             </div>
 
-            <div class="mb-3">
+            <Search v-model="searchQuery" :searchResult="searchResult" :loader="loader" @input="search"
+                placeholder="Search Loinc tests" />
+
+            <div class="mb-3 mt-4">
                 <label>Test Name</label>
                 <BaseInput v-model="form.testName" type="text" placeholder="Test Name" required />
                 <InputError class="mt-2" :message="form.errors.testName" />
@@ -222,7 +217,7 @@ defineExpose({
             </div>
 
             <div class="col">
-                 <BaseInput v-model="form.location" type="text" label="Location" placeholder="Location" />
+                <BaseInput v-model="form.location" type="text" label="Location" placeholder="Location" />
                 <InputError class="mt-2" :message="form.errors.location" />
             </div>
 
@@ -247,12 +242,11 @@ defineExpose({
             </div>
         </div>
 
-        <div class="modal-footer">
-            
+        <div class="flex float-end">
             <button type="submit" class="btn btn-primary">
                 Save
             </button>
-            <button type="button" class="btn btn-danger" @click="closeModal">
+            <button type="button" class="btn btn-danger ml-2" @click="closeModal">
                 Close
             </button>
         </div>

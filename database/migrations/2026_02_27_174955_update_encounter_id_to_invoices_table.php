@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasTable('invoices') || Schema::hasColumn('invoices', 'encounter_id')) {
+            return;
+        }
+
         Schema::table('invoices', function (Blueprint $table) {
             $table->foreignUuid('encounter_id')->after('appointment_id')->nullable()->constrained()->onDelete('set null');
         });
@@ -21,8 +25,17 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (! Schema::hasTable('invoices') || ! Schema::hasColumn('invoices', 'encounter_id')) {
+            return;
+        }
+
         Schema::table('invoices', function (Blueprint $table) {
-            $table->dropForeign(['encounter_id']);
+            try {
+                $table->dropForeign(['encounter_id']);
+            } catch (\Throwable $e) {
+                // Ignore missing foreign key constraints in divergent schemas.
+            }
+
             $table->dropColumn('encounter_id');
         });
     }

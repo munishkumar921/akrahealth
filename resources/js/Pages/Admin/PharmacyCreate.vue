@@ -5,9 +5,8 @@ import CustomImageUpload from "@/Components/CustomImageUpload.vue";
 
 const props = defineProps({
 	pharmacy: Object,
-	states:Object,
-	countries:Object
-	
+	states: Object,
+	countries: Object
 });
 
 const form = useForm({
@@ -67,8 +66,7 @@ const submitForm = () => {
 					</div>
 					<div class="col-md-6 mb-3">
 						<label class="form-label">Email</label>
-						<input v-model="form.email" type="email" class="form-control"
-							placeholder="admin@gmail.com" />
+						<input v-model="form.email" type="email" class="form-control" placeholder="admin@gmail.com" />
 					</div>
 
 					<div class="col-md-6 mb-3">

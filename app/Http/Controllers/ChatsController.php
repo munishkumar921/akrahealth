@@ -5,10 +5,116 @@ namespace App\Http\Controllers;
 use App\Models\ChatMessage;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Services\ChatService;
+use Illuminate\Support\Facades\Auth;
 
 class ChatsController extends Controller
 {
+    protected $chatService;
+
+    /**
+     * __construct
+     *
+     * @param  mixed $chatService
+     * @return void
+     */
+    public function __construct(ChatService $chatService)
+    {
+        $this->chatService = $chatService;
+    }
+
+    /**
+     * Get or create conversation
+     */
+    public function getConversation(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id'
+        ]);
+
+        $conversation = $this->chatService->getOrCreateConversation(
+            auth()->id(),
+            $request->user_id
+        );
+
+        return $conversation;
+    }
+
+    /**
+     * Get messages
+     */
+    public function messages($conversationId)
+    {
+        return $this->chatService->getMessages($conversationId);
+    }
+
+    /**
+     * Send message
+     */
+    public function sendMessage(Request $request, $conversationId)
+    {
+        $request->validate([
+            'message' => 'nullable|string',
+            'type' => 'nullable|string',
+            'file' => 'nullable|string',
+            'local_time' => 'required|string'
+        ]);
+
+        $message = $this->chatService->sendMessage(
+            $conversationId,
+            $request->message,
+            $request->type ?? 'text',
+            $request->local_time,
+            $request->file,
+        );
+
+        return response()->json($message);
+    }
+
+    /**
+     * Mark as read
+     */
+    public function markAsRead($conversationId)
+    {
+        $this->chatService->markAsRead($conversationId);
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Conversation list
+     */
+    public function conversations()
+    {
+        return $this->chatService->getUserConversations(auth()->id());
+    }
+
+    /**
+     * conversationID
+     *
+     * @param  mixed $request
+     * @param  mixed $userID
+     * @return void
+     */
+    public function conversationID(Request $request, $userID)
+    {
+        $request->merge([
+            'user_id' => $userID,
+        ]);
+
+        request()->session()->put('chat_partner_id', $userID);
+
+        return $this->getConversation($request);
+    }
+
+    /**
+     * index
+     *
+     * @param  mixed $request
+     * @return void
+     */
     public function index(Request $request)
     {
         $authUser = $request->user();
@@ -21,53 +127,112 @@ class ChatsController extends Controller
                     ->orWhere('receiver_id', $authUser->id);
             });
 
-        $receivedMessages = (clone $baseQuery)
-            ->where('receiver_id', $authUser->id)
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('thread', 'like', "%{$search}%")
-                        ->orWhere('message', 'like', "%{$search}%")
-                        ->orWhereHas('sender', function ($senderQuery) use ($search) {
-                            $senderQuery->where('name', 'like', "%{$search}%");
-                        })
-                        ->orWhereHas('receiver', function ($receiverQuery) use ($search) {
-                            $receiverQuery->where('name', 'like', "%{$search}%");
-                        });
-                });
-            })
-            ->latest()
-            ->get();
+        $user = auth()->user();
+        $users = collect();
 
-        $sentMessages = (clone $baseQuery)
-            ->where('sender_id', $authUser->id)
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('thread', 'like', "%{$search}%")
-                        ->orWhere('message', 'like', "%{$search}%")
-                        ->orWhereHas('sender', function ($senderQuery) use ($search) {
-                            $senderQuery->where('name', 'like', "%{$search}%");
-                        })
-                        ->orWhereHas('receiver', function ($receiverQuery) use ($search) {
-                            $receiverQuery->where('name', 'like', "%{$search}%");
-                        });
-                });
-            })
-            ->latest()
-            ->get();
+        /* Doctor Role */
+        if ($user->hasRole('Doctor')) {
 
-        $users = User::query()
-            ->where('id', '!=', $authUser->id)
-            ->select('id', 'name', 'email')
-            ->orderBy('name')
-            ->get();
+            $doctor = $user->doctor;
+            $hospitalId = $doctor->hospital_id;
+
+            $doctorUsers = User::whereHas('doctor', function ($q) use ($hospitalId) {
+                $q->where('hospital_id', $hospitalId);
+            })
+                ->select(
+                    'users.id',
+                    DB::raw("CONCAT(users.name, ' (Doctor)') as name"),
+                    'users.email'
+                )
+                ->distinct()
+                ->get();
+
+            $adminUsers = User::whereHas('hospital', function ($q) use ($hospitalId) {
+                $q->where('id', $hospitalId);
+            })
+                ->select('users.id', 'users.name', 'users.email')
+                ->get();
+
+            $patientUsers = User::select(
+                'users.id',
+                DB::raw("CONCAT(users.name, ' (Patient)') as name"),
+                'users.email'
+            )
+                ->join('patients', 'patients.user_id', '=', 'users.id')
+                ->join('appointments', 'appointments.patient_id', '=', 'patients.id')
+                ->join('doctors', 'doctors.id', '=', 'appointments.doctor_id')
+                ->where('doctors.hospital_id', $hospitalId)
+                ->distinct()
+                ->get();
+
+            $users = $users
+                ->merge($doctorUsers)
+                ->merge($adminUsers)
+                ->merge($patientUsers);
+        }
+
+        /* Admin role */
+        if ($user->hasRole('Admin')) {
+
+            $hospitalId = $user->hospital->id;
+
+            $doctorUsers = User::whereHas('doctor', function ($q) use ($hospitalId) {
+                $q->where('hospital_id', $hospitalId);
+            })
+                ->select(
+                    'users.id',
+                    DB::raw("CONCAT(users.name, ' (Doctor)') as name"),
+                    'users.email'
+                )->get();
+
+            $patientUsers = User::select(
+                'users.id',
+                DB::raw("CONCAT(users.name, ' (Patient)') as name"),
+                'users.email'
+            )
+                ->join('patients', 'patients.user_id', '=', 'users.id')
+                ->join('appointments', 'appointments.patient_id', '=', 'patients.id')
+                ->join('doctors', 'doctors.id', '=', 'appointments.doctor_id')
+                ->where('doctors.hospital_id', $hospitalId)
+                ->distinct()
+                ->get();
+
+            $users = $users
+                ->merge($doctorUsers)
+                ->merge($patientUsers);
+        }
+
+        $users = $users->unique('id')->values();
+        $users = $users->where('id', '!=', auth()->id());
+
+        /* Patient role */
+        if ($user->hasRole('Patient')) {
+
+            $patient = $user->patient;
+            $doctorUsers = User::whereHas('doctor.appointments', function ($q) use ($patient) {
+                $q->where('patient_id', $patient->id);
+            })->get();
+
+            $users = $users->merge($doctorUsers);
+        }
+
+        if ($request->session()->has('chat_partner_id')) {
+            $chatPartnerId = $request->session()->get('chat_partner_id');
+        } else {
+            $chatPartnerId = $users[0]?->id ?? null;
+        }
+        $request->merge([
+            'user_id' => $chatPartnerId,
+        ]);
+        $conversation = $this->getConversation($request);
 
         return Inertia::render('Common/Chat/Index', [
-            'receivedMessages' => $receivedMessages,
-            'sentMessages' => $sentMessages,
-            'users' => $users,
+            'users' => $users->values(),
             'filters' => [
                 'search' => $search,
             ],
+            'chat_partner_id' => $chatPartnerId,
+            'conversation' => $conversation,
         ]);
     }
 
@@ -97,7 +262,7 @@ class ChatsController extends Controller
         $filePath = null;
         if ($request->hasFile('file')) {
             $storedPath = $request->file('file')->store('chat-files', 'public');
-            $filePath = '/storage/'.$storedPath;
+            $filePath = '/storage/' . $storedPath;
         }
 
         ChatMessage::create([

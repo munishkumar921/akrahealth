@@ -15,10 +15,11 @@ class PatientSupplementsService
      */
     public function store($input)
     {
+        $notificationService = app(InAppNotificationService::class);
         $data = $input;
         $encounter = Encounter::where('id', $data['encounter_id'])->first();
 
-        return PatientSupplement::updateOrCreate(
+        $supplement = PatientSupplement::updateOrCreate(
             ['id' => $data['id'] ?? null],
             [
                 'encounter_id' => $data['encounter_id'] ?? null,
@@ -38,6 +39,25 @@ class PatientSupplementsService
                 'reason' => $data['reason'] ?? null,
                 'reconcile' => $data['reconcile'] ?? null,
             ]);
+
+        $notificationService->notifyPatient(
+            $encounter?->patient_id,
+            $notificationService->buildPayload(
+                'New supplement added',
+                'A supplement has been added or updated in your chart.',
+                'supplement_added',
+                [
+                    'recipient_role' => 'Patient',
+                    'patient_id' => $encounter?->patient_id,
+                    'doctor_id' => $encounter?->doctor_id,
+                    'action_url' => route('patient.supplements'),
+                    'related_model_type' => PatientSupplement::class,
+                    'related_model_id' => $supplement->id,
+                ]
+            )
+        );
+
+        return $supplement;
     }
 
     /**

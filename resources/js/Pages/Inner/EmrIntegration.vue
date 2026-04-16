@@ -258,7 +258,7 @@ defineProps({
                 <ListItems :items="[
                     { title: 'Secure patient record synchronization', description: 'Securely access, update, and manage patient data within free EMR for physicians, web-based EMR systems, and free online medical records.', icon: 'fa-check' },
                     { title: 'Automated workflows', description: 'Streamline scheduling, billing, and documentation with free medical record software, EMR apps, and free EHR for small practices.', icon: 'fa-check' },
-                    { title: 'HIPAA-compliant data exchange', description: 'Maintain HIPAA and APA-compliant data exchange for secure patient management in electronic medical records software free and best free EMR platforms.', icon: 'fa-check' },
+                    { title: 'HIPAA-compliant data exchange', description: 'Maintain HIPAA-compliant data exchange for secure patient management in electronic medical records software free and best free EMR platforms.', icon: 'fa-check' },
                     { title: 'Improved clinical efficiency', description: 'Experience seamless connectivity between DrChrono and other healthcare applications, including telemedicine EMR, E-Rx systems, and white-label patient portals.', icon: 'fa-check' }
                   ]" />
 

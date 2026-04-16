@@ -3,308 +3,371 @@ import AuthLayout from "@/Layouts/AuthLayout.vue";
 import Table from "@/Components/Table/Table.vue";
 import { router } from "@inertiajs/vue3";
 import { ref, computed } from "vue";
+import { route } from "ziggy-js";
 
 const props = defineProps({
-	keyword: String,
 	labReports: {
 		type: [Array, Object],
-		default: () => []
+		default: () => [],
 	},
 	filters: {
 		type: Object,
 		default: () => ({
-			status: '',
-			payment_status: '',
-			date_from: '',
-			date_to: ''
-		})
+			keyword: "",
+			status: "",
+			payment_status: "",
+			date_from: "",
+			date_to: "",
+		}),
 	},
-	route: Array,
+});
+
+const filterForm = ref({
+	keyword: props.filters?.keyword || "",
+	status: props.filters?.status || "",
+	payment_status: props.filters?.payment_status || "",
+	date_from: props.filters?.date_from || "",
+	date_to: props.filters?.date_to || "",
 });
 
 const columns = [
-	{ label: "Order#", key: "order_id" },
-	{ label: "Patient", key: "patient" },
-	{ label: "Lab", key: "lab" },
-	{ label: "Doctor", key: "doctor" },
-	{ label: "Amount", key: "amount" },
-	{ label: "Payment", key: "payment_status" },
-	{ label: "Status", key: "status" },
-	{ label: "Created", key: "created_at" },
+	{ label: "Order#", key: "order_id", type: "slot", slot: "order", align: "left" },
+	{ label: "Patient", key: "patient", type: "slot", slot: "patient", align: "left" },
+	{ label: "Lab", key: "lab", type: "slot", slot: "lab", align: "left" },
+	{ label: "Doctor", key: "doctor", type: "slot", slot: "doctor", align: "left" },
+	{ label: "Amount", key: "amount", type: "slot", slot: "amount", align: "left" },
+	{ label: "Payment", key: "payment_status", type: "slot", slot: "payment", align: "center" },
+	{ label: "Status", key: "status", type: "slot", slot: "status", align: "center" },
+	{ label: "Created", key: "created_at", type: "slot", slot: "created", align: "left" },
 ];
 
-const searchKeyword = ref(props.keyword || '');
-const selectedStatus = ref(props.filters.status || '');
-const selectedPaymentStatus = ref(props.filters.payment_status || '');
-const dateFrom = ref(props.filters.date_from || '');
-const dateTo = ref(props.filters.date_to || '');
-
-// Status filter options
 const statusOptions = [
-	{ value: '', label: 'All Status' },
-	{ value: 'pending', label: 'Pending' },
-	{ value: 'completed', label: 'Completed' },
-	{ value: 'cancelled', label: 'Cancelled' },
-	{ value: 'in_progress', label: 'In Progress' },
+	{ value: "", label: "All status" },
+	{ value: "pending", label: "Pending" },
+	{ value: "completed", label: "Completed" },
+	{ value: "cancelled", label: "Cancelled" },
+	{ value: "in_progress", label: "In Progress" },
 ];
 
-// Payment status options
 const paymentStatusOptions = [
-	{ value: '', label: 'All Payment' },
-	{ value: 'paid', label: 'Paid' },
-	{ value: 'unpaid', label: 'Unpaid' },
-	{ value: 'refunded', label: 'Refunded' },
-	{ value: 'pending', label: 'Pending' },
+	{ value: "", label: "All payment" },
+	{ value: "paid", label: "Paid" },
+	{ value: "unpaid", label: "Unpaid" },
+	{ value: "refunded", label: "Refunded" },
+	{ value: "pending", label: "Pending" },
 ];
 
-// Search function
-const search = () => {
-	router.get(route('admin.labReports'), {
-		keyword: searchKeyword.value,
-		status: selectedStatus.value,
-		payment_status: selectedPaymentStatus.value,
-		date_from: dateFrom.value,
-		date_to: dateTo.value,
-	}, {
+const perPageOptions = [10, 15, 25, 50, 100];
+const perPage = ref(Number(new URLSearchParams(window.location.search).get("per_page")) || 10);
+const rows = computed(() => props.labReports?.data ?? []);
+const activeFilterCount = computed(() =>
+	Object.values(filterForm.value).filter((value) => value !== null && value !== "").length
+);
+const hasActiveFilters = computed(() => activeFilterCount.value > 0);
+const resultSummary = computed(() => {
+	const total = props.labReports?.total ?? rows.value.length;
+	const from = props.labReports?.from ?? (rows.value.length ? 1 : 0);
+	const to = props.labReports?.to ?? rows.value.length;
+
+	if (!total) {
+		return "No lab reports found";
+	}
+
+	return `Showing ${from}-${to} of ${total} lab reports`;
+});
+
+const buildQuery = (overrides = {}) => {
+	const params = new URLSearchParams(window.location.search);
+	const query = {
+		per_page: params.get("per_page") || undefined,
+		sort: params.get("sort") || undefined,
+		direction: params.get("direction") || undefined,
+		...filterForm.value,
+		...overrides,
+	};
+
+	return Object.fromEntries(
+		Object.entries(query).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+	);
+};
+
+const applyFilters = () => {
+	router.get(route("admin.labReports"), buildQuery(), {
 		preserveState: true,
+		preserveScroll: true,
 		replace: true,
 	});
 };
 
-// Clear filters
 const clearFilters = () => {
-	searchKeyword.value = '';
-	selectedStatus.value = '';
-	selectedPaymentStatus.value = '';
-	dateFrom.value = '';
-	dateTo.value = '';
-	search();
+	filterForm.value = {
+		keyword: "",
+		status: "",
+		payment_status: "",
+		date_from: "",
+		date_to: "",
+	};
+
+	router.get(route("admin.labReports"), buildQuery(), {
+		preserveState: true,
+		preserveScroll: true,
+		replace: true,
+	});
 };
 
-// Status badge class
+const updatePerPage = () => {
+	router.get(route("admin.labReports"), buildQuery({ per_page: perPage.value, page: 1 }), {
+		preserveState: true,
+		preserveScroll: true,
+		replace: true,
+	});
+};
+
 const getStatusClass = (status) => {
-	const statusMap = {
-		'completed': 'badge bg-success',
-		'pending': 'badge bg-warning',
-		'cancelled': 'badge bg-danger',
-		'in_progress': 'badge bg-info',
-		'active': 'badge bg-success',
-		'inactive': 'badge bg-secondary',
-	};
-	const lowerStatus = status?.toLowerCase();
-	return statusMap[lowerStatus] || 'badge bg-secondary';
+	const lowerStatus = String(status || "").toLowerCase();
+
+	if (lowerStatus === "completed") return "status-pill--active";
+	if (lowerStatus === "pending" || lowerStatus === "in_progress") return "status-pill--pending";
+
+	return "status-pill--inactive";
 };
 
-// Payment status badge class
 const getPaymentStatusClass = (status) => {
-	const statusMap = {
-		'paid': 'badge bg-success',
-		'unpaid': 'badge bg-danger',
-		'refunded': 'badge bg-info',
-		'pending': 'badge bg-warning',
-	};
-	const lowerStatus = status?.toLowerCase();
-	return statusMap[lowerStatus] || 'badge bg-secondary';
+	const lowerStatus = String(status || "").toLowerCase();
+
+	if (lowerStatus === "paid") return "status-pill--active";
+	if (lowerStatus === "pending") return "status-pill--pending";
+
+	return "status-pill--inactive";
 };
 
-// Amount formatting
 const formatAmount = (amount) => {
-	if (!amount) return '₹0.00';
-	return '₹' + Number(amount).toFixed(2);
+	if (!amount) return "₹0.00";
+	return "₹" + Number(amount).toFixed(2);
 };
 
-// Download report function
 const downloadReport = (row) => {
 	if (row.report_file) {
-		window.open(row.report_file, '_blank');
+		window.open(row.report_file, "_blank");
 	}
 };
 </script>
 
 <template>
-	<AuthLayout
-		title="Lab Reports"
-		description="View lab reports"
-		heading="Lab Reports"
-	>
-		<!-- ================= HEADER ================= -->
-		<div class="">
-			<!-- ================= DESKTOP VIEW - Title and Filters in Same Row ================= -->
-			<div class="d-none d-md-flex align-items-center justify-content-between mb-3">
-				<!-- Title -->
-				<h3 class="text-xl mb-0">Lab Reports</h3>
+	<AuthLayout title="Lab Reports" description="View lab reports" heading="Lab Reports">
+		<div class="lab-reports-page">
+			<div class="users-toolbar card border-0 shadow-sm mb-4">
+				<div class="card-body">
+					<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+						<div>
+							<h3 class="mb-1">Lab Reports</h3>
+							<p class="text-muted mb-0">{{ resultSummary }}</p>
+						</div>
 
-				<!-- Controls -->
-				<div class="d-flex align-items-center gap-3">
-					<!-- Search Input -->
-					<input 
-						type="text" 
-						class="form-control form-control-sm" 
-						placeholder="Search..." 
-						style="width: 200px;"
-						v-model="searchKeyword"
-						@keyup.enter="search"
-					/>
+						<div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+							<span v-if="hasActiveFilters" class="filter-count-badge">
+								{{ activeFilterCount }} filter{{ activeFilterCount > 1 ? "s" : "" }} active
+							</span>
+							<button
+								v-if="hasActiveFilters"
+								type="button"
+								class="btn btn-outline-secondary btn-sm"
+								@click="clearFilters"
+							>
+								<i class="bi bi-x-circle me-1"></i>Clear filters
+							</button>
+						</div>
+					</div>
 
-					<!-- Status Filter -->
-					<select 
-						class="form-select form-select-sm" 
-						style="width: 140px;"
-						v-model="selectedStatus"
-						@change="search"
-					>
-						<option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-							{{ opt.label }}
-						</option>
-					</select>
+					<div class="row g-3 align-items-end">
+						<div class="col-12 col-xl-4">
+							<label class="form-label text-muted small text-uppercase mb-2">Search</label>
+							<div class="input-group lab-reports-search-control">
+								<span class="input-group-text bg-white border-end-0 border col-1 rounded-circle-left">
+									<i class="bi bi-search text-muted"></i>
+								</span>
+								<input
+									v-model="filterForm.keyword"
+									type="search"
+									class="form-control border-start-0"
+									placeholder="Search by order, patient, doctor, or lab"
+									@keydown.enter.prevent="applyFilters"
+								/>
+								<button type="button" class="btn btn-primary" @click="applyFilters">Search</button>
+							</div>
+						</div>
 
-					<!-- Payment Status Filter -->
-					<select 
-						class="form-select form-select-sm" 
-						style="width: 140px;"
-						v-model="selectedPaymentStatus"
-						@change="search"
-					>
-						<option v-for="opt in paymentStatusOptions" :key="opt.value" :value="opt.value">
-							{{ opt.label }}
-						</option>
-					</select>
+						<div class="col-12 col-sm-6 col-xl-2">
+							<label class="form-label text-muted small text-uppercase mb-2">Status</label>
+							<select v-model="filterForm.status" class="form-select" @change="applyFilters">
+								<option v-for="option in statusOptions" :key="option.value" :value="option.value">
+									{{ option.label }}
+								</option>
+							</select>
+						</div>
 
-					<!-- Clear Filters -->
-					<button 
-						v-if="searchKeyword || selectedStatus || selectedPaymentStatus || dateFrom || dateTo"
-						class="btn btn-outline-danger btn-sm" 
-						type="button" 
-						@click="clearFilters"
-						title="Clear filters"
-					>
-						<i class="bi bi-x-lg"></i>
-					</button>
+						<div class="col-12 col-sm-6 col-xl-2">
+							<label class="form-label text-muted small text-uppercase mb-2">Payment</label>
+							<select v-model="filterForm.payment_status" class="form-select" @change="applyFilters">
+								<option v-for="option in paymentStatusOptions" :key="option.value" :value="option.value">
+									{{ option.label }}
+								</option>
+							</select>
+						</div>
+
+						<div class="col-12 col-sm-6 col-xl-2">
+							<label class="form-label text-muted small text-uppercase mb-2">From</label>
+							<input v-model="filterForm.date_from" type="date" class="form-control" @change="applyFilters" />
+						</div>
+
+						<div class="col-12 col-sm-6 col-xl-2">
+							<label class="form-label text-muted small text-uppercase mb-2">To</label>
+							<input v-model="filterForm.date_to" type="date" class="form-control" @change="applyFilters" />
+						</div>
+					</div>
 				</div>
 			</div>
 
-			<!-- ================= MOBILE VIEW - Title and Filters ================= -->
-			<div class="d-md-none">
-				<h3 class="text-xl mb-3">Lab Reports</h3>
-				
-				<!-- Search Input -->
-				<input 
-					type="text" 
-					class="form-control form-control-sm mb-2" 
-					placeholder="Search..." 
-					v-model="searchKeyword"
-					@keyup.enter="search"
-				/>
+			<div class="card border-0 shadow-sm">
+				<div class="card-body p-0 p-md-3">
+					<div class="d-flex justify-content-end align-items-center px-3 px-md-0 pt-3 pt-md-0 pb-2">
+						<div class="d-flex align-items-center gap-2 rows-select-wrap">
+							<select
+								id="lab-reports-per-page"
+								v-model="perPage"
+								class="form-select form-select-sm top-page-select"
+								@change="updatePerPage"
+							>
+								<option v-for="option in perPageOptions" :key="option" :value="option">
+									{{ option }}
+								</option>
+							</select>
+						</div>
+					</div>
 
-				<!-- Status Filter -->
-				<select 
-					class="form-select form-select-sm mb-2" 
-					v-model="selectedStatus"
-					@change="search"
-				>
-					<option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-						{{ opt.label }}
-					</option>
-				</select>
+					<Table :columns="columns" :data="labReports" :search-show="false" :PageOptions="false">
+						<template #order="{ row }">
+							<div class="text-start">
+								<div class="fw-semibold text-dark">{{ row.order_id || "-" }}</div>
+							</div>
+						</template>
 
-				<!-- Payment Status Filter -->
-				<select 
-					class="form-select form-select-sm mb-2" 
-					v-model="selectedPaymentStatus"
-					@change="search"
-				>
-					<option v-for="opt in paymentStatusOptions" :key="opt.value" :value="opt.value">
-						{{ opt.label }}
-					</option>
-				</select>
+						<template #patient="{ row }">
+							<div class="text-start">
+								<div class="fw-medium text-dark">{{ row.patient || "-" }}</div>
+							</div>
+						</template>
 
-				<!-- Clear Filters -->
-				<button 
-					v-if="searchKeyword || selectedStatus || selectedPaymentStatus || dateFrom || dateTo"
-					class="btn btn-outline-danger btn-sm mb-3" 
-					type="button" 
-					@click="clearFilters"
-				>
-					Clear Filters
-				</button>
+						<template #lab="{ row }">
+							<div class="text-start">
+								<div class="fw-medium text-dark">{{ row.lab || "-" }}</div>
+							</div>
+						</template>
+
+						<template #doctor="{ row }">
+							<div class="text-start">
+								<div class="fw-medium text-dark">{{ row.doctor || "-" }}</div>
+							</div>
+						</template>
+
+						<template #amount="{ row }">
+							<div class="text-start">
+								<div class="fw-medium text-dark">{{ formatAmount(row.amount) }}</div>
+							</div>
+						</template>
+
+						<template #payment="{ row }">
+							<span class="status-pill" :class="getPaymentStatusClass(row.payment_status)">
+								{{ row.payment_status || "N/A" }}
+							</span>
+						</template>
+
+						<template #status="{ row }">
+							<span class="status-pill" :class="getStatusClass(row.status)">
+								{{ row.status || "N/A" }}
+							</span>
+						</template>
+
+						<template #created="{ row }">
+							<div class="text-start">
+								<div class="fw-medium text-dark">{{ row.created_at || "-" }}</div>
+								<div v-if="row.reported_at && row.reported_at !== '-'" class="text-muted small">
+									Reported: {{ row.reported_at }}
+								</div>
+							</div>
+						</template>
+
+						<template #actions="{ row }">
+							<button
+								class="icon-btn btn btn-info"
+								title="Download Report"
+								@click="downloadReport(row)"
+								:disabled="!row.report_file"
+							>
+								<i class="bi bi-download"></i>
+							</button>
+						</template>
+					</Table>
+				</div>
 			</div>
-		</div>
-
-		<!-- ================= TABLE + PAGINATION ================= -->
-		<div class="table-responsive">
-			<Table :columns="columns" :data="labReports" :search="keyword">
-				<template #status="{ row }">
-					<span :class="getStatusClass(row.status)">
-						{{ row.status || 'N/A' }}
-					</span>
-				</template>
-				<template #payment_status="{ row }">
-					<span :class="getPaymentStatusClass(row.payment_status)">
-						{{ row.payment_status || 'N/A' }}
-					</span>
-				</template>
-				<template #amount="{ row }">
-					{{ formatAmount(row.amount) }}
-				</template>
-				<template #actions="{ row }">
-					<button 
-						class="icon-btn btn btn-info" 
-						title="Download Report"
-						@click="downloadReport(row)"
-						:disabled="!row.report_file"
-					>
-						<i class="bi bi-download"></i>
-					</button>
-				</template>
-			</Table>
 		</div>
 	</AuthLayout>
 </template>
 
 <style scoped>
-.status-check {
-	appearance: none;
-	width: 16px;
-	height: 16px;
-	border: 2px solid #d1d5db;
-	border-radius: 4px;
-	display: inline-block;
-	position: relative;
-	cursor: pointer;
-	background: #fff;
-}
-.status-check:focus { outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
-
-.status-check--green:checked {
-	border-color: #06c270;
-	background-color: #06c270;
-}
-.status-check--grey:checked {
-    border-color: #9ca3af;
-	background-color: #9ca3af;
-}
-.status-check--red:checked {
-    border-color: #f35353;
-	background-color: #f35353;
+.users-toolbar {
+	border-radius: 20px;
 }
 
-/* tick icon */
-.status-check:checked::after {
-	content: "";
-	position: absolute;
-	left: 4px;
-	top: 1px;
-	width: 4px;
-	height: 8px;
-	border: solid #fff;
-	border-width: 0 2px 2px 0;
-	transform: rotate(45deg);
+.filter-count-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.45rem 0.75rem;
+	border-radius: 999px;
+	background: #eef2ff;
+	color: #3730a3;
+	font-size: 0.8rem;
+	font-weight: 600;
 }
 
-.badge {
+.status-pill {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 84px;
+	padding: 0.35rem 0.7rem;
+	border-radius: 999px;
 	font-size: 0.75rem;
-	padding: 0.35em 0.65em;
-	font-weight: 500;
+	font-weight: 700;
+	text-transform: capitalize;
+}
+
+.status-pill--active {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.status-pill--inactive {
+	background: #f1f5f9;
+	color: #475569;
+}
+
+.status-pill--pending {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.top-page-select {
+	min-width: 74px;
+	width: 74px;
+}
+
+.rows-select-wrap {
+	flex: 0 0 auto;
+}
+
+.lab-reports-search-control {
+	max-width: 720px;
 }
 
 .icon-btn {

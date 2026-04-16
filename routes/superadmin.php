@@ -16,10 +16,16 @@ Route::group(['middleware' => ['auth:sanctum', 'is.superAdmin', config('jetstrea
 
     // Super Admin Dashboard
     Route::get('/dashboard', [SAdminController::class, 'dashboard'])->name('dashboard');
+    Route::get('/logs', [SAdminController::class, 'logViewer'])->name('logs');
 
     Route::resource('/usermanagement', SAdminUserController::class);
     Route::get('/user/dashboard', [SAdminUserController::class, 'userdashboard'])->name('userdashboard');
     Route::get('/user/list', [SAdminUserController::class, 'userlist'])->name('userlist');
+    Route::get('/user/list/{id}', [SAdminUserController::class, 'show'])->name('userlist.show');
+    Route::put('/user/list/{id}', [SAdminUserController::class, 'update'])->name('userlist.update');
+    Route::delete('/user/list/{id}', [SAdminUserController::class, 'destroy'])->name('userlist.destroy');
+    Route::post('/user/list/{id}/toggle-status', [SAdminUserController::class, 'toggleStatus'])->name('userlist.toggle-status');
+    Route::post('/user/list/{id}/toggle-verification', [SAdminUserController::class, 'toggleVerification'])->name('userlist.toggle-verification');
     Route::get('/user/activitymonitoring', [SAdminUserController::class, 'useractivitymonitoring'])->name('activitymonitoring');
 
     Route::resource('/financemanagement', SAdminFinanceController::class);
@@ -35,16 +41,24 @@ Route::group(['middleware' => ['auth:sanctum', 'is.superAdmin', config('jetstrea
     Route::get('/finance/payment', [SAdminFinanceController::class, 'payment'])->name('payment');
     Route::get('/finance/invoice', [SAdminFinanceController::class, 'invoice'])->name('invoice');
     Route::resource('/services', SAdminServiceController::class);
+    Route::post('/services/{service}/toggle-status', [SAdminServiceController::class, 'toggleStatus'])->name('services.toggle-status');
 
     Route::resource('/emailnotification', SAdminEmailNotificationController::class);
     Route::get('/email/mass/notification', [SAdminEmailNotificationController::class, 'massnotification'])->name('massnotification');
     Route::get('/email/system/notification', [SAdminEmailNotificationController::class, 'systemnotification'])->name('systemnotification');
     Route::get('/email/mass/mail/notification', [SAdminEmailNotificationController::class, 'massmailnotification'])->name('massmailnotification');
+    Route::delete('/email/notification/{id}', [SAdminEmailNotificationController::class, 'destroyNotification'])->name('notifications.destroy');
+    Route::post('/email/notifications/mark-all-read', [SAdminEmailNotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+    Route::delete('/email/notifications/delete-all', [SAdminEmailNotificationController::class, 'deleteAll'])->name('notifications.delete-all');
 
     Route::resource('/generalsetting', SAdminGeneralSettingController::class);
     Route::get('/global/setting', [SAdminGeneralSettingController::class, 'globalsetting'])->name('globalsetting');
+    Route::post('/global/setting', [SAdminGeneralSettingController::class, 'updateGlobalSettings'])->name('globalsetting.update');
     Route::get('/SMTP/setting', [SAdminGeneralSettingController::class, 'SMTPsetting'])->name('smtpsetting');
+    Route::post('/SMTP/setting', [SAdminGeneralSettingController::class, 'updateSMTPSettings'])->name('smtpsetting.update');
+    Route::post('/SMTP/setting/test', [SAdminGeneralSettingController::class, 'testSMTPSettings'])->name('smtpsetting.test');
     Route::get('/language/setting', [SAdminGeneralSettingController::class, 'languagesetting'])->name('languagesetting');
+    Route::post('/language/setting', [SAdminGeneralSettingController::class, 'updateLanguageSettings'])->name('languagesetting.update');
 
     // Roles & Permissions Management
     Route::get('/settings/roles-permissions', [SAdminController::class, 'rolespermission'])->name('rolesandpermission');

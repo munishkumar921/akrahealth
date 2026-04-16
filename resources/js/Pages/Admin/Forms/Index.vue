@@ -105,25 +105,3 @@ const deleteForm = (id) => {
   </AuthLayout>
 </template>
 
-<style scoped>
-.icon-btn {
-    padding: 9px 8px 6px 8px;
-    border: none;
-    border-radius: 12px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    cursor: pointer;
-    transition: transform .07s ease-in-out, opacity .15s ease-in-out;
-}
-
-.icon-btn:active {
-    transform: scale(0.97);
-}
-
-.icon-btn i {
-    font-size: 14px;
-    line-height: 1;
-}
-</style>

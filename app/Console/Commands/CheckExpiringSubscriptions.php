@@ -7,6 +7,8 @@ use App\Mail\SubscriptionExpiringMail;
 use App\Models\UserSubscription;
 use App\Notifications\SubscriptionExpiredNotification;
 use App\Notifications\SubscriptionExpiringNotification;
+use App\Services\EmailNotificationService;
+use App\Services\InAppNotificationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
@@ -50,7 +52,22 @@ class CheckExpiringSubscriptions extends Command
                 $subscription->user->notify(new SubscriptionExpiringNotification($subscription, 3));
 
                 // Send email
-                Mail::to($subscription->user->email)->send(new SubscriptionExpiringMail($subscription, 3));
+                Mail::to($subscription->user->email)->queue(new SubscriptionExpiringMail($subscription, 3));
+                app(InAppNotificationService::class)->notifySuperAdmins(
+                    app(InAppNotificationService::class)->buildPayload(
+                        'Trial ending soon',
+                        ($subscription->user->name ?? 'A user')."'s subscription ends in 3 days.",
+                        'trial_ending_soon',
+                        [
+                            'related_model_type' => UserSubscription::class,
+                            'related_model_id' => $subscription->id,
+                            'meta' => [
+                                'days_remaining' => 3,
+                                'plan' => $subscription->subscriptionPlan?->title,
+                            ],
+                        ]
+                    )
+                );
 
                 $this->line('Notification sent to '.$subscription->user->email.' - Subscription expiring in 3 days');
             }
@@ -70,7 +87,22 @@ class CheckExpiringSubscriptions extends Command
                 $subscription->user->notify(new SubscriptionExpiringNotification($subscription, 1));
 
                 // Send email
-                Mail::to($subscription->user->email)->send(new SubscriptionExpiringMail($subscription, 1));
+                Mail::to($subscription->user->email)->queue(new SubscriptionExpiringMail($subscription, 1));
+                app(InAppNotificationService::class)->notifySuperAdmins(
+                    app(InAppNotificationService::class)->buildPayload(
+                        'Trial ending soon',
+                        ($subscription->user->name ?? 'A user')."'s subscription ends in 1 day.",
+                        'trial_ending_soon',
+                        [
+                            'related_model_type' => UserSubscription::class,
+                            'related_model_id' => $subscription->id,
+                            'meta' => [
+                                'days_remaining' => 1,
+                                'plan' => $subscription->subscriptionPlan?->title,
+                            ],
+                        ]
+                    )
+                );
 
                 $this->line('Notification sent to '.$subscription->user->email.' - Subscription expiring in 1 day');
             }
@@ -95,7 +127,23 @@ class CheckExpiringSubscriptions extends Command
                 $subscription->user->notify(new SubscriptionExpiredNotification($subscription));
 
                 // Send email
-                Mail::to($subscription->user->email)->send(new SubscriptionExpiredMail($subscription));
+                Mail::to($subscription->user->email)->queue(new SubscriptionExpiredMail($subscription));
+                app(EmailNotificationService::class)->queueSubscriptionExpiredAdminAlert($subscription);
+                app(InAppNotificationService::class)->notifySuperAdmins(
+                    app(InAppNotificationService::class)->buildPayload(
+                        'Subscription expired',
+                        ($subscription->user->name ?? 'A user')."'s subscription expired today.",
+                        'subscription_expired',
+                        [
+                            'related_model_type' => UserSubscription::class,
+                            'related_model_id' => $subscription->id,
+                            'meta' => [
+                                'plan' => $subscription->subscriptionPlan?->title,
+                                'expired_on' => $subscription->end_date,
+                            ],
+                        ]
+                    )
+                );
 
                 $this->line('Expired subscription notification sent to '.$subscription->user->email);
             }

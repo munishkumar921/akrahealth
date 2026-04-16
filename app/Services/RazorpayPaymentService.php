@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\SubscriptionPlan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -213,6 +215,173 @@ class RazorpayPaymentService
     }
 
     /**
+     * Create or reuse a Razorpay plan for recurring subscriptions.
+     */
+    public function createOrGetSubscriptionPlan(SubscriptionPlan $plan): array
+    {
+        $currency = strtoupper($plan->currency ?? 'INR');
+        $multiplier = $this->getSubunitMultiplier($currency);
+        $cacheKey = sprintf(
+            'razorpay_plan:%s:%s:%s:%s',
+            $plan->id,
+            (string) $plan->price,
+            $currency,
+            strtolower($plan->frequency ?? 'monthly')
+        );
+
+        if ($cachedPlanId = Cache::get($cacheKey)) {
+            return [
+                'success' => true,
+                'data' => ['id' => $cachedPlanId],
+            ];
+        }
+
+        try {
+            $api = new \Razorpay\Api\Api($this->keyId, $this->keySecret);
+
+            $period = $this->mapPlanFrequencyToPeriod($plan->frequency);
+            $amount = (int) round(((float) $plan->price) * $multiplier);
+
+            $razorpayPlan = $api->plan->create([
+                'period' => $period,
+                'interval' => 1,
+                'item' => [
+                    'name' => $plan->title ?? 'Subscription Plan',
+                    'description' => $plan->label ?? ($plan->title ?? 'Subscription Plan'),
+                    'amount' => $amount,
+                    'currency' => $currency,
+                ],
+                'notes' => [
+                    'subscription_plan_id' => (string) $plan->id,
+                    'plan_frequency' => strtolower($plan->frequency ?? 'monthly'),
+                ],
+            ]);
+
+            Cache::forever($cacheKey, $razorpayPlan['id']);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'id' => $razorpayPlan['id'],
+                ],
+            ];
+        } catch (\Exception $e) {
+            Log::error('Razorpay plan creation failed', [
+                'subscription_plan_id' => $plan->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Create a delayed-start Razorpay subscription for mandate authorization.
+     */
+    public function createSubscription(array $data): array
+    {
+        try {
+            $api = new \Razorpay\Api\Api($this->keyId, $this->keySecret);
+
+            $subscriptionData = [
+                'plan_id' => $data['plan_id'],
+                'total_count' => $data['total_count'] ?? 120,
+                'quantity' => 1,
+                'customer_notify' => 1,
+                'start_at' => $data['start_at'],
+                'expire_by' => $data['expire_by'] ?? strtotime('+1 day'),
+                'notes' => $data['notes'] ?? [],
+            ];
+
+            $razorpaySubscription = $api->subscription->create($subscriptionData);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'id' => $razorpaySubscription['id'],
+                    'status' => $razorpaySubscription['status'] ?? null,
+                    'short_url' => $razorpaySubscription['short_url'] ?? null,
+                ],
+            ];
+        } catch (\Razorpay\Api\Errors\BadRequestError $e) {
+            Log::error('Razorpay subscription creation failed', [
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Invalid subscription request: '.$e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('Razorpay subscription creation exception', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Fetch a Razorpay subscription by id.
+     */
+    public function fetchSubscription(string $subscriptionId): array
+    {
+        try {
+            $response = Http::withBasicAuth($this->keyId, $this->keySecret)
+                ->get("{$this->baseUrl}/subscriptions/{$subscriptionId}");
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json(),
+                ];
+            }
+
+            Log::error('Razorpay subscription fetch failed', [
+                'subscription_id' => $subscriptionId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $response->json(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('Razorpay subscription fetch exception', [
+                'subscription_id' => $subscriptionId,
+                'message' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Verify Razorpay subscription authorization signature.
+     */
+    public function verifySubscriptionSignature(array $data): bool
+    {
+        $expectedSignature = hash_hmac(
+            'sha256',
+            $data['razorpay_payment_id'].'|'.$data['razorpay_subscription_id'],
+            $this->keySecret
+        );
+
+        return hash_equals($expectedSignature, $data['razorpay_signature']);
+    }
+
+    /**
      * Get currency subunit multiplier
      * Razorpay uses currency subunits; default is 100 for most currencies.
      * Zero-decimal currencies should use multiplier 1.
@@ -222,5 +391,13 @@ class RazorpayPaymentService
         $zeroDecimal = ['JPY', 'KRW', 'VND'];
 
         return in_array($currency, $zeroDecimal, true) ? 1 : 100;
+    }
+
+    private function mapPlanFrequencyToPeriod(?string $frequency): string
+    {
+        return match (strtolower($frequency ?? 'monthly')) {
+            'yearly', 'annual', 'annually' => 'yearly',
+            default => 'monthly',
+        };
     }
 }

@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class LabTestCategory extends Model
 {
-    use HasUuids;
+    use HasUuids, SoftDeletes;
 
     protected $keyType = 'string';
 
@@ -23,6 +24,7 @@ class LabTestCategory extends Model
         'description',
         'icon',
         'is_active',
+        'hospital_id',
     ];
 
     protected $casts = [

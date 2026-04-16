@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Helpers\AgoraTokenGenerator;
 use App\Models\Appointment;
+use Illuminate\Http\Request;
 
 class AgoraController extends Controller
 {
@@ -13,9 +14,23 @@ class AgoraController extends Controller
      * @param  mixed  $request
      * @return void
      */
-    public function generateToken($doctor_id, $appointment_id = null)
+    public function generateToken(Request $request, $doctor_id, $appointment_id = null)
     {
         $user = auth()->user();
+        abort_unless($user, 401);
+
+        $appointment = null;
+        if ($appointment_id) {
+            $appointment = Appointment::with(['doctor', 'patient'])->findOrFail($appointment_id);
+            abort_unless((string) $appointment->doctor_id === (string) $doctor_id, 403);
+
+            $isDoctorOwner = $user->doctor && (string) $user->doctor->id === (string) $appointment->doctor_id;
+            $isPatientOwner = $user->patient && (string) $user->patient->id === (string) $appointment->patient_id;
+            $isAdminForHospital = $user->hospital && (string) $user->hospital->id === (string) $appointment->doctor?->hospital_id;
+
+            abort_unless($isDoctorOwner || $isPatientOwner || $isAdminForHospital, 403);
+        }
+
         if ($user->doctor) {
             $uid = crc32($user->doctor->id);
         } elseif ($user->patient) {
@@ -24,9 +39,8 @@ class AgoraController extends Controller
             $uid = rand(10000, 99999);
         }
 
-        $appointment = Appointment::where('id', $appointment_id)->first();
-
-        $channelName = $this->generateChannelName($doctor_id, $appointment->patient_id);
+        $channelParticipantId = $appointment?->patient_id ?: (string) $user->id;
+        $channelName = $this->generateChannelName($doctor_id, $channelParticipantId);
         $appID = env('AGORA_APP_ID');
         $appCertificate = env('AGORA_APP_CERTIFICATE');
         $role = AgoraTokenGenerator::RolePublisher;
@@ -42,8 +56,8 @@ class AgoraController extends Controller
             $privilegeExpiredTs
         );
 
-        if ($appointment_id) {
-            Appointment::where('id', $appointment_id)->update([
+        if ($appointment) {
+            $appointment->update([
                 'agora_channel_id' => $channelName,
                 'agora_channel_token' => $token,
             ]);

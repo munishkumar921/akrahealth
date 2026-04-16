@@ -26,9 +26,7 @@ class User extends Authenticatable
     use TwoFactorAuthenticatable;
 
     protected $keyType = 'string';
-
     public $incrementing = false;
-
     protected $guard_name = 'web';
 
     /**
@@ -97,6 +95,11 @@ class User extends Authenticatable
 
     ];
 
+    /**
+     * dates
+     *
+     * @var array
+     */
     protected $dates = [
         'created_at',
         'updated_at',
@@ -121,6 +124,13 @@ class User extends Authenticatable
         return $this->subscriptionPlan?->title ?? null;
     }
 
+    /**
+     * scopeByRole
+     *
+     * @param  mixed $query
+     * @param  mixed $user
+     * @return void
+     */
     public function scopeByRole($query, $user)
     {
         if ($user->hasRole('Admin')) {
@@ -130,6 +140,12 @@ class User extends Authenticatable
         return $query->where('id', $user->id);
     }
 
+    /**
+     * getCreatedAttribute
+     *
+     * @param  mixed $value
+     * @return void
+     */
     public function getCreatedAttribute($value)
     {
         return Carbon::parse($value)->format('M d, Y');
@@ -159,16 +175,31 @@ class User extends Authenticatable
         return $this->hasOne(Address::class, 'user_id');
     }
 
+    /**
+     * DoctorAssistant
+     *
+     * @return void
+     */
     public function DoctorAssistant()
     {
         return $this->hasOne(DoctorAssistant::class, 'user_id');
     }
 
+    /**
+     * userSkills
+     *
+     * @return HasOne
+     */
     public function userSkills(): HasOne
     {
         return $this->hasOne(UserSkill::class, 'user_id');
     }
 
+    /**
+     * hospital
+     *
+     * @return void
+     */
     public function hospital()
     {
         return $this->hasOne(Hospital::class, 'user_id');
@@ -182,13 +213,34 @@ class User extends Authenticatable
         return $this->belongsTo(SubscriptionPlan::class);
     }
 
+    /**
+     * lab
+     *
+     * @return void
+     */
     public function lab()
     {
         return $this->hasOne(Lab::class, 'user_id');
     }
 
+    /**
+     * pharmacy
+     *
+     * @return void
+     */
     public function pharmacy()
     {
         return $this->hasOne(Pharmacy::class, 'user_id');
+    }
+
+    /**
+     * userSubscription
+     *
+     * @return void
+     */
+    public function userSubscription()
+    {
+        /* get latest active subscription */
+        return $this->hasOne(UserSubscription::class)->latest();
     }
 }

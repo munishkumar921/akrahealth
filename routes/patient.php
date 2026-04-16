@@ -49,9 +49,11 @@ Route::group(['middleware' => ['auth:sanctum', 'is.patient', config('jetstream.a
     Route::get('/results', [PatientController::class, 'results'])->name('results');
     Route::get('/results/{id}', [PatientController::class, 'show'])->name('results.show');
     Route::get('/billing', [PatientController::class, 'billing'])->name('billing');
+
     Route::get('/print-invoice/{id}', [PatientController::class, 'print'])->name('billing.print');
+    Route::get('/billing_payment/{id}', [PatientController::class, 'billing_print'])->name('payment_billing.print');
+
     Route::get('billing_payment_history/{id}', [PatientController::class, 'billing_payment_history'])->name('billing_payment_history');
-    Route::get('/billing_payment/{id}', [PatientController::class, 'billing_print'])->name('billing.print');
     Route::get('/social-history', [PatientController::class, 'SocialHistory'])->name('social-history');
     Route::post('/social-history', [PatientController::class, 'storeSocialHistory'])->name('social-history.store');
     Route::get('/family-history', [PatientController::class, 'FamilyHistory'])->name('family-history');
@@ -60,6 +62,7 @@ Route::group(['middleware' => ['auth:sanctum', 'is.patient', config('jetstream.a
     Route::get('/messages', [PatientController::class, 'Messages'])->name('messages');
     Route::get('/messages/{id}', [PatientController::class, 'messageShow'])->name('messages.show');
     Route::get('/booking-list', [PatientController::class, 'bookingList'])->name('booking.list');
+    Route::get('/share-details/providers', [PatientController::class, 'shareDetailProviders'])->name('share.details.providers');
     Route::post('/patient/share-details', [PatientController::class, 'shareDetails'])->name('share.details');
     Route::get('/live-consultation/{id}', [PatientController::class, 'liveConsultation'])->name('live.consultation');
     Route::delete('/remove-doctor-access/{doctorId}', [PatientController::class, 'removeDoctorAccess'])->name('remove.doctor.access');
